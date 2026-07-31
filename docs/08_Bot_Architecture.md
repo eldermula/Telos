@@ -103,6 +103,14 @@ Tracks historical equity peaks and halts trading before catastrophic failure.
 
 **This resolves `FR-BOT-5` / `FR-BOT-7` from the SRS:** "equity decline trend" is defined as a 45% drawdown from peak equity, triggering an immediate strategy switch or halt.
 
+### 6.1 Strategy B — Capital Preservation Mode (Proposed, pending confirmation)
+
+- **Flat 1% risk per trade**, regardless of tier — the Tier 0–7 risk ceilings (Section 3) are ignored entirely while in Strategy B.
+- **Confidence bar raised**: only takes trades where `strategy_confidence >= 0.90` — the highest-conviction setups only.
+- **Tier/milestone progression frozen** — no new tiers unlock while in Strategy B; the bot is defending capital, not growing it.
+- **Recovery condition**: returns to Strategy A once `active_trading_balance` recovers to within half the macro drawdown threshold from peak (drawdown back under 22.5% from peak) — a hysteresis band so the bot doesn't flap between A and B right at the 45% boundary.
+- **Resolving "`STRATEGY_B_OR_HALT`":** this is a two-stage failsafe, not an either/or. The 45% breaker always switches to Strategy B first — it never jumps straight to a full halt. A full halt (with mandatory manual re-enable) only triggers if Strategy B is *also* breached by a secondary, deeper floor — proposed at 60% down from the original peak. This also serves the "cheapest and reliable" priority: an unnecessary full stop means the bot isn't working at all, so the design defends capital first and only stops completely as a last resort.
+
 ## 7. Phase 6 — Emergency Safety (Micro Circuit Breaker)
 
 Instantly decouples the risk engine from aggressive settings when immediate technical threats appear.
@@ -162,11 +170,82 @@ Translates the approved risk percentage into exact lot/contract sizes based on e
 
 **Why this holds up architecturally:** separating deterministic risk math (APIRS) from probabilistic analysis (Market/News/Strategy modules) is a legitimate, well-established pattern in institutional algorithmic trading — not just a theoretical nicety. It also means a failure in one module (e.g. the news feed going down) is isolated and doesn't take down the whole bot.
 
-**Two things to pin down before this becomes `04_System_Architecture.md`'s bot-level diagram** (tracked in Section 11):
-- **Fallback behavior on module failure/timeout** isn't fully defined yet — "lower confidence and let APIRS clamp risk to 1%" is the intent, but needs an explicit rule (e.g. specific default values for `market_quality`/`news_impact_score` when the News AI is unavailable) rather than staying implicit.
-- **AI-call latency and cadence** — if Modules 2–4 call an LLM (Claude/OpenAI) synchronously on every tick, a 10–50ms round-trip isn't realistic; LLM inference typically adds hundreds of milliseconds at minimum. Decide whether AI analysis runs per-tick (slower, always fresh) or on a periodic cadence with the latest cached result reused between ticks (faster, still current) — this materially changes the system diagram.
+### 9.1 Module Failure/Timeout Fallback (Proposed, pending confirmation)
 
-## 10. Core Management Principles
+- **Module 2 (Market Intelligence) fails/times out:** set `trend_quality = 0.5` (neutral) and force `market_volatility = HIGH` for that cycle.
+- **Module 3 (News AI) fails/times out:** set `market_quality = 0.5` (neutral) and `news_impact_score = 0` (neutral), and force `market_volatility = HIGH` for that cycle.
+- **General rule:** any single module failure for a given tick forces `market_volatility = HIGH` for that cycle. This deliberately reuses the existing Phase 6 rule rather than inventing new failure-handling logic — it's the cheapest and most reliable option, since it adds no new state or code paths, just triggers the already-defined 1% clamp.
+
+### 9.2 AI-Call Latency & Cadence (Proposed) — designed around "cheapest, fast, reliable"
+
+- **Fast path (every tick, no API cost):** Master Orchestrator, APIRS (Module 5), Execution Engine (Module 7) — pure deterministic math, no external calls. Sub-50ms is realistic here.
+- **Slow path (periodic, cached):** Modules 2–4's AI-backed analysis runs on a fixed interval — proposed every 15–30 seconds, or event-triggered (e.g. a new economic calendar release) — rather than on every tick. The latest result is cached and reused by the fast path until the next update. This is both faster *and* cheaper: forex conditions don't meaningfully change tick-to-tick, and a 15–30s cadence cuts LLM API call volume dramatically compared to calling per-tick.
+- **Prefer free/rule-based computation wherever it's genuinely sufficient:** Module 2's `trend_quality`/`volatility_penalty` (moving averages, ATR, RSI-style indicators) don't need an LLM at all — plain technical calculation is free and faster. Reserve Claude/OpenAI API calls for what actually needs language understanding: Module 3's unstructured news/RSS parsing, and higher-level confidence reasoning in Module 4. Calling an LLM for every input regardless of whether it needs one is the expensive, slow option — this design avoids that by default.
+
+### 9.3 Module 3 Data Source Reliability (Proposed)
+
+- Maintain 2–3 **free** RSS/economic-calendar sources in priority order (no paid data feeds, per the cost priority) — short timeout (3–5s) on the primary before falling back to the next.
+- If all sources fail for a cycle, treat it as a Module 3 failure per Section 9.1 (neutral values + forced HIGH volatility).
+- Lightweight health tracker: if News AI fails N consecutive cycles (proposed: 5), mark it "degraded" and skip attempting it for a cooldown period (proposed: 5 minutes) rather than repeatedly timing out and adding latency to every tick — keeps the fast path fast even when a free source is temporarily down.
+
+## 10. Data Payload Structure (Proposed)
+
+The environment dictionary the Master Orchestrator assembles and passes to APIRS:
+
+```json
+{
+  "timestamp": "ISO-8601",
+  "account_state": {
+    "active_trading_balance": 0.00,
+    "peak_equity": 0.00,
+    "active_strategy_mode": "STRATEGY_A"
+  },
+  "market_intelligence": {
+    "trend_quality": 0.0,
+    "market_volatility": "LOW | NORMAL | HIGH",
+    "volatility_penalty": 0.0
+  },
+  "news_intelligence": {
+    "market_quality": 0.0,
+    "news_impact_score": 0.0
+  },
+  "strategy_signal": {
+    "trade_direction": "BUY | SELL | WAIT",
+    "strategy_confidence": 0.0,
+    "proposed_entry": 0.0,
+    "proposed_stop": 0.0,
+    "proposed_target": 0.0
+  },
+  "learning_engine": {
+    "live_win_probability": 0.0,
+    "drawdown_penalty": 0.0,
+    "loss_penalty": 0.0,
+    "consecutive_losses": 0,
+    "daily_drawdown_pct": 0.0
+  }
+}
+```
+
+APIRS's response back to the Master Orchestrator:
+
+```json
+{
+  "final_applied_position_risk": 0.0,
+  "profit_lock_triggered": false,
+  "active_strategy_mode": "STRATEGY_A | STRATEGY_B | HALTED",
+  "trade_approved": true
+}
+```
+
+Field names here are a starting proposal — they'll likely need to match whatever shape the Backend API/Cursor implements, but this establishes the contract.
+
+## 11. Pre-Live Validation Policy (Proposed) — resolves `FR-BOT-8`
+
+- Any **new or materially modified strategy**, or any change to a tier's Base Risk / Max Risk Ceiling, must run in **paper-trading mode** (simulated execution, no real broker orders — zero cost, which fits the cost priority directly) for a minimum sample window, proposed to match the Learning Engine's existing 50-trade rolling window (Section 8).
+- **Minimum bar to graduate to live**, proposed as a starting point: positive net P&L over the paper window, and `live_win_probability` above 45%. Both are easy to tune later.
+- **Tier progression itself (Sections 3–5) doesn't need re-validation** — it's risk-scaling on an already-validated strategy, not a new strategy. Only new strategies or changed formulas trigger this gate.
+
+## 12. Core Management Principles
 
 1. Small account size does not justify reckless risk allocation.
 2. Large account size does not justify careless exposure.
@@ -177,15 +256,21 @@ Translates the approved risk percentage into exact lot/contract sizes based on e
 7. Never increase aggression without statistical validation.
 8. Every decision should maximize long-term system survival, not short-term gain.
 
-## 11. Open Items
+## 13. Open Items
 
-- **Strategy B** — rules not yet defined (referenced in Phase 5 as `STRATEGY_B_OR_HALT`).
-- **Penalty parameter formulas** — exact math for `drawdown_penalty`, `volatility_penalty`, and `loss_penalty` (Phase 3) not yet defined.
-- **`FR-BOT-8` (backtesting / paper-trading gate)** — this system defines risk *management* in detail but doesn't yet specify how new tiers/strategies get validated before running on a live linked account. Recommend deciding this before any live deployment.
-- **Module failure/timeout fallback values** — needs explicit default values (not just "lower confidence") for when Market Intelligence or News AI is unavailable or times out.
-- **AI-call latency/cadence** — decide whether Modules 2–4's AI analysis runs synchronously per-tick or on a periodic cadence with cached results, since this changes the realistic latency budget.
-- **Data Payload Structure** — the exact shape of the data passed between the Master Orchestrator and APIRS is not yet defined; needed for `04_System_Architecture.md` and `06_API_Specification.md`.
-- **Module 3 data source reliability** — free RSS feeds/economic calendars carry rate-limit and uptime risk; worth a fallback plan even outside the general module-failure case above.
+Every gap below now has a proposed resolution elsewhere in this document — pending your confirmation, not yet treated as settled:
+
+- **Strategy B** — defined in Section 6.1. Confirm the flat 1% risk, 0.90 confidence bar, and 60%-from-peak secondary halt floor.
+- **Penalty parameter formulas** — defined in Section 4. Confirm the three formulas.
+- **`FR-BOT-8` (backtesting / paper-trading gate)** — policy proposed in Section 11. Confirm the 50-trade window and the graduation bar (positive P&L + 45% win probability).
+- **Module failure/timeout fallback values** — defined in Section 9.1.
+- **AI-call latency/cadence** — resolved in Section 9.2 (fast deterministic path + 15–30s cached AI path).
+- **Data Payload Structure** — proposed in Section 10.
+- **Module 3 data source reliability** — proposed in Section 9.3.
+
+**Still genuinely open, no proposal yet:**
+- The actual content of `STRATEGY_A`'s candidate strategy set (breakouts, mean reversion, or others) — Module 4 references this but the specific strategies themselves haven't been defined.
+- Which broker(s)/MT5 connection method — carried over from `03_SRS.md` Section 8, blocks Module 7's exact implementation.
 
 ---
 
