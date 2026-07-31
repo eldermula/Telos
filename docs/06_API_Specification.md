@@ -49,7 +49,51 @@ Matches the `users` table (`05` Section 1.2) directly — no changes needed afte
 { "token": "jwt...", "user": { "id": "...", "email": "...", "role": "user | admin" } }
 ```
 
+**JWT model — settled (Phase 1 planning):** single token only, as shown above. No access/refresh split for now — `09_Security.md` Section 2's mention of a refresh mechanism is deferred to Roadmap Phase 8 (hardening), not built in Phase 1. Logout invalidates the token via a Redis blacklist entry (`session:{user_id}`), checked on every authenticated request until the token's natural expiry.
+
+**Full request/response bodies — settled (Phase 1 planning), filling the gap this section originally left open:**
+
+```json
+// POST /auth/signup
+{ "email": "string", "password": "string" }
+→ 201 { "user": { "id", "email", "role" } }
+// Also auto-creates an empty settings row for the new user (1:1 per 05's ERD) —
+// avoids null-settings edge cases everywhere else that reads settings.
+
+// POST /auth/login
+{ "email": "string", "password": "string" }
+→ 200 { "token": "...", "user": { "id", "email", "role" } }
+
+// POST /auth/logout
+(no body, requires auth) → 204
+
+// POST /auth/password-reset/request
+{ "email": "string" }
+→ 200 { "message": "If that email exists, a reset link was sent." }
+// Deliberately generic — never confirms whether the email exists (no user enumeration).
+// Token stored in Redis with a TTL (password_reset:{token}), not a Postgres table —
+// fits Redis's ephemeral-state role (05 Section 3) rather than adding a new table for it.
+// Email delivery: dev placeholder (log the reset link server-side) until a real SMTP
+// provider is configured — nodemailer is wired in but unused until then. This is an
+// interim state, not a final decision — revisit before Phase 9's live rollout.
+
+// POST /auth/password-reset/confirm
+{ "token": "string", "password": "string" }
+→ 200 { "message": "Password updated." }
+
+// GET /auth/me
+→ 200 { "id", "email", "role", "created_at" }
+```
+
+**Health check — settled:** `GET /health` lives at the root, outside `/api/v1` — standard placement for a tunnel/liveness probe, not part of the versioned API surface.
+
+**Auth rate limiting — settled default:** 5 login attempts per 15 minutes per IP, via the Redis `ratelimit:` mechanism already in `05` Section 2. Other endpoints' thresholds remain open (Section 15).
+
 MFA (`FR-AUTH-5`) remains out of scope for this contract version — not designed now to avoid guessing at a shape before requirements land.
+
+## 3a. Migration Tooling (Settled — Phase 1 Planning)
+
+Raw SQL migration files (`database/migrations/NNN_description.sql`), run in order by a small Node script (`database/migrate.js`) using `pg` directly — no ORM. Matches AI Rules' preference for explicit, deterministic code over abstraction, and keeps the dependency footprint smaller on the resource-constrained self-hosted machine (`13_Cursor_Implementation_Guide.md` `CIG-11.1`). Migrations are tracked in a `schema_migrations` table.
 
 ## 4. Onboarding — Broker Connections (`FR-ONB-1` – `FR-ONB-6`)
 
@@ -275,15 +319,17 @@ Every `/admin/*` route requires `role: admin` on the JWT — enforced server-sid
 - **`NFR-2` security boundary:** broker credentials never appear in any response body, including admin routes.
 - **`NFR-3` real-time delivery:** Section 11 covers this; REST for on-demand queries/actions, WebSocket for live state.
 - **`NFR-6` auditability:** now covered on two fronts — `GET /trading/decision-log` (bot decisions) and the `admin_audit_log` write requirement (Section 13, admin actions). The first draft only implicitly covered the former.
-- Rate limiting: still unspecified per-endpoint (Section 15).
+- Rate limiting: auth login default settled (5/15min/IP, Section 3) — other endpoints still unspecified per-endpoint (Section 15).
 
 ## 15. Open Questions
 
 - Exact WebSocket auth handshake mechanics (query param vs. auth frame vs. subprotocol).
-- Per-endpoint rate limits.
+- Per-endpoint rate limits, outside the now-settled auth login default.
 - MFA endpoint(s), once `FR-AUTH-5` scope is confirmed.
 - Whether `/reports/:id/download` streams the file directly or returns a signed URL from `reports.file_path`.
 - Final shape of `FR-AI-2` — if the Assistant gains action-taking ability, exact endpoint(s) need explicit sign-off.
+- SMTP provider for password-reset emails — currently a dev placeholder (Section 3); needs a real choice before Phase 9's live rollout.
+- Cloudflare Tunnel domain/hostname — needed to verify Phase 1's exit criteria; user-supplied, not a design decision.
 
 ## 16. Reconciliation Notes — Changes Made After Reviewing `05_Database_Design.md`
 
