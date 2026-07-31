@@ -65,6 +65,7 @@ users ──1:1──> settings
 |---|---|---|
 | id | UUID (PK) | |
 | bot_instance_id | UUID (FK → bot_instances) | |
+| origin | enum('bot','manual') | distinguishes bot-originated trades from `FR-TRADE-5` manual orders — both still route through the same `bot_instance_id`/execution path, this only records who decided it |
 | direction | enum('BUY','SELL') | from Bot Architecture §9 Module 4 output |
 | entry_price | numeric | |
 | stop_price | numeric | |
@@ -85,7 +86,7 @@ users ──1:1──> settings
 | timestamp | timestamptz | |
 | decision_type | enum('strategy_switch','profit_lock','macro_circuit_breaker','micro_circuit_breaker','trade_approved','trade_rejected') | |
 | triggering_condition | text | human-readable reason |
-| details | jsonb | full environment dictionary snapshot (per Bot Architecture §10, once defined) that produced this decision |
+| details | jsonb | full environment dictionary snapshot, per Bot Architecture §10, that produced this decision |
 
 **`notifications`**
 | Column | Type | Notes |
@@ -175,6 +176,8 @@ Redis is not the source of truth for anything — every value cached here has a 
 - ~~`risk_tier_config` table vs. hardcoded~~ → configurable table (Section 1.3).
 - ~~`bot_decision_log` retention~~ → full detail kept 6 months, then archived to local compressed JSON rather than deleted.
 - ~~Report file storage location~~ → local disk on the self-hosted machine (per infrastructure decision — the same PC running the Backend API/Bot stores `reports.file_path` contents directly).
+- ~~Report generation: sync vs. async~~ → **synchronous.** No `status` column added — given the self-hosted, resource-constrained setup (System Architecture §8), adding an async job queue is extra infrastructure for a report-generation task that doesn't need it yet. `POST /reports` (`06_API_Specification.md`) returns the finished resource directly. Revisit only if report generation time becomes a real problem.
+- ~~Portfolio "current holdings" storage~~ → **derived, not stored.** No `holdings` table. `GET /portfolio/holdings` (`06_API_Specification.md`) computes net position per instrument from open `trades` rows at query time — avoids a second source of truth that could drift from `trades`, and there's no `trades` volume yet where the computation would be a performance problem.
 
 ---
 
