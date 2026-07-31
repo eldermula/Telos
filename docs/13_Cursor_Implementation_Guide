@@ -1,0 +1,116 @@
+# 13 — Cursor Implementation Guide — Telos
+
+> Supplements `MASTER_PROJECT_BLUEPRINT.md`, `docs/10_AI_Rules.md`, and `docs/11_AI_Prompt_Library.md`. Does not replace them. Defines how Cursor (or any implementation tool operating in this role) must behave for the lifetime of the Telos project.
+>
+> **Format note:** rules are stated as `MUST` / `MUST NOT` / `SHOULD` (RFC 2119-style), one directive per line, each with a rule ID (`CIG-x.x`) and a cross-reference to the doc section that governs it. This is deliberate — it's written to be parsed and cited by an AI tool, not just read by a human.
+>
+> **Renumbered from the submitted draft's "12"** — `12_Roadmap.md` already occupies that slot. This document is `13`.
+
+---
+
+## 1. Role Definition
+
+- `CIG-1.1` — Cursor MUST act only as implementation engineer: translating already-approved documentation into working code.
+- `CIG-1.2` — Cursor MUST NOT change product requirements, architecture, or business rules on its own initiative. Any such change requires explicit human approval first.
+
+## 2. Source-of-Truth Protocol
+
+- `CIG-2.1` — Before any implementation task, Cursor MUST read, in this order: (1) `MASTER_PROJECT_BLUEPRINT.md`, (2) `docs/10_AI_Rules.md`, (3) every doc section directly relevant to the task (per `11_AI_Prompt_Library.md` Section 1's preamble).
+- `CIG-2.2` — Documentation MUST be treated as authoritative over Cursor's own inference, always.
+- `CIG-2.3` — IF code and documentation disagree, Cursor MUST NOT silently resolve the conflict in either direction (neither "fix" the code to match stale docs nor "fix" the docs to match existing code). Cursor MUST state the conflict explicitly and wait for a decision.
+
+## 3. Incremental Development Protocol
+
+- `CIG-3.1` — Cursor MUST NOT attempt to implement the full platform, or a full phase, in a single task.
+- `CIG-3.2` — Work MUST be broken into milestones. **The authoritative milestone sequence is `12_Roadmap.md`'s Phase 0–10** — Cursor MUST follow that ordering rather than inventing or reordering milestones, since the Roadmap's sequence is deliberately cost-optimized (deterministic APIRS core proven in paper trading before any AI-API-driven module is built — see Roadmap Phase 3 vs. Phase 6).
+- `CIG-3.3` — Cursor MUST complete and get sign-off on one milestone before beginning the next, unless explicitly told to parallelize.
+
+## 4. No-Guessing Protocol
+
+- `CIG-4.1` — Cursor MUST NOT invent, without being told to: database columns or tables (governed by `05_Database_Design.md`), API endpoints or payload shapes (`06_API_Specification.md`), business/trading logic or risk formulas (`08_Bot_Architecture.md`), authentication flows (`09_Security.md` Section 2), or frontend behavior/design values (`07_UI_UX_Guide.md`).
+- `CIG-4.2` — IF a required detail is undocumented, or explicitly marked as an "Open Item" in any doc, Cursor MUST stop and request clarification rather than choosing a default.
+
+## 5. Module Boundary Enforcement
+
+Module list and single-responsibility mapping — MUST match `08_Bot_Architecture.md` Section 9 and `04_System_Architecture.md` Section 3 exactly, not a paraphrased subset:
+
+- `CIG-5.1` — **Frontend** — user interface only. MUST NOT call the Bot, MT5, or broker directly (Blueprint Section 5).
+- `CIG-5.2` — **Backend API** — orchestration, auth, persistence only. MUST NOT contain trading/risk logic itself (that's APIRS's domain).
+- `CIG-5.3` — **Master Orchestrator** (Bot Architecture Module 1) — routes data between the modules below; MUST NOT contain risk logic or trading strategy logic itself.
+- `CIG-5.4` — **Market Intelligence** (Module 2) — technical/market analysis only.
+- `CIG-5.5` — **News AI** (Module 3) — news/sentiment analysis only.
+- `CIG-5.6` — **Strategy Engine** (Module 4) — trade signal generation only.
+- `CIG-5.7` — **APIRS** (Module 5) — risk management and position sizing only. Has absolute veto power over every other module (`08` Section 9).
+- `CIG-5.8` — **Learning Engine** (Module 6) — post-trade performance feedback only.
+- `CIG-5.9` — **Execution Engine** (Module 7) — trade execution only; MUST remain blind to market sentiment/strategy reasoning (`08` Module 7).
+- `CIG-5.10` — No module may assume another module's responsibility, even temporarily "to save time" on a milestone.
+
+## 6. Database Rules
+
+- `CIG-6.1` — All persistent, business-critical data MUST live in PostgreSQL, per `05_Database_Design.md`.
+- `CIG-6.2` — Redis MUST be treated as cache/ephemeral state only (`05` Section 3). Business-critical information MUST NOT exist solely in Redis.
+- `CIG-6.3` — Every schema change MUST have a corresponding migration AND a corresponding update to `05_Database_Design.md` in the same milestone — not deferred to "later" (matches `11_AI_Prompt_Library.md` Section 7).
+
+## 7. Deterministic vs. Probabilistic AI Rule
+
+- `CIG-7.1` — APIRS (`08_Bot_Architecture.md` Sections 2–8) MUST be implemented to match the documented formulas exactly. MUST NOT be approximated, "interpreted," or reimplemented via a probabilistic/LLM component.
+- `CIG-7.2` — Probabilistic/ML modules (Market Intelligence, News AI, Strategy Engine, Learning Engine) MAY recommend or score. They MUST NOT override APIRS's `final_applied_position_risk` or `trade_approved` output (`08` Section 9 — absolute veto power).
+
+## 8. Security Rules
+
+- `CIG-8.1` — MUST NOT store passwords, broker credentials, secrets, API keys, or tokens in plaintext, anywhere — code, logs, or database (`09_Security.md` Sections 2–3).
+- `CIG-8.2` — Passwords MUST be hashed with bcrypt or Argon2 (`09` Section 2).
+- `CIG-8.3` — Broker credentials MUST be encrypted at rest and MUST NOT appear in any response sent to the Frontend, including admin-facing responses (`09` Section 3, `NFR-2`).
+- `CIG-8.4` — The non-custodial constraint (Blueprint Section 5a) applies without exception to every rule in this section — no code path may accept, hold, or transfer user trading funds.
+
+## 9. Coding Standards
+
+- `CIG-9.1` — Write production-quality code. Placeholder implementations only when explicitly requested, and MUST be clearly marked as placeholders (e.g. `// TODO(placeholder): ...`).
+- `CIG-9.2` — MUST NOT duplicate logic that already exists as a reusable service — extend or call the existing service instead.
+- `CIG-9.3` — Functions SHOULD be single-purpose and meaningfully named.
+- `CIG-9.4` — Comments SHOULD be written only where they add understanding the code itself doesn't already convey.
+
+## 10. Error Handling
+
+- `CIG-10.1` — MUST NOT silently swallow exceptions.
+- `CIG-10.2` — Error responses MUST be meaningful but MUST NOT leak internal detail (stack traces, query text, file paths) — matches `06_API_Specification.md` Section 2's error shape and `09_Security.md` Section 8.
+- `CIG-10.3` — Failures MUST be logged with enough context to diagnose without reproducing the issue from scratch.
+- `CIG-10.4` — Failed broker operations MUST surface to the user via the Notifications module (`FR-NOTIF-2`) — MUST NOT fail silently.
+
+## 11. Performance Constraints — Local Dev & Self-Hosted Production
+
+**Current environment (consolidated — see revision note in Section 15):**
+- Development machine: Windows 10, Intel Core i5-6300U @ 2.4GHz, 8GB RAM, **HDD (no SSD)**.
+- Production: the same self-hosted machine, reached via **Cloudflare Tunnel** (`04_System_Architecture.md` Section 8) — not a separate cloud environment. Frontend deploys to Vercel; Backend/PostgreSQL/Redis/Bot all run locally on this machine in both dev and production.
+
+- `CIG-11.1` — Given HDD rather than SSD, disk I/O MUST be treated as a real constraint, not a theoretical one: minimize unnecessary synchronous writes, avoid excessive small/frequent DB writes where batching is reasonable, and keep Docker images minimal (this also serves `09_Security.md` Section 9's smaller-attack-surface goal — same action, two benefits).
+- `CIG-11.2` — MUST avoid unnecessary database queries; reuse services rather than re-fetching the same data.
+- `CIG-11.3` — SHOULD prefer asynchronous operations where the approved stack supports them idiomatically.
+- `CIG-11.4` — MUST design with future horizontal scaling in mind (`04_System_Architecture.md` Section 9's open item) WITHOUT building distributed-systems infrastructure now — the current target is 5 users on one machine, not thousands across a cluster.
+
+## 12. Testing
+
+- `CIG-12.1` — Every implemented feature MUST be testable.
+- `CIG-12.2` — A milestone MUST NOT be marked complete if its main execution paths haven't been verified to work.
+
+## 13. Documentation Synchronization Protocol
+
+- `CIG-13.1` — IF implementation reveals a documentation error, Cursor MUST NOT silently change behavior to match either the code or the docs.
+- `CIG-13.2` — Cursor MUST identify: (a) the affected document, (b) the conflicting section, (c) a recommended update — and wait for approval before changing documentation. This is the standing rule behind the prompt template in `11_AI_Prompt_Library.md` Section 9, not just a one-off prompt to remember.
+
+## 14. Git Discipline
+
+- `CIG-14.1` — Each milestone SHOULD produce focused, atomic commits.
+- `CIG-14.2` — MUST NOT combine unrelated changes into one commit.
+- `CIG-14.3` — Commit history SHOULD read as a understandable record of what changed and why, not just what got saved.
+
+## 15. Long-Term Objective & Revision Notes
+
+**Objective:** optimize for maintainability, correctness, modularity, and scalability. Temporary shortcuts are acceptable only when explicitly approved and clearly documented (ties directly to Section 13's synchronization protocol — an undocumented shortcut is itself a documentation violation). The long-term goal — evolving from one local machine to distributed cloud infrastructure without requiring architectural redesign — is the same open item already tracked in `04_System_Architecture.md` Section 9 and `12_Roadmap.md` Phase 10, not a separate aspiration.
+
+**Changes made from the submitted draft, and why:**
+1. Renumbered `12` → `13` (collision with the existing Roadmap).
+2. Replaced the generic milestone list with a direct pointer to `12_Roadmap.md`'s actual phase sequence (Section 3), since that sequence encodes a specific cost-driven ordering the generic list didn't capture and could have silently contradicted.
+3. Expanded the module list (Section 5) to match `08_Bot_Architecture.md`'s actual seven modules exactly — the original list omitted the Master Orchestrator and News AI as distinct entries.
+4. Merged the "Local Development Environment" section into Section 11 alongside the previously-established hardware facts, and clarified that Cloudflare Tunnel governs production reachability — it wasn't mentioned in the original draft and its absence could have read as "not yet decided."
+5. Converted all prose rules into `MUST`/`MUST NOT`/`SHOULD` directives with stable IDs, per the request to make this more machine/AI-parseable — each rule can now be cited by ID (e.g. "per CIG-7.1") instead of re-quoted in full.
