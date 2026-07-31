@@ -8,6 +8,8 @@
 
 ## 1. PostgreSQL — Durable Storage
 
+**Migration tooling — settled (Phase 1 planning):** raw SQL files run by a small Node script, no ORM. Full rationale in `06_API_Specification.md` Section 3a.
+
 ### 1.1 Entity Relationship Overview
 
 ```
@@ -159,8 +161,9 @@ The Tier 0–7 matrix in `08_Bot_Architecture.md` Section 3 lives in this table 
 | `session:{user_id}` | Session/auth cache, JWT refresh/blacklist handling |
 | `ratelimit:{user_id}:{endpoint}` | API rate-limiting counters |
 | `bot-events:{bot_instance_id}` (pub/sub channel) | Fanout channel so multiple backend instances all receive the same Bot events for WebSocket broadcast (`04_System_Architecture.md` §5) |
+| `password_reset:{token}` (TTL-bound) | Password reset tokens (`FR-AUTH-4`, `06_API_Specification.md` Section 3) — settled during Phase 1 planning |
 
-Redis is not the source of truth for anything — every value cached here has a durable counterpart in PostgreSQL (`bot_instances`, `trades`, `bot_decision_log`) that Redis is refreshed from.
+Redis is not the source of truth for most of the above — every other value cached here has a durable counterpart in PostgreSQL (`bot_instances`, `trades`, `bot_decision_log`) that Redis is refreshed from. **`password_reset:{token}` is the one deliberate exception:** it has no Postgres counterpart by design, since a lost/expired reset token just means the user requests a new one — no data worth durably persisting. Worth remembering as an exception rather than assuming the principle above is absolute.
 
 ## 3. Encryption & Security Notes
 
