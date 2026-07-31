@@ -1,6 +1,6 @@
 # 07 — UI/UX Guide — Telos
 
-> Read `MASTER_PROJECT_BLUEPRINT.md` Section 3, `01_Project_Vision.md`, and `docs/10_AI_Rules.md` Section 5 first — this document expands their design direction into concrete tokens and component rules. It is the authoritative source `03_SRS.md` (`NFR-7`) and `02_PRD.md` point to. All recommendations here default to $0-cost / free-tier tools and licenses, per current project constraints — no paid fonts, icon packs, or UI kits.
+> Read `MASTER_PROJECT_BLUEPRINT.md` Section 3, `01_Project_Vision.md`, and `docs/10_AI_Rules.md` Section 5 first — this document expands their design direction into concrete tokens and component rules. It is the authoritative source `03_SRS.md` (`NFR-7`) and `02_Product_Requirements.md` point to. All recommendations here default to $0-cost / free-tier tools and licenses, per current project constraints — no paid fonts, icon packs, or UI kits.
 
 ---
 
