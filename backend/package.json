@@ -1,0 +1,14 @@
+{
+  "name": "telos-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telos Backend API",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
