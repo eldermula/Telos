@@ -55,21 +55,27 @@ MFA (`FR-AUTH-5`) remains out of scope for this contract version — not designe
 
 **Renamed from the first draft's `/broker-accounts` to `/broker-connections`, and `broker_type` to `broker_name`, to match the `broker_connections` table in `05` exactly** — see Section 16.1.
 
-The broker/MT5 connection *method* is still an open item (SRS Section 8, System Architecture Section 9) — that's unrelated to this naming fix and still unresolved. Endpoints stay broker-agnostic: `broker_name` is a free-form identifier validated server-side, and `credentials` shape is broker-specific.
+**Confirmed — single broker account per user, enforced at the application layer** (`04_System_Architecture.md` Section 3.6/9): the schema stays multi-capable (unchanged, no cost to leave it that way), but `POST /broker-connections` rejects a second link attempt while an active one exists, returning `409 CONNECTION_ALREADY_EXISTS`. The optional `broker_connection_id` param below is kept as a defensive/forward-compatible pattern, not because it's needed today.
+
+**Confirmed — MT5 connection method** (`04_System_Architecture.md` Section 3.6): the official `MetaTrader5` Python package, via a local Python service. `credentials` below has a concrete shape now rather than a placeholder.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/broker-connections` | Link a broker account |
-| GET | `/broker-connections` | List linked broker connection(s) + status |
-| GET | `/broker-connections/:id` | Get one connection's status/detail |
+| POST | `/broker-connections` | Link a broker account (fails with `409` if one already exists) |
+| GET | `/broker-connections` | Get the linked connection + status (empty array if none) |
+| GET | `/broker-connections/:id` | Get connection status/detail |
 | PATCH | `/broker-connections/:id` | Re-link / update credentials |
 | DELETE | `/broker-connections/:id` | Disconnect |
 
 `POST /broker-connections` request:
 ```json
 {
-  "broker_name": "mt5 | <other-broker-key>",
-  "credentials": { "// broker_name-specific shape, defined once brokers are confirmed": "" }
+  "broker_name": "mt5",
+  "credentials": {
+    "login": "string",
+    "password": "string",
+    "server": "string"
+  }
 }
 ```
 
@@ -84,7 +90,7 @@ Response — matches `broker_connections` columns directly:
 }
 ```
 
-**Cardinality note (new — see Section 16.2):** `05`'s ERD is `users ──1:N──> broker_connections`, i.e. a user can have more than one linked broker account, each with its own `bot_instance`. The PRD's core flow (Vision Section 5, PRD 3.2) was written assuming a single linked account. This document doesn't resolve that tension — it's flagged here and carried into Section 6 (Trading), where it actually matters for endpoint design. `GET /broker-connections` returning a list rather than a single object is deliberate, so the Frontend isn't rebuilt later if multi-account is confirmed.
+**Cardinality note (settled — see `04_System_Architecture.md` Section 3.6/9):** `05`'s schema is `users ──1:N──> broker_connections` and stays that way, but is application-enforced to one active connection per user for now. `GET /broker-connections` still returns an array (empty or single-item) rather than a single object, so the Frontend doesn't need rebuilding if multi-account is enabled later.
 
 **Non-negotiable constraints (unchanged):**
 - `credentials` accepted once, encrypted at rest, never echoed back — list/detail responses only ever contain `connection_status` and metadata, never credential material.
@@ -97,11 +103,11 @@ Response — matches `broker_connections` columns directly:
 |---|---|---|
 | GET | `/dashboard/summary` | Aggregate view: connection status, portfolio snapshot, recent activity, key metrics |
 
-Read-only server-side composition of Broker Connections + Trading + Portfolio + Analytics, so the Frontend isn't required to make 4 calls on initial load. If a user has multiple `broker_connections`/`bot_instances` (Section 4 cardinality note), this endpoint returns a summary array keyed by `broker_connection_id` rather than assuming one. Live updates after initial load come via WebSocket (Section 11), not polling.
+Read-only server-side composition of Broker Connections + Trading + Portfolio + Analytics, so the Frontend isn't required to make 4 calls on initial load. Given single-account is confirmed for V1 (Section 4), this returns one summary object, not an array — simpler than the earlier draft assumed. Live updates after initial load come via WebSocket (Section 11), not polling.
 
 ## 6. Trading (`FR-TRADE-1` – `FR-TRADE-5`)
 
-Every endpoint below now accepts an optional `broker_connection_id` (query param on `GET`s, body field on `POST`s). **If the user has exactly one broker connection, it's inferred and the param can be omitted — this keeps the single-account flow from the Vision doc simple by default.** If a user has more than one, omitting it returns `409 AMBIGUOUS_BOT_INSTANCE` rather than silently guessing. This is the concrete resolution of the Section 4 cardinality note as far as this endpoint set is concerned.
+**Simplified now that single account per user is confirmed (Section 4):** `broker_connection_id` is resolved server-side from the authenticated user automatically — it's not a client-supplied param. The `409 AMBIGUOUS_BOT_INSTANCE` case from the earlier draft can't occur under this constraint and has been removed. If multi-account is enabled later (`12_Roadmap.md` Phase 10), an explicit `broker_connection_id` param would be reintroduced here — not before.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -275,18 +281,16 @@ Every `/admin/*` route requires `role: admin` on the JWT — enforced server-sid
 
 - Exact WebSocket auth handshake mechanics (query param vs. auth frame vs. subprotocol).
 - Per-endpoint rate limits.
-- `broker_name` allowed values and each broker's `credentials` schema — blocked on the broker/MT5 decision (SRS Section 8 / System Architecture Section 9).
 - MFA endpoint(s), once `FR-AUTH-5` scope is confirmed.
 - Whether `/reports/:id/download` streams the file directly or returns a signed URL from `reports.file_path`.
 - Final shape of `FR-AI-2` — if the Assistant gains action-taking ability, exact endpoint(s) need explicit sign-off.
-- **Still open, not yet decided:** whether Telos supports multiple broker connections per user (schema allows it — `05` Section 1.1) or should be constrained to one, matching the Vision/PRD's original single-account assumption (Section 4/16.2). This is the one open item here that's a product decision, not a technical one.
 
 ## 16. Reconciliation Notes — Changes Made After Reviewing `05_Database_Design.md`
 
 For traceability, since AI Rules Section 9 asks that changes be explained rather than silently applied:
 
 1. **Naming:** `/broker-accounts` → `/broker-connections`, `broker_type` → `broker_name`, generic `status` → `connection_status` in the linking response — all to match the `broker_connections` table exactly instead of parallel invented terms.
-2. **Cardinality:** `05`'s `users ──1:N──> broker_connections` means multi-account is schema-supported even though PRD 3.2/Vision assume one. Resolved *for the Trading endpoints specifically* with an optional `broker_connection_id` param (inferred when only one exists, `409` when ambiguous and omitted) — not resolved everywhere, and not a claim that multi-account is definitely in scope.
+2. **Cardinality:** `05`'s `users ──1:N──> broker_connections` means multi-account is schema-supported even though PRD 3.2/Vision assume one. At the time of this revision, resolved only *for the Trading endpoints* with an optional `broker_connection_id` param — **superseded since by a project-wide decision: single account per user for V1, enforced at the application layer (Section 4)**, which simplified Section 6 further.
 3. **`trades` has no bot-vs-manual distinction** — surfaced as a schema gap blocking clean implementation of `FR-TRADE-5`'s audit trail, not silently absorbed into the API.
 4. **AI Assistant restructured** from flat messages to nested `conversations/:id/messages`, matching `ai_assistant_conversations`/`ai_assistant_messages`'s actual 1:N shape in `05`.
 5. **Added `GET /trading/decision-log`**, previously missing entirely — `bot_decision_log` existed in `05` with no Frontend-facing read path, which undercuts the audit/transparency requirements it exists to serve.
