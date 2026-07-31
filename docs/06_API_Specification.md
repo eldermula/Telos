@@ -144,7 +144,7 @@ Every endpoint below now accepts an optional `broker_connection_id` (query param
 }
 ```
 
-**Schema gap surfaced by this review (see Section 16.3):** the `trades` table has no column distinguishing a bot-originated trade from a manual one (`POST /trading/manual-orders`). As drafted, `FR-TRADE-5`'s manual trades and bot trades are indistinguishable in `trade history` and in `bot_decision_log`. Recommend adding `trades.origin enum('bot','manual')` to `05_Database_Design.md` before this endpoint is implemented — flagged here rather than worked around in the API layer, since the API can't invent data the schema doesn't store.
+**Schema gap now resolved** (`05_Database_Design.md` Section 1.2): `trades.origin enum('bot','manual')` distinguishes bot-originated trades from `FR-TRADE-5` manual orders — both still route through the same `bot_instance_id`/execution path, this only records who decided it.
 
 `GET /trading/decision-log` (new) — direct paginated read of `bot_decision_log`, satisfying `FR-BOT-6`/`NFR-6` and the Vision's "watch it work" transparency goal, which wasn't exposed to the Frontend at all in the first draft:
 ```json
@@ -177,10 +177,10 @@ Per System Architecture Section 6, this is strictly separate from the Bot-intern
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/portfolio/holdings` | Current holdings |
+| GET | `/portfolio/holdings` | Current holdings — computed from open `trades` at query time |
 | GET | `/portfolio/performance?range=` | Historical performance over a selectable range |
 
-**Open item surfaced by this review (see Section 16.6):** `05_Database_Design.md` has no `holdings` table. `trades` gives history and open positions, but "current holdings" as a distinct concept (e.g. net position size per instrument) isn't durably stored anywhere. That means `GET /portfolio/holdings` either (a) computes holdings on the fly from open `trades` rows, or (b) requires a live pull from the broker via the Trading Engine on each request, which has different latency/caching implications than a Postgres read. Not resolved here — needs a decision before this endpoint is implemented, and `05` may need a `holdings` table or a documented "derived, not stored" decision.
+**Settled — derived, not stored** (`05_Database_Design.md` Section 4): no `holdings` table. Net position per instrument is computed from open `trades` rows on each request, avoiding a second source of truth that could drift from `trades`.
 
 ## 9. Analytics (`FR-ANLY-1`, `FR-ANLY-2`)
 
@@ -193,25 +193,21 @@ Exact metric set is still open (SRS Section 8); shape is stable regardless (quer
 
 ## 10. Reports (`FR-REP-1`, `FR-REP-2`)
 
-**Corrected from the first draft — see Section 16.7.**
+**Settled — synchronous generation, no `status` column** (`05_Database_Design.md` Section 4): given the self-hosted setup, an async job queue is extra infrastructure this doesn't need yet.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/reports` | Generate a report for a given period |
+| POST | `/reports` | Generate a report for a given period — returns the finished resource directly |
 | GET | `/reports` | List previously generated reports |
 | GET | `/reports/:id` | Get report metadata |
 | GET | `/reports/:id/download` | Download the generated file |
 
-`POST /reports` request — `period_start`/`period_end` as **date**, not full timestamp, matching the `reports` table's column types:
+`POST /reports` request — `period_start`/`period_end` as **date**, matching the `reports` table's column types:
 ```json
 { "period_start": "YYYY-MM-DD", "period_end": "YYYY-MM-DD", "format": "pdf | csv" }
 ```
 
-**Correction:** the first draft put `?format=` on the download endpoint and treated generation as async with a `pending/ready/failed` status. `05`'s `reports` table has no `status` column and `format` is fixed at creation — so `?format=` on download was wrong (removed), and "async with status" isn't representable as written. Two ways to resolve, neither picked yet:
-- Add a `status` column to `reports` in `05_Database_Design.md`, and keep the async model + `report.ready` WebSocket event (Section 11) as originally designed, **or**
-- Treat generation as synchronous (small enough date ranges that it doesn't need async handling), in which case `POST /reports` just returns the finished resource and the `report.ready` event isn't needed.
-
-Flagged in Section 15 as an open question rather than silently choosing one.
+No `report.ready` WebSocket event is needed — the synchronous response *is* the ready report. (Revisit only if report generation time becomes a real problem, per `05`'s note.)
 
 ## 11. Notifications & WebSocket Events (`FR-NOTIF-1` – `FR-NOTIF-3`, `NFR-3`)
 
@@ -281,11 +277,9 @@ Every `/admin/*` route requires `role: admin` on the JWT — enforced server-sid
 - Per-endpoint rate limits.
 - `broker_name` allowed values and each broker's `credentials` schema — blocked on the broker/MT5 decision (SRS Section 8 / System Architecture Section 9).
 - MFA endpoint(s), once `FR-AUTH-5` scope is confirmed.
-- **New:** Reports — add a `status` column to `05`'s `reports` table (async model) or confirm generation is synchronous (Section 10).
-- **New:** Portfolio holdings — derive on the fly from `trades`, or add a `holdings` table to `05` (Section 8/16.6).
-- **New:** `trades.origin` column (`'bot'|'manual'`) needed in `05` before `POST /trading/manual-orders` can be told apart from bot trades in history/audit (Section 6/16.3).
 - Whether `/reports/:id/download` streams the file directly or returns a signed URL from `reports.file_path`.
 - Final shape of `FR-AI-2` — if the Assistant gains action-taking ability, exact endpoint(s) need explicit sign-off.
+- **Still open, not yet decided:** whether Telos supports multiple broker connections per user (schema allows it — `05` Section 1.1) or should be constrained to one, matching the Vision/PRD's original single-account assumption (Section 4/16.2). This is the one open item here that's a product decision, not a technical one.
 
 ## 16. Reconciliation Notes — Changes Made After Reviewing `05_Database_Design.md`
 
