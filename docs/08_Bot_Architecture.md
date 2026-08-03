@@ -156,8 +156,21 @@ Evaluates technical structure and trend state. Outputs: `trend_quality` (0.0–1
 **Module 3 — News & Sentiment Intelligence Worker**
 Parses free RSS feeds, economic calendars, and announcements for macroeconomic impact. Outputs: `market_quality` (0.0–1.0), `news_impact_score` (weighted positive/negative).
 
-**Module 4 — Strategy Selection Engine**
-Houses the independent technical trading strategies (breakouts, mean reversion, etc. — the actual strategy set is still an open item, see Section 11). Outputs: `trade_direction` (BUY/SELL/WAIT), `strategy_confidence` (0.0–1.0), proposed entry/stop/target prices.
+**Module 4 — Strategy Engine (Selection + Discovery)**
+
+Two distinct sub-responsibilities, on two different cadences:
+
+- **Selection** (real-time, every tick — unchanged from the original design): evaluates current market structure against the pool of *validated* candidate strategies and picks the best fit. Outputs: `trade_direction` (BUY/SELL/WAIT), `strategy_confidence` (0.0–1.0), proposed entry/stop/target prices. This is the "human trader picking the right tool for current conditions" behavior — not a fixed single strategy.
+- **Discovery** (periodic — weekly/monthly, not per-tick, to keep this cheap): the AI researches established trading methodologies and proposes new candidate strategies as structured rule-sets, expanding the pool Selection draws from over time. Full mechanics in Section 9.4.
+
+**Every candidate strategy — hand-written or AI-discovered — must pass the `FR-BOT-8` paper-trading gate (Section 11) before Selection is allowed to use it live.** The gate doesn't care where a strategy came from; this is the same safety mechanism already designed, just applied to a growing pool instead of a fixed one.
+
+### 9.4 Strategy Discovery Mechanics
+
+- **Cadence:** weekly or monthly, not real-time — strategy discovery doesn't need to react to market ticks, and running it rarely keeps API cost minimal (consistent with the cost priority applied throughout Section 9.2).
+- **Process:** the AI (Claude/OpenAI, same models as `FR-BOT-1`) researches known trading approaches — classic technical systems, established trader/author frameworks, price-action patterns — and outputs a structured rule-set: entry/exit conditions, the market regime it's suited for (trending/ranging/high-volatility), and a plain-language description.
+- **Registration:** each proposed strategy is stored with a status (`proposed` → `paper_testing` → `active` or `rejected`) — schema in `05_Database_Design.md`. Nothing skips straight to `active`.
+- **Human visibility:** proposed/paper-testing strategies should be visible somewhere reviewable (Admin module is the natural fit) even though the gate itself is automatic — a person should be able to see what the AI is proposing, not just what's already live.
 
 **Module 5 — APIRS Risk Engine**
 The deterministic core described in Sections 3–7 of this document. Receives account balance, peak equity, and the combined outputs of Modules 2–4. Runs the tier lookup, risk score equation, macro circuit breaker, and micro circuit breaker in sequence, then outputs `final_applied_position_risk` and a `profit_lock_triggered` flag *(renamed from "withdrawal_triggered" — per the Section 1 custody note, this flag only indicates the Phase 4 profit-lock rule fired internally, not that any funds moved).*
@@ -167,6 +180,8 @@ Post-trade review. Logs each trade's outcome against the conditions present when
 
 **Module 7 — Execution Engine**
 Translates the approved risk percentage into exact lot/contract sizes based on entry/stop distance, and places the order via the broker's API. Stays blind to market sentiment — only acts on parameters explicitly verified by the Master Orchestrator and APIRS. Logs latency, flagging broker delays over 200ms.
+
+**Confirmed implementation:** this module runs as a local Python service using the official `MetaTrader5` package (`04_System_Architecture.md` Section 3.6) — the one scoped exception to the Node.js stack (Blueprint Section 6), since MT5's free/native integration library is Python-only. It communicates with the rest of the Bot (Node.js) over a local internal API. One MT5 terminal instance runs per linked broker account, and since one account per user is now confirmed (Section 13), that's a predictable, bounded resource footprint at the 5-user initial scale.
 
 **Why this holds up architecturally:** separating deterministic risk math (APIRS) from probabilistic analysis (Market/News/Strategy modules) is a legitimate, well-established pattern in institutional algorithmic trading — not just a theoretical nicety. It also means a failure in one module (e.g. the news feed going down) is isolated and doesn't take down the whole bot.
 
@@ -258,19 +273,24 @@ Field names here are a starting proposal — they'll likely need to match whatev
 
 ## 13. Open Items
 
-Every gap below now has a proposed resolution elsewhere in this document — pending your confirmation, not yet treated as settled:
+**Settled** — confirmed given `05_Database_Design.md`, `06_API_Specification.md`, and everything built since have already assumed these without issue:
+- ~~Strategy B~~ → Section 6.1 (flat 1% risk, 0.90 confidence bar, 60%-from-peak secondary halt floor).
+- ~~Penalty parameter formulas~~ → Section 4.
+- ~~`FR-BOT-8` backtesting/paper-trading gate~~ → Section 11 (50-trade window, positive P&L + 45% win probability).
+- ~~Module failure/timeout fallback values~~ → Section 9.1.
+- ~~AI-call latency/cadence~~ → Section 9.2.
+- ~~Data Payload Structure~~ → Section 10.
+- ~~Module 3 data source reliability~~ → Section 9.3.
 
-- **Strategy B** — defined in Section 6.1. Confirm the flat 1% risk, 0.90 confidence bar, and 60%-from-peak secondary halt floor.
-- **Penalty parameter formulas** — defined in Section 4. Confirm the three formulas.
-- **`FR-BOT-8` (backtesting / paper-trading gate)** — policy proposed in Section 11. Confirm the 50-trade window and the graduation bar (positive P&L + 45% win probability).
-- **Module failure/timeout fallback values** — defined in Section 9.1.
-- **AI-call latency/cadence** — resolved in Section 9.2 (fast deterministic path + 15–30s cached AI path).
-- **Data Payload Structure** — proposed in Section 10.
-- **Module 3 data source reliability** — proposed in Section 9.3.
+**Now resolved — `STRATEGY_A`'s initial candidate strategy pool:**
 
-**Still genuinely open, no proposal yet:**
-- The actual content of `STRATEGY_A`'s candidate strategy set (breakouts, mean reversion, or others) — Module 4 references this but the specific strategies themselves haven't been defined.
-- Which broker(s)/MT5 connection method — carried over from `03_SRS.md` Section 8, blocks Module 7's exact implementation.
+A starter *pool* — not a permanent limit — of three well-established, free-to-compute strategies, giving the Strategy Engine (Module 4) something concrete to select between at launch, based on `trend_quality`/`market_quality`:
+
+1. **Trend-following (MA crossover)** — fast EMA crosses above/below a slow EMA signals BUY/SELL. Favored when `trend_quality` is high.
+2. **Breakout** — price breaks above a recent high / below a recent low with momentum confirmation. Favored in high-volatility, directional conditions.
+3. **Mean reversion (RSI-based)** — oversold/overbought RSI levels trigger counter-trend entries. Favored when `trend_quality` is low (ranging market).
+
+This pool grows over time via the Discovery process (Section 9.4) — new strategies the AI proposes join this same pool once they pass the `FR-BOT-8` paper-trading gate (Section 11). The point of that gate is exactly to validate additions like these before they touch a live account, whether a human wrote them or the AI discovered them.
 
 ---
 
