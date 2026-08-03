@@ -80,10 +80,13 @@ Given the current scale (5 initial users, self-hosted), a lightweight plan beats
 
 ## 11. Open Items
 
-- **Key management approach** for the credential encryption key (Section 3) — still the most important unresolved item in this document.
-- **Backup destination and encryption-in-backup verification** (Section 5).
-- **Per-endpoint rate limit thresholds** (Section 7), carried from `06_API_Specification.md`.
-- **Regulatory/compliance considerations** — worth flagging even though it's outside this document's technical scope: running an automated trading platform, even non-custodial, may carry jurisdiction-specific regulatory obligations depending on where users are located and what the platform is described as doing. This isn't something to resolve in a technical doc — it's a genuine "worth checking with someone qualified before real users connect real accounts" item, not a coding task.
+**Settled:**
+- ~~Key management approach~~ → environment-variable-based key, tradeoff and rationale in `05_Database_Design.md` Section 4.
+- ~~Backup destination~~ → scheduled encrypted `pg_dump` exports pushed to a private GitHub repo (`05_Database_Design.md` Section 4) — free, reuses existing infrastructure.
+- ~~Per-endpoint rate limit thresholds~~ → general default: 60 requests/minute per user for read (`GET`) endpoints, 10 requests/minute for state-changing (`POST`/`PATCH`/`DELETE`) endpoints. Auth login keeps its tighter override (5/15min/IP, `06_API_Specification.md` Section 3). WebSocket connections aren't REST-rate-limited by this scheme.
+
+**Still genuinely open — not a technical decision, flagged for you specifically:**
+- **Regulatory/compliance considerations** — running an automated trading platform, even non-custodial, may carry jurisdiction-specific obligations depending on where users are located and how the platform is described. Worth checking with someone qualified before real users connect real accounts (Roadmap Phase 9) — this isn't something any of these documents can resolve.
 
 ---
 
