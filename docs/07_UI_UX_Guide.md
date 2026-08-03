@@ -175,9 +175,10 @@ Matches the "calm, precise, professional" brand (Vision Section 2) rather than a
 
 ## 10. Open Questions
 
-- Whether Fraunces/Public Sans/IBM Plex Mono get self-hosted (bundled) vs. loaded from Google Fonts CDN at runtime — affects `NFR-3`/perceived load performance marginally; recommend self-hosting once the Frontend build pipeline exists, but not blocking now.
-- Exact mobile tab bar module set (only 5 fit comfortably) — likely Dashboard, Trading, Portfolio, Notifications, Settings, with Analytics/Reports/AI Assistant reachable via a "More" entry, but not yet confirmed against real usage patterns.
-- Whether the Admin module gets a visually distinct theme (e.g. a subtle accent shift) to reduce the chance of an admin mistaking it for the regular user dashboard — not yet decided, flagged for `03_SRS.md`/Admin scoping rather than assumed here.
+**Settled:**
+- ~~Font hosting~~ → self-hosted/bundled, not loaded from Google Fonts CDN at runtime. Removes a dependency on an external service being reachable, which matters more given the self-hosted/tunnel setup (`04_System_Architecture.md` Section 8) than it would on typical cloud hosting — one fewer thing that can fail.
+- ~~Mobile tab bar module set~~ → Dashboard, Trading, Portfolio, Notifications, Settings, with Analytics/Reports/AI Assistant reachable via a "More" entry, as originally proposed.
+- ~~Admin visual distinction~~ → a subtle accent shift: Admin screens swap `accent-gold` for a muted slate-blue (`#5B7A9C`, roughly) as their primary accent color, keeping every other token identical. Enough to make it visually obvious at a glance that "this isn't the regular dashboard," without a full separate theme to maintain.
 
 ---
 
