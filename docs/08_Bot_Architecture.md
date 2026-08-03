@@ -2,7 +2,7 @@
 
 > Read `MASTER_PROJECT_BLUEPRINT.md` and `03_Software_Requirements_Specification.md` (especially Section 3.5, Trading Bot) first. This document is the authoritative technical spec for the Trading Bot's risk engine.
 
-**Edition:** Hyper-Growth Capital Scaling Model (Max 40% Risk Capacity)
+**Edition:** Hyper-Growth Capital Scaling Model (Max 40% Risk Capacity above $50; see Section 3a for the sub-$50 bootstrap phase, which runs hotter)
 **Purpose:** Grow accounts aggressively only when statistically justified, while protecting accumulated capital through dynamic risk scaling, milestone-based profit locking, and intelligent drawdown control.
 
 ---
@@ -18,9 +18,9 @@ If actual cash withdrawal to the user's bank was ever intended for any part of t
 ## 2. Initial Parameters & Constants
 
 ```
-initial_balance        = 50.00
-active_trading_balance  = 50.00   (renamed from current_balance — see Note above)
-peak_equity             = 50.00
+initial_balance        = 10.00
+active_trading_balance  = 10.00   (renamed from current_balance — see Note above)
+peak_equity             = 10.00
 active_strategy_mode    = STRATEGY_A
 lock_ratio              = 0.70    (renamed from withdrawal_ratio)
 growth_ratio            = 0.30
@@ -29,7 +29,9 @@ micro_daily_drawdown_limit = 0.15
 emergency_floor_risk    = 0.01
 ```
 
-## 3. Phase 1 & 2 — Dynamic Milestone Risk Tier Matrix
+**Settled — starting balance revised from $50 to $10 (this revision).** This changes which risk regime a new account starts in: at $10, the account starts inside the **sub-$50 bootstrap phase** (Section 3a below), not directly in Tier 0 of the standard matrix (Section 3). The standard Tier 0–7 matrix and its dollar step sizes are otherwise **unchanged** — they still apply exactly as originally specified once `active_trading_balance` crosses $50.
+
+## 3. Phase 1 & 2 — Dynamic Milestone Risk Tier Matrix (Applies once `active_trading_balance` ≥ $50)
 
 The engine calculates the current tier by evaluating total completed profit blocks. Step Size is the dollar profit target required to unlock the next tier.
 
@@ -46,6 +48,37 @@ The engine calculates the current tier by evaluating total completed profit bloc
 
 *(Flag: Tier 7's 40% ceiling is a deliberately aggressive setting — confirm this is intended before enabling live trading at that tier.)*
 
+**Unchanged by this revision, per explicit instruction:** every dollar amount in this table (step sizes) and every percentage in this table (Base Risk / Max AI Risk Ceiling) stays exactly as originally specified for any balance at or above $50. This table only governs the account once it has grown past the bootstrap phase in Section 3a — it does not itself change shape based on how the account got there.
+
+## 3a. Sub-$50 Micro-Balance Bootstrap Risk Scaling (Proposed — pending confirmation, this revision)
+
+**Why this exists:** the standard Tier 0–7 matrix (Section 3) was designed around dollar-amount step sizes ($150–$500) that only make sense relative to a starting balance in the same order of magnitude. At a $10 starting balance, those step sizes are 15–50x the account itself — the tier system would never realistically progress under the standard percentages (2–5% base/ceiling at Tier 0). This section defines a **separate, temporary risk regime** that applies only while `active_trading_balance < $50`, so the account has a defined (if aggressive) way to reach the point where the standard matrix in Section 3 becomes meaningful.
+
+**Rule — inverse linear scaling between two anchor points:**
+- At `active_trading_balance = $50`: risk = **5%** (matches Tier 0's Max AI Risk Ceiling exactly, so there's no discontinuity at the $50 handoff point).
+- At `active_trading_balance = $10`: risk = **70%**, per explicit instruction.
+- For any balance strictly between $10 and $50, risk scales linearly between those two points:
+
+```
+bootstrap_risk_pct(balance) = 0.05 + ((50 - balance) / 40) * 0.65
+```
+
+- For `active_trading_balance ≤ $10` (e.g. after an early loss shrinks the account further): risk is **capped flat at 70%** — the formula is not extrapolated below $10, since doing so would approach or exceed 100% risk per trade, which is not a valid position size.
+- Once `active_trading_balance ≥ $50`, the account exits this section entirely and is governed by Section 3's Tier 0–7 matrix from that point forward, unchanged.
+
+**Worked reference table:**
+
+| Balance | Bootstrap Risk % |
+|---|---|
+| $50.00 | 5.00% |
+| $40.00 | 21.25% |
+| $30.00 | 37.50% |
+| $20.00 | 53.75% |
+| $10.00 | 70.00% |
+| ≤ $10.00 | 70.00% (flat cap) |
+
+**Flagged explicitly, not smoothed over:** this regime is dramatically more aggressive than anything else in this document, including the already-flagged Tier 7 ceiling. At the $10–$20 end of this scale, a single stop-loss hit consumes more than half the account; two consecutive losing trades in that range can reduce the account to a few dollars or less. This section does **not** currently interact with the Phase 5 macro circuit breaker (Section 6) or Phase 6 micro circuit breaker (Section 7) — both of those were designed around the standard matrix's risk levels, and whether they should override or coexist with this bootstrap phase is an open item (see Section 13). Until that's resolved, treat this section as high-risk-by-design and pending your explicit sign-off before any live (non-paper) use.
+
 ## 4. Phase 3 — Position Sizing Engine
 
 All environmental inputs are normalized decimals between 0.0 (worst) and 1.0 (best):
@@ -60,9 +93,9 @@ All environmental inputs are normalized decimals between 0.0 (worst) and 1.0 (be
 
 **Rules:**
 1. `risk_score = strategy_confidence + live_win_probability + market_quality + trend_quality - drawdown_penalty - volatility_penalty - loss_penalty`
-2. `calculated_risk = tier_base_risk * risk_score`
-3. Final applied position risk is locked between 1% (0.01) and the active tier's Max AI Risk Ceiling.
-4. `final_risk = MAX(0.01, MIN(calculated_risk, tier_max_risk_ceiling))`
+2. `calculated_risk = tier_base_risk * risk_score` — where `tier_base_risk` is the Section 3 table's Base Risk once `active_trading_balance ≥ $50`, or the Section 3a `bootstrap_risk_pct(balance)` value while below $50.
+3. Final applied position risk is locked between 1% (0.01) and the applicable ceiling — the active tier's Max AI Risk Ceiling (Section 3) once ≥ $50, or the Section 3a bootstrap value while below $50.
+4. `final_risk = MAX(0.01, MIN(calculated_risk, applicable_risk_ceiling))`
 
 **Proposed formulas (pending confirmation)** for the three penalty inputs — each designed to scale smoothly toward 1.0 as conditions approach an existing circuit-breaker threshold, so the Risk Score degrades gracefully rather than being fine right up until a hard breaker fires:
 
@@ -89,6 +122,8 @@ Evaluated on trade execution close. Uses a 70% locked / 30% growth split (`lock_
 
 This is an internal accounting/risk-exposure adjustment only. No funds move; the locked portion simply stops being counted as capital available for active risk-taking.
 
+**Note on interaction with Section 3a:** `current_tier_step_size` is undefined while the account is in the sub-$50 bootstrap phase, since Section 3a has no tiers or step sizes of its own — profit-lock milestones as defined here only begin applying once the account has crossed into the standard Tier 0–7 matrix. This is flagged as an open item in Section 13.
+
 ## 6. Phase 5 — Peak Equity Protection (Macro Circuit Breaker)
 
 Tracks historical equity peaks and halts trading before catastrophic failure.
@@ -102,6 +137,8 @@ Tracks historical equity peaks and halts trading before catastrophic failure.
    - Issue an emergency user notification (ties to `FR-NOTIF-3`)
 
 **This resolves `FR-BOT-5` / `FR-BOT-7` from the SRS:** "equity decline trend" is defined as a 45% drawdown from peak equity, triggering an immediate strategy switch or halt.
+
+**Flagged interaction with Section 3a:** at bootstrap-phase risk levels (up to 70%), a single losing trade can exceed this 45% macro-drawdown threshold outright, meaning the macro breaker could fire after just one trade rather than acting as a longer-horizon safeguard. Whether that's acceptable or whether Section 3a needs its own, tighter breaker is an open item (Section 13).
 
 ### 6.1 Strategy B — Capital Preservation Mode (Proposed, pending confirmation)
 
@@ -123,6 +160,8 @@ Instantly decouples the risk engine from aggressive settings when immediate tech
 
 This is the short-horizon complement to the macro circuit breaker in Phase 5 — it reacts within a single trading day rather than waiting for a full drawdown from peak.
 
+**Flagged interaction with Section 3a:** this breaker forcing risk down to 1% is a much larger relative drop while in the bootstrap phase (from up to 70% down to 1%) than in the standard matrix (from at most 40% down to 1%). Worth confirming this is the intended behavior rather than, say, a bootstrap-specific floor — open item, Section 13.
+
 ## 8. Phase 7 — Closed-Loop Self Learning
 
 At the completion of every trade execution cycle, the engine recalculates and feeds updated performance vectors (`strategy_confidence`, `live_win_probability`, `market_quality`, `trend_quality`) back into the Phase 3 scoring for the next trading sequence.
@@ -131,7 +170,7 @@ At the completion of every trade execution cycle, the engine recalculates and fe
 
 **System type:** Orchestrated Event-Driven Multi-Agent Trading System. This describes how the bot's internal modules communicate to feed APIRS (Sections 3–7 above) with the live inputs it needs.
 
-**Design principle:** APIRS is deterministic and does not guess — it strictly executes the math in Sections 3–7. All prediction/analysis (market structure, news, strategy signals) is handled by separate probabilistic modules that feed data *into* APIRS. APIRS has absolute veto power: no trade executes without its sign-off, regardless of how confident the upstream modules are.
+**Design principle:** APIRS is deterministic and does not guess — it strictly executes the math in Sections 3–7 (and, while applicable, Section 3a). All prediction/analysis (market structure, news, strategy signals) is handled by separate probabilistic modules that feed data *into* APIRS. APIRS has absolute veto power: no trade executes without its sign-off, regardless of how confident the upstream modules are.
 
 **High-level flow:**
 ```
@@ -173,7 +212,7 @@ Two distinct sub-responsibilities, on two different cadences:
 - **Human visibility:** proposed/paper-testing strategies should be visible somewhere reviewable (Admin module is the natural fit) even though the gate itself is automatic — a person should be able to see what the AI is proposing, not just what's already live.
 
 **Module 5 — APIRS Risk Engine**
-The deterministic core described in Sections 3–7 of this document. Receives account balance, peak equity, and the combined outputs of Modules 2–4. Runs the tier lookup, risk score equation, macro circuit breaker, and micro circuit breaker in sequence, then outputs `final_applied_position_risk` and a `profit_lock_triggered` flag *(renamed from "withdrawal_triggered" — per the Section 1 custody note, this flag only indicates the Phase 4 profit-lock rule fired internally, not that any funds moved).*
+The deterministic core described in Sections 3–7 (and Section 3a) of this document. Receives account balance, peak equity, and the combined outputs of Modules 2–4. Runs the applicable tier/bootstrap lookup, risk score equation, macro circuit breaker, and micro circuit breaker in sequence, then outputs `final_applied_position_risk` and a `profit_lock_triggered` flag *(renamed from "withdrawal_triggered" — per the Section 1 custody note, this flag only indicates the Phase 4 profit-lock rule fired internally, not that any funds moved).*
 
 **Module 6 — Learning Engine**
 Post-trade review. Logs each trade's outcome against the conditions present when it opened. Feeds `live_win_probability` (rolling 50-trade window) and adjustments to `drawdown_penalty`/`loss_penalty` back into future Module 5 runs.
@@ -256,9 +295,9 @@ Field names here are a starting proposal — they'll likely need to match whatev
 
 ## 11. Pre-Live Validation Policy (Proposed) — resolves `FR-BOT-8`
 
-- Any **new or materially modified strategy**, or any change to a tier's Base Risk / Max Risk Ceiling, must run in **paper-trading mode** (simulated execution, no real broker orders — zero cost, which fits the cost priority directly) for a minimum sample window, proposed to match the Learning Engine's existing 50-trade rolling window (Section 8).
+- Any **new or materially modified strategy**, or any change to a tier's Base Risk / Max Risk Ceiling — **including the Section 3a bootstrap-phase risk curve introduced in this revision** — must run in **paper-trading mode** (simulated execution, no real broker orders — zero cost, which fits the cost priority directly) for a minimum sample window, proposed to match the Learning Engine's existing 50-trade rolling window (Section 8).
 - **Minimum bar to graduate to live**, proposed as a starting point: positive net P&L over the paper window, and `live_win_probability` above 45%. Both are easy to tune later.
-- **Tier progression itself (Sections 3–5) doesn't need re-validation** — it's risk-scaling on an already-validated strategy, not a new strategy. Only new strategies or changed formulas trigger this gate.
+- **Tier progression itself (Sections 3–5) doesn't need re-validation** — it's risk-scaling on an already-validated strategy, not a new strategy. Only new strategies or changed formulas trigger this gate. **Section 3a counts as a changed formula** and should not go live without passing this gate first, given how far outside prior tested ranges its risk levels sit.
 
 ## 12. Core Management Principles
 
@@ -270,6 +309,8 @@ Field names here are a starting proposal — they'll likely need to match whatev
 6. Protect capital baselines before chasing profit growth.
 7. Never increase aggression without statistical validation.
 8. Every decision should maximize long-term system survival, not short-term gain.
+
+*(Flag: Section 3a's bootstrap risk curve is in direct tension with Principle 1 above — worth resolving explicitly rather than leaving the two to quietly disagree.)*
 
 ## 13. Open Items
 
@@ -291,6 +332,13 @@ A starter *pool* — not a permanent limit — of three well-established, free-t
 3. **Mean reversion (RSI-based)** — oversold/overbought RSI levels trigger counter-trend entries. Favored when `trend_quality` is low (ranging market).
 
 This pool grows over time via the Discovery process (Section 9.4) — new strategies the AI proposes join this same pool once they pass the `FR-BOT-8` paper-trading gate (Section 11). The point of that gate is exactly to validate additions like these before they touch a live account, whether a human wrote them or the AI discovered them.
+
+**Newly opened by this revision — not yet resolved:**
+
+- **Section 3a's interaction with Phase 4 (Profit Lock, Section 5)** — profit-lock milestones are defined in terms of `current_tier_step_size`, which doesn't exist while the account is in the sub-$50 bootstrap phase. Does profit-lock simply not apply below $50, or does it need its own bootstrap-phase definition?
+- **Section 3a's interaction with the macro circuit breaker (Section 6)** — at up to 70% risk per trade, a single loss can trigger the 45% macro-drawdown breaker on its own, which changes that breaker's role from "protects against a sustained bad run" to "protects against one bad trade." Confirm this is intended.
+- **Section 3a's interaction with the micro circuit breaker (Section 7)** — same concern at the single-trade level: worth confirming the existing two-strike/15%-daily-drawdown triggers are still the right thresholds at these risk levels, or whether the bootstrap phase needs tighter versions of its own.
+- **Whether Section 3a should exist as a permanent design feature or a one-time bootstrap this project intends to phase out** — worth a plain decision either way, so it doesn't sit as a permanent gap between the stated Core Management Principles (Section 12) and actual behavior below $50.
 
 ---
 
