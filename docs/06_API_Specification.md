@@ -308,6 +308,8 @@ Platform subscription/billing, if introduced, lives under a separate `/billing/*
 | GET | `/admin/system-health` | System health snapshot |
 | GET | `/admin/risk-tiers` | Read current `risk_tier_config` (all 8 tiers) |
 | PATCH | `/admin/risk-tiers/:tier` | Update a tier's `step_size` / `base_risk` / `max_risk_ceiling` |
+| GET | `/admin/candidate-strategies?status=` | List strategies in `candidate_strategies` (`05` Section 1.4), filterable by status |
+| PATCH | `/admin/candidate-strategies/:id` | Mark `reviewed_by_admin`, or manually override status (e.g. force-`reject` a paper-testing strategy) |
 
 Every `/admin/*` route requires `role: admin` on the JWT — enforced server-side, `403` on a non-admin token, never a filtered response.
 
@@ -323,13 +325,16 @@ Every `/admin/*` route requires `role: admin` on the JWT — enforced server-sid
 
 ## 15. Open Questions
 
-- Exact WebSocket auth handshake mechanics (query param vs. auth frame vs. subprotocol).
-- Per-endpoint rate limits, outside the now-settled auth login default.
-- MFA endpoint(s), once `FR-AUTH-5` scope is confirmed.
-- Whether `/reports/:id/download` streams the file directly or returns a signed URL from `reports.file_path`.
-- Final shape of `FR-AI-2` — if the Assistant gains action-taking ability, exact endpoint(s) need explicit sign-off.
-- SMTP provider for password-reset emails — currently a dev placeholder (Section 3); needs a real choice before Phase 9's live rollout.
-- Cloudflare Tunnel domain/hostname — needed to verify Phase 1's exit criteria; user-supplied, not a design decision.
+**Settled:**
+- ~~WebSocket auth handshake~~ → JWT passed as a query param on the connection URL (`wss://.../ws?token=<jwt>`) — simplest option, matches what Section 11 already implied.
+- ~~Per-endpoint rate limits~~ → general default: 60/min for `GET`, 10/min for state-changing methods, per `09_Security.md` Section 11. Auth login keeps its own tighter limit (Section 3).
+- ~~`/reports/:id/download` mechanism~~ → streams the file directly from the backend. No signed-URL scheme needed — there's no separate object storage service in this setup (`05_Database_Design.md` Section 4: reports live on local disk on the same self-hosted machine).
+- ~~`FR-AI-2` scope~~ → read-only/advisory for V1, as Section 7 already assumed. The Assistant does not call `/trading/*` and has no path to influence bot behavior. Revisit only if a real need for action-taking emerges.
+- ~~SMTP provider for password-reset emails~~ → a free-tier transactional email provider (e.g. Brevo, ~300 emails/day free — comfortably enough for 5 users). Needs a free signup and the resulting SMTP credentials dropped into `.env`; the dev-placeholder logging (Section 3) stays in place until that's done.
+
+**Still open — user-dependent, not a design decision:**
+- MFA endpoint(s), once `FR-AUTH-5` scope is confirmed (deliberately deferred, not blocking).
+- Cloudflare Tunnel domain/hostname — a free Quick Tunnel covers Phase 1 verification; once a real domain is purchased, this needs updating with the actual value.
 
 ## 16. Reconciliation Notes — Changes Made After Reviewing `05_Database_Design.md`
 
