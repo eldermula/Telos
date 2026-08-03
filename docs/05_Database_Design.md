@@ -153,6 +153,23 @@ The Tier 0–7 matrix in `08_Bot_Architecture.md` Section 3 lives in this table 
 | base_risk | numeric | |
 | max_risk_ceiling | numeric | |
 
+### 1.4 `candidate_strategies` — New: Strategy Discovery & Validation
+
+Tracks every strategy the Strategy Engine (`08_Bot_Architecture.md` Module 4/Section 9.4) can draw from — both the initial hand-picked pool and anything the AI discovery process proposes later. Nothing reaches `active` without passing the `FR-BOT-8` paper-trading gate.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID (PK) | |
+| name | text | e.g. "MA Crossover", "RSI Mean Reversion" |
+| rule_set | jsonb | structured entry/exit conditions, market regime fit |
+| description | text | plain-language summary |
+| source | enum(`manual`, `ai_discovered`) | |
+| status | enum(`proposed`, `paper_testing`, `active`, `rejected`) | |
+| paper_trading_results | jsonb, nullable | P&L, win rate, trade count from the `FR-BOT-8` validation window |
+| discovered_at | timestamptz | |
+| activated_at | timestamptz, nullable | |
+| reviewed_by_admin | boolean, default false | ties to the Admin visibility requirement in `08_Bot_Architecture.md` Section 9.4 — a person should see what's proposed, not just what's live |
+
 ## 2. Redis — Fast-Changing / Ephemeral State
 
 | Key pattern | Purpose |
@@ -168,14 +185,13 @@ Redis is not the source of truth for most of the above — every other value cac
 ## 3. Encryption & Security Notes
 
 - `broker_connections.encrypted_credentials` — field-level encryption (e.g. AES-256), decrypted only within the Backend API/Trading Engine boundary per `04_System_Architecture.md` Section 7.
-- **Open item:** key management approach (KMS provider, key rotation policy) not yet decided — needed before `09_Security.md` can be considered complete.
+- **Settled:** key management uses an environment-variable-based key — see Section 4 for the full rationale and tradeoff.
 
 ## 4. Open Items
 
-- Key management / encryption approach for broker credentials (Section 3).
-- Backup/redundancy strategy for the PostgreSQL database, given it runs on a single self-hosted machine with no built-in cloud redundancy. No credit card is available for paid cloud backup services, which narrows this to free-tier storage options or periodic manual export to external media.
-
 **Settled:**
+- ~~Key management / encryption approach~~ → the encryption key lives as an environment variable (`.env`, never committed, restrictive file permissions), loaded at backend startup. This is the simplest, free option — the honest tradeoff is that the key lives on the same machine as the encrypted data it protects, which a dedicated secrets manager/KMS would avoid. Given no budget for a paid KMS and the current 5-user scale, this is the right call for now — revisit in `12_Roadmap.md` Phase 10 once scale/budget justifies a proper secrets manager.
+- ~~Backup/redundancy strategy~~ → scheduled encrypted `pg_dump` exports, pushed to a **private GitHub repo** (separate from the code repo) on a regular interval. This is genuinely the cheapest option available — free, and reuses infrastructure already in place rather than requiring a new account/service. At 5-user scale the data volume is small enough that this is practical; revisit if/when dump size becomes unwieldy for git.
 - ~~`risk_tier_config` table vs. hardcoded~~ → configurable table (Section 1.3).
 - ~~`bot_decision_log` retention~~ → full detail kept 6 months, then archived to local compressed JSON rather than deleted.
 - ~~Report file storage location~~ → local disk on the self-hosted machine (per infrastructure decision — the same PC running the Backend API/Bot stores `reports.file_path` contents directly).
