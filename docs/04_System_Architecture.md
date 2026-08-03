@@ -32,12 +32,19 @@ Defines the system-level component boundaries, data flow, and integration points
                                 │
                                 ▼
                       ┌───────────────────┐
-                      │   MT5 / Broker API  │  (user's own linked
-                      │                      │   broker account)
+                      │  MT5 CONNECTOR      │  Python + official
+                      │  (Execution Engine,  │  MetaTrader5 package —
+                      │  Bot Module 7)        │  see Section 3.6
                       └─────────┬──────────┘
                                 │
                                 ▼
-                           [ Markets ]
+                      ┌───────────────────┐
+                      │  Local MT5 Terminal  │  one instance per linked
+                      │  (per user account)   │  broker account (Section 3.6)
+                      └─────────┬──────────┘
+                                │
+                                ▼
+                           [ Broker → Markets ]
 ```
 
 **The frontend never has a direct line to any box below the Backend API.** This is the Blueprint Section 5 boundary, enforced structurally by this diagram, not just by convention.
@@ -71,8 +78,13 @@ Defines the system-level component boundaries, data flow, and integration points
 - Full schema in `05_Database_Design.md`
 
 ### 3.6 MT5 / Broker Layer
+
+**Connection method — confirmed: the official `MetaTrader5` Python package.** Free, native, and Windows-only — which happens to match the self-hosted machine's OS exactly, so no third-party bridge service or paid API is needed. This is a scoped exception to the Node.js-only backend stack (Blueprint Section 6): the MT5 connector runs as a small local Python service, called by the Bot's Execution Engine (`08_Bot_Architecture.md` Module 7) over an internal API — the rest of the Bot and the entire Backend API remain Node.js/Express as approved.
+
+**How it works:** the official library drives a locally running MT5 terminal instance per linked account. **Confirmed: one broker connection per user** (see Section 9) — so this means at most one MT5 terminal instance per user, which keeps resource usage on the 8GB self-hosted machine predictable at the confirmed 5-user initial scale (Section 8). This wouldn't hold up unchanged at "thousands of users" — noted in Section 9 as part of the longer-term scaling question, not a problem to solve now.
+
 - The user's own linked broker account (Blueprint 5a — non-custodial)
-- Connection method (MT5 API vs. broker-specific API) is still an open item — see Section 8
+- Credentials (MT5 login, password, server) captured once via `/broker-connections` (`06_API_Specification.md` Section 4), encrypted at rest, passed to the local MT5 terminal only at connection time — never persisted by the Python connector itself, only by the Backend API's encrypted storage (`09_Security.md` Section 3)
 
 ## 4. Core User Flow, Mapped to Components
 
@@ -107,14 +119,27 @@ Telos has **two distinct AI integration points**, and they must not be merged in
 ## 8. Deployment Architecture
 
 - **Frontend** — deployed to Vercel, auto-deploys from GitHub (confirmed, per prior planning)
-- **Backend API / Trading Engine / Bot / Database** — hosting provider not yet decided. Blueprint Section 6 confirms Docker as the containerization approach, but not where those containers run (e.g. a VPS, a managed container service, etc.). This matters more than it might seem: the Bot is a long-lived process, not a typical serverless request handler, so the hosting choice needs to support that.
+- **Backend API / Trading Engine / Bot / Database** — **self-hosted on your own PC**, not a cloud provider. This actually fits the Bot's nature well: it's a long-lived process (Section 3.4), which doesn't suit typical serverless platforms like Vercel anyway — an always-on machine is the right shape for it.
+- **Connectivity — confirmed: Cloudflare Tunnel.** Connects the Vercel-hosted Frontend to the self-hosted Backend without opening ports on the router or needing a static IP/dynamic DNS. Also fits well with a mobile hotspot connection (see below), since it doesn't require an inbound-reachable public IP at all. Cloudflare's free tier covers this, which matters given no credit card is available for paid services.
+- **Hardware reality check:** the PC running everything is an Intel Core i5-6300U @ 2.4GHz, 8GB RAM, 64-bit. That's modest for running Docker containers for the Backend API, PostgreSQL, Redis, and the Bot's multi-agent orchestration (Section 6) simultaneously, all day. Not a blocker, but worth keeping container resource limits tight and monitoring memory usage once real load is on it — 8GB fills up fast across four+ containers.
+- **Connectivity source:** internet is via phone hotspot, not fixed broadband. Two implications: (1) data usage matters — WebSocket streaming and continuous market/news polling (Bot Architecture Section 9) run all day, so it's worth watching data caps/throttling; (2) hotspot connections are generally less stable than fixed broadband, which reinforces the uptime concern already flagged below.
+- **Initial scale target — confirmed: 5 real users** on this exact setup (self-hosted PC + hotspot + Cloudflare Tunnel), rather than waiting to move to cloud hosting first. This gives a concrete near-term target instead of designing against the eventual "thousands of users" goal (Blueprint Section 9) from day one — cloud migration becomes relevant if/when growth approaches this setup's ceiling, not before.
+- **Operational flags, not software decisions, but worth having a plan for:**
+  - Forex markets run ~24/5 — the PC needs to stay powered on and connected almost continuously; a power or internet drop silently pauses the Bot. A UPS (battery backup) is worth having, especially with hotspot connectivity already being the less stable link.
+  - Single machine = single point of failure. No automatic redundancy if the hardware fails (ties to `05_Database_Design.md` Section 4's backup/redundancy open item).
 
 ## 9. Open Items
 
-- **Backend/Bot/Database hosting provider** — not yet chosen (Section 8).
-- **MT5/broker connection method** — carried over from PRD Section 7 / SRS Section 8.
-- **Horizontal scaling plan for the Bot** — if a user base grows to "thousands of concurrent users" (Blueprint Section 9), does each user get an isolated Bot process, or does one Bot service manage many accounts? Not yet defined, and it changes the Trading Engine's design meaningfully.
-- All six open items still pending in `08_Bot_Architecture.md` (Strategy B, fallback defaults, AI cadence, data payload structure, backtesting policy, News-source reliability) feed directly into this document once resolved.
+- **Longer-term horizontal scaling plan for the Bot** — beyond the confirmed 5-user initial target (Section 8), and beyond the one-MT5-terminal-per-user model (Section 3.6): does each user eventually get an isolated Bot process, or does one Bot service manage many accounts? Only relevant once approaching that ceiling — the last genuinely open architectural question in this document.
+
+**Settled:**
+- ~~Backend/Bot/Database hosting provider~~ → self-hosted on your own PC (Section 8).
+- ~~Tunnel/connectivity method~~ → Cloudflare Tunnel (Section 8).
+- ~~Backup/redundancy plan~~ → scheduled encrypted `pg_dump` to a private GitHub repo (`05_Database_Design.md` Section 4).
+- ~~All items previously carried from `08_Bot_Architecture.md`~~ → all resolved there (Section 13).
+- ~~Initial scale target~~ → 5 real users on the self-hosted setup (Section 8).
+- ~~MT5/broker connection method~~ → official `MetaTrader5` Python package, local Python service alongside the Node.js backend (Section 3.6).
+- ~~Single vs. multi broker-account per user~~ → single, enforced at the application layer; schema stays multi-capable for later (Section 3.6).
 
 ---
 
