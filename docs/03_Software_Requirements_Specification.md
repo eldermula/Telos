@@ -52,34 +52,10 @@ This SRS covers the functional and non-functional requirements for all Telos mod
 
 #### 3.5.1 Profit-Lock Strategy — Milestone-Based Percentage Split
 
-A dynamic compounding profit-lock strategy, applied while equity is trending favorably — complementary to the decline-trend trigger in `FR-BOT-5`, which takes over once equity starts declining.
-
-**Confirmed custody interpretation:** this mechanism never moves money into, out of, or through Telos. It only changes how much capital the bot actively risks on future trades within the user's own linked broker account. The "locked" portion stays in the account, untouched, exactly as if the bot simply stopped trading with it. No transfer, no custody event, no exception to Blueprint 5a. For this reason the variable below is named `locked_profit_amount` rather than "withdrawal" — that naming is intentional and should be preserved in implementation to avoid it being misread as an instruction to move funds.
-
-**Inputs:**
-- `current_balance`
-- `initial_base = 50`
-- `block_size = 150`
-- `lock_ratio = 0.70`
-- `growth_ratio = 0.30`
-
-**Rules:**
-1. `total_profit = current_balance - initial_base`
-2. `completed_blocks = floor(total_profit / block_size)`
-3. `milestone_profit = completed_blocks * block_size`
-4. `locked_profit_amount = milestone_profit * lock_ratio`
-5. `active_trading_balance = current_balance - locked_profit_amount`
-
-**Equation form:**
-```
-Locked Profit = floor((Balance − 50) / 150) × 150 × 0.70
-Active Trading Balance = Balance − Locked Profit
-```
-
-Every time profit crosses a `block_size` milestone, `lock_ratio` (70%) of that milestone is de-risked (excluded from future active trading) and `growth_ratio` (30%) continues compounding within the active trading balance. The de-risked portion remains in the user's own broker account at all times.
+Full detail — including the dynamic per-tier step sizes, risk-scaling matrix, and circuit breakers this strategy operates alongside — now lives in `08_Bot_Architecture.md` (the Adaptive Progressive Intelligence Risk System). Summary: while equity trends favorably, the bot locks in `lock_ratio` (70%) of profit at each completed milestone and continues compounding the remaining `growth_ratio` (30%). This is a de-risking mechanism only — no funds ever move out of the user's linked broker account, keeping it compliant with the non-custodial rule (Blueprint 5a).
 - `FR-BOT-6` — Every strategy selection, switch, and stop/start decision is logged with a timestamp and the triggering condition, for audit and later review.
-- `FR-BOT-7` *(recommended, not yet confirmed)* — A hard maximum-drawdown safeguard exists independent of the trend-based logic, as a backstop in case trend detection fails to trigger in time.
-- `FR-BOT-8` *(recommended, not yet confirmed)* — New or modified strategies are backtested against historical data, and/or run in a paper-trading mode, before being enabled on a live linked account.
+- `FR-BOT-7` — A hard maximum-drawdown safeguard exists independent of the day-to-day trend logic: a 45% drawdown from peak equity triggers an immediate strategy switch or full halt, plus a same-day micro circuit breaker (two consecutive losses, 15% daily drawdown, high volatility, or confidence below 80% all force position risk down to 1%). Full definition in `08_Bot_Architecture.md`.
+- `FR-BOT-8` *(recommended, still not yet confirmed)* — New or modified strategies/tiers are backtested against historical data, and/or run in a paper-trading mode, before being enabled on a live linked account.
 
 ### 3.6 AI Assistant
 - `FR-AI-1` — Users can interact with an in-app AI assistant for portfolio/trading insights.
@@ -139,13 +115,10 @@ Every time profit crosses a `block_size` milestone, `lock_ratio` (70%) of that m
 
 ## 8. Open Questions
 
-- Precise definition of "equity decline trend" for `FR-BOT-5` — e.g., number of consecutive losing periods, percentage drawdown threshold, or a statistical trend measure.
-- Which specific trading methodologies/strategies form the bot's candidate strategy set, and how they're sourced/validated.
-- Whether `FR-BOT-7` (hard max-drawdown safeguard) and `FR-BOT-8` (backtesting/paper-trading gate) are adopted as requirements or handled differently.
-- Scope of AI Assistant actions (`FR-AI-2`) — insights only, or can it influence bot behavior directly?
-- Which broker(s) are supported first, and via what connection method (carried over from PRD Section 7).
-- Exact analytics metric set (`FR-ANLY-1`).
-- Report export format(s) (`FR-REP-2`).
+**Settled** — all three now resolved in `08_Bot_Architecture.md`:
+- ~~Candidate strategy set for `STRATEGY_A`~~ → Section 13 (MA crossover, breakout, RSI mean-reversion starter set).
+- ~~Penalty parameter formulas~~ → Section 4.
+- ~~`FR-BOT-8` backtesting/paper-trading gate~~ → Section 11, confirmed adopted.
 
 ---
 
