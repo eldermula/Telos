@@ -93,7 +93,7 @@ MFA (`FR-AUTH-5`) remains out of scope for this contract version — not designe
 
 ## 3a. Migration Tooling (Settled — Phase 1 Planning)
 
-Raw SQL migration files (`database/migrations/NNN_description.sql`), run in order by a small Node script (`database/migrate.js`) using `pg` directly — no ORM. Matches AI Rules' preference for explicit, deterministic code over abstraction, and keeps the dependency footprint smaller on the resource-constrained self-hosted machine (`13_Cursor_Implementation_Guide.md` `CIG-11.1`). Migrations are tracked in a `schema_migrations` table.
+Raw SQL migration files (`database/migrations/NNN_description.sql`), run in order by a small Node script (`database/migrate.js`) using `pg` directly — no ORM. Matches AI Rules' preference for explicit, deterministic code over abstraction, and keeps the dependency footprint smaller on the resource-constrained self-hosted machine (`04_System_Architecture.md` Section 8 — 8GB RAM, modest CPU, multiple containers running concurrently). Migrations are tracked in a `schema_migrations` table.
 
 ## 4. Onboarding — Broker Connections (`FR-ONB-1` – `FR-ONB-6`)
 
