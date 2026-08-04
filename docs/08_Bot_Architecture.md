@@ -122,7 +122,7 @@ Evaluated on trade execution close. Uses a 70% locked / 30% growth split (`lock_
 
 This is an internal accounting/risk-exposure adjustment only. No funds move; the locked portion simply stops being counted as capital available for active risk-taking.
 
-**Note on interaction with Section 3a:** `current_tier_step_size` is undefined while the account is in the sub-$50 bootstrap phase, since Section 3a has no tiers or step sizes of its own — profit-lock milestones as defined here only begin applying once the account has crossed into the standard Tier 0–7 matrix. This is flagged as an open item in Section 13.
+**Settled — Section 3a interaction:** profit-lock does **not** apply while `active_trading_balance < $50`. `current_tier_step_size` stays undefined for the entire bootstrap phase by design — this phase is intentionally light on rules (Section 3a, Section 13) so the account has room to grow unencumbered. Profit-lock begins the moment the account crosses into the standard Tier 0–7 matrix at $50, exactly as originally specified, with no bootstrap-specific variant needed.
 
 ## 6. Phase 5 — Peak Equity Protection (Macro Circuit Breaker)
 
@@ -138,7 +138,7 @@ Tracks historical equity peaks and halts trading before catastrophic failure.
 
 **This resolves `FR-BOT-5` / `FR-BOT-7` from the SRS:** "equity decline trend" is defined as a 45% drawdown from peak equity, triggering an immediate strategy switch or halt.
 
-**Flagged interaction with Section 3a:** at bootstrap-phase risk levels (up to 70%), a single losing trade can exceed this 45% macro-drawdown threshold outright, meaning the macro breaker could fire after just one trade rather than acting as a longer-horizon safeguard. Whether that's acceptable or whether Section 3a needs its own, tighter breaker is an open item (Section 13).
+**Settled — Section 3a interaction:** confirmed intended. At bootstrap-phase risk levels (up to 70%), a single losing trade can exceed this 45% macro-drawdown threshold outright, meaning the macro breaker can fire after just one trade rather than acting as a longer-horizon safeguard. This is accepted as the tradeoff for allowing 70% risk at very small balances — see Section 13.
 
 ### 6.1 Strategy B — Capital Preservation Mode (Proposed, pending confirmation)
 
@@ -160,7 +160,7 @@ Instantly decouples the risk engine from aggressive settings when immediate tech
 
 This is the short-horizon complement to the macro circuit breaker in Phase 5 — it reacts within a single trading day rather than waiting for a full drawdown from peak.
 
-**Flagged interaction with Section 3a:** this breaker forcing risk down to 1% is a much larger relative drop while in the bootstrap phase (from up to 70% down to 1%) than in the standard matrix (from at most 40% down to 1%). Worth confirming this is the intended behavior rather than, say, a bootstrap-specific floor — open item, Section 13.
+**Settled — Section 3a-specific rule (this revision):** the standard two-strike rule above still applies throughout the bootstrap phase unchanged. In addition, a **single-loss override** applies specifically at the bootstrap phase's risk ceiling: if a trade taken at or near the 70% flat-cap risk level (i.e. `active_trading_balance ≤ $10`, per Section 3a) results in a loss, `active_strategy_mode` switches to `STRATEGY_B` immediately — after that one loss, not after two. This is tighter than the standard two-strike rule by design: a loss at the maximum bootstrap risk level is proportionally far more damaging than a loss at the standard matrix's maximum of 40%, so it doesn't wait for a second occurrence before stepping back into capital preservation.
 
 ## 8. Phase 7 — Closed-Loop Self Learning
 
@@ -310,7 +310,7 @@ Field names here are a starting proposal — they'll likely need to match whatev
 7. Never increase aggression without statistical validation.
 8. Every decision should maximize long-term system survival, not short-term gain.
 
-*(Flag: Section 3a's bootstrap risk curve is in direct tension with Principle 1 above — worth resolving explicitly rather than leaving the two to quietly disagree.)*
+*(Note: Section 3a's bootstrap risk curve is in direct, acknowledged tension with Principle 1 above. This is a deliberate, accepted exception — confirmed in Section 13 — scoped specifically to balances under $50, not a contradiction left to quietly disagree.)*
 
 ## 13. Open Items
 
@@ -333,12 +333,12 @@ A starter *pool* — not a permanent limit — of three well-established, free-t
 
 This pool grows over time via the Discovery process (Section 9.4) — new strategies the AI proposes join this same pool once they pass the `FR-BOT-8` paper-trading gate (Section 11). The point of that gate is exactly to validate additions like these before they touch a live account, whether a human wrote them or the AI discovered them.
 
-**Newly opened by this revision — not yet resolved:**
+**Settled — all four Section 3a interaction questions, this revision:**
 
-- **Section 3a's interaction with Phase 4 (Profit Lock, Section 5)** — profit-lock milestones are defined in terms of `current_tier_step_size`, which doesn't exist while the account is in the sub-$50 bootstrap phase. Does profit-lock simply not apply below $50, or does it need its own bootstrap-phase definition?
-- **Section 3a's interaction with the macro circuit breaker (Section 6)** — at up to 70% risk per trade, a single loss can trigger the 45% macro-drawdown breaker on its own, which changes that breaker's role from "protects against a sustained bad run" to "protects against one bad trade." Confirm this is intended.
-- **Section 3a's interaction with the micro circuit breaker (Section 7)** — same concern at the single-trade level: worth confirming the existing two-strike/15%-daily-drawdown triggers are still the right thresholds at these risk levels, or whether the bootstrap phase needs tighter versions of its own.
-- **Whether Section 3a should exist as a permanent design feature or a one-time bootstrap this project intends to phase out** — worth a plain decision either way, so it doesn't sit as a permanent gap between the stated Core Management Principles (Section 12) and actual behavior below $50.
+- ~~Interaction with Phase 4 (Profit Lock)~~ → does not apply below $50. Begins only once the account crosses into the standard Tier 0–7 matrix (Section 5).
+- ~~Interaction with the macro circuit breaker~~ → confirmed intended. A single loss can trigger the 45% macro breaker outright at bootstrap risk levels — accepted as the deliberate tradeoff of allowing 70% risk at very small balances (Section 6).
+- ~~Interaction with the micro circuit breaker~~ → resolved with a new bootstrap-specific rule: a single loss at the 70% flat-cap risk level (balance ≤ $10) triggers an immediate switch to Strategy B, rather than waiting for the standard two-strike threshold (Section 7).
+- ~~Permanent feature vs. one-time bootstrap~~ → **permanent by design, deliberately minimal.** Section 3a is intended to stay light-touch — few rules, maximum room for the account to grow from a very small starting balance — rather than accumulating the same constraint layers as the standard matrix. This is an intentional, accepted tension with Core Management Principle 1 (Section 12), not a gap to close later.
 
 ---
 
