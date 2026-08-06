@@ -3,6 +3,7 @@ const cors = require('cors');
 const { CORS_ORIGIN } = require('./config/env');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth.routes');
+const brokerConnectionsRouter = require('./routes/broker-connections.routes');
 const { errorHandler } = require('./middleware/error-handler');
 
 const app = express();
@@ -13,6 +14,7 @@ app.use(express.json());
 
 app.use(healthRouter);
 app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/broker-connections', brokerConnectionsRouter);
 
 app.use((req, res) => {
   res.status(404).json({
