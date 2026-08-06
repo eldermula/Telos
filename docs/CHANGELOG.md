@@ -1,5 +1,18 @@
 # Changelog — Telos
 
+## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
+
+**2026-08-06**
+
+- **4.1** Trading Engine scaffold: `backend/src/engine/` — `bot_instances` ensure/load (APIRS `$10` defaults), Redis `bot:{id}:status` cache aligned with `GET /trading/session` shape. Smoke: `scripts/smoke-trading-engine-41.js` → `TRADING_ENGINE_41_PASS`
+- **4.2** Trading REST: `POST /trading/session/start|stop`, `GET /trading/session` (JWT, single broker resolve, Redis-backed session shape). Smoke: `scripts/smoke-trading-session-42.js` → `TRADING_SESSION_42_PASS`
+- **4.3** In-process paper `BotRuntime`: uses `bot/apirs` via `runTradeCycle`, stub signals, persists `trades` + `bot_decision_log`, Redis equity sync, in-process `event-bus`. Smoke: `scripts/smoke-bot-runtime-43.js` → `BOT_RUNTIME_43_PASS`
+- **4.4** WebSocket `/ws?token=<jwt>` + Redis pub/sub `bot-events:{id}`; dependency `ws` added. Events: `bot.status_changed`, `trade.closed`, `equity.updated`, `strategy.switched`. Smoke: `scripts/smoke-websocket-44.js` → `WEBSOCKET_44_PASS`
+- **4.5** Trading reads: `GET /trading/positions|orders|history|decision-log`. `history`/`decision-log` paginated (`{ data, meta: { page, limit, total } }`); `positions` always empty under the paper harness (no open-trade state produced by `runTradeCycle`); `orders` always empty **by design**, not a gap — the bot's execution model never places resting limit/stop orders, only immediate market orders with attached `stop_price`/`target_price` (now documented in `06_API_Specification.md` Section 6). Smoke: `scripts/smoke-trading-reads-45.js` → `TRADING_READS_45_PASS`
+- **4.6a** First real MT5 order-placement path — `bot/mt5-connector/server.py`: `GET /symbol-info`, `GET /positions`, `POST /order/place`, `POST /order/close` (filling-mode retry across FOK/IOC/RETURN; `trade_mode_full` check surfaces closed-market conditions distinctly from a code error). Backend client (`mt5-connector.client.js`) wraps all four. **Manually-triggered only — not called from `BotRuntime`'s automatic tick loop; 4.6b (wiring real trades into the live loop) explicitly deferred until Phase 6 delivers real signals and position-monitoring exists.** Smoke: `scripts/smoke-mt5-order-46.js` → confirmed `EURUSD` `volume_min=0.01`, `trade_mode_full=true`, live ticks; placed, verified, and closed a real 0.01-lot BUY order against MetaQuotes-Demo (ticket `57869054102`) → `MT5_ORDER_46_PASS`
+
+**Phase 4 is complete through 4.6a.** Full paper-trading loop works end-to-end: Start/Stop, live WebSocket status/trade/equity events, and positions/history/decision-log reads. First successful real MT5 order-execution proof is on record against MetaQuotes-Demo — manually-triggered only, deliberately not wired into the automatic bot loop (4.6b, deferred to Phase 6).
+
 ## Phase 3 — APIRS Core (complete)
 
 **2026-08-06**
