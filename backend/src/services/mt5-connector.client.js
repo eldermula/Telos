@@ -51,4 +51,85 @@ async function validateBrokerCredentials(credentials) {
   };
 }
 
-module.exports = { validateBrokerCredentials };
+/**
+ * 4.6a — order execution capability (Bot Architecture Module 7).
+ * Manually-triggered only — not called from BotRuntime's automatic tick
+ * loop (12_Roadmap.md Phase 4 / 4.6b explicitly deferred).
+ */
+
+async function connectorRequest(path, { method = 'GET', body } = {}) {
+  let response;
+  try {
+    response = await fetch(`${MT5_CONNECTOR_URL}${path}`, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    throw new AppError(
+      503,
+      'BROKER_CONNECTOR_UNAVAILABLE',
+      'MT5 connector is unreachable. Ensure the Python service and MT5 terminal are running.',
+      { reason: err.message }
+    );
+  }
+
+  let respBody;
+  try {
+    respBody = await response.json();
+  } catch {
+    throw new AppError(502, 'MT5_CONNECTOR_INVALID_RESPONSE', 'MT5 connector returned an invalid response');
+  }
+  return { status: response.status, ok: response.ok, body: respBody };
+}
+
+async function getSymbolInfo(symbol) {
+  const { ok, body } = await connectorRequest(`/symbol-info?symbol=${encodeURIComponent(symbol)}`);
+  if (!ok || !body.ok) {
+    throw new AppError(422, 'MT5_SYMBOL_INFO_FAILED', body.message || 'Failed to fetch symbol info');
+  }
+  return body;
+}
+
+async function getPositions(symbol) {
+  const qs = symbol ? `?symbol=${encodeURIComponent(symbol)}` : '';
+  const { ok, body } = await connectorRequest(`/positions${qs}`);
+  if (!ok || !body.ok) {
+    throw new AppError(422, 'MT5_POSITIONS_FAILED', body.message || 'Failed to list positions');
+  }
+  return body.positions;
+}
+
+async function placeOrder({ symbol, direction, volume, sl, tp }) {
+  const { ok, body } = await connectorRequest('/order/place', {
+    method: 'POST',
+    body: { symbol, direction, volume, sl, tp },
+  });
+  if (!ok || !body.ok) {
+    throw new AppError(422, 'MT5_ORDER_PLACE_FAILED', body.message || 'Failed to place order', {
+      retcode: body.retcode,
+    });
+  }
+  return body;
+}
+
+async function closeOrder(ticket) {
+  const { ok, body } = await connectorRequest('/order/close', {
+    method: 'POST',
+    body: { ticket },
+  });
+  if (!ok || !body.ok) {
+    throw new AppError(422, 'MT5_ORDER_CLOSE_FAILED', body.message || 'Failed to close order', {
+      retcode: body.retcode,
+    });
+  }
+  return body;
+}
+
+module.exports = {
+  validateBrokerCredentials,
+  getSymbolInfo,
+  getPositions,
+  placeOrder,
+  closeOrder,
+};
