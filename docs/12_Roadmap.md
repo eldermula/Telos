@@ -8,9 +8,10 @@
 
 - **Docs before code, always** (Blueprint Section 8) — every phase below assumes the relevant doc section is read first, per `11_AI_Prompt_Library.md` Section 1.
 - **Cheapest, fast, reliable** — the standing project priority. Where a phase has a cheap-but-slower path and an expensive-but-faster one, default to cheap unless flagged otherwise.
-- **Two decisions currently block downstream phases** — flagged inline below rather than smoothed over:
-  - Broker/MT5 connection method (blocks parts of Phase 2 and Phase 4)
-  - Single vs. multi broker-account per user (blocks parts of Phase 2 and Phase 5)
+- **Two decisions once blocked downstream phases — both now settled in `04_System_Architecture.md` Section 9, noted here so this roadmap doesn't drift out of sync with that resolution:**
+  - Broker/MT5 connection method → official `MetaTrader5` Python package, local Python service (settled).
+  - Single vs. multi broker-account per user → single, application-enforced; schema stays multi-capable (settled).
+  - **What remains open is narrower than either of these:** which specific broker a *live* (real-money) account is opened with. The connection *method* works with any MT5-compatible broker — this is a live-account choice, not an architecture gap, and it doesn't block Phase 2/4 testing work, which runs against the MetaQuotes-Demo practice server.
 - **Initial target is 5 real users on the self-hosted setup** (`04_System_Architecture.md` Section 8) — this roadmap builds toward that, not toward "thousands of users" scale, which is explicitly a later concern.
 
 ## Phase 0 — Foundation (Complete)
@@ -30,9 +31,8 @@
 
 ## Phase 2 — Broker Onboarding
 
-**Blocked on:** broker/MT5 connection method decision.
+**No longer blocked** — connection method and cardinality are both settled (`04_System_Architecture.md` Section 9). This phase can proceed against the MetaQuotes-Demo practice server immediately; a live broker choice is only needed before Phase 9's live rollout, not before this phase.
 
-- Resolve the connection method and the single-vs-multi-account question — both flagged as the last real open product decisions across `04`/`05`/`06`.
 - Implement `/broker-connections` (`06_API_Specification.md` Section 4): linking, credential encryption (`09_Security.md` Section 3), status checks.
 - Key management decision (`09_Security.md` Section 3, Section 11) resolved here — this can't stay open once real credentials are being stored.
 
@@ -50,7 +50,7 @@ This is the highest-priority phase to get right, and deliberately the cheapest t
 
 ## Phase 4 — Trading Engine Integration & Real-Time Updates
 
-**Partially blocked on:** broker/MT5 method (for the actual order-placement leg).
+**No longer blocked** — MT5 connection method is settled (`04_System_Architecture.md` Section 9); the order-placement leg can be built against the MetaQuotes-Demo server now.
 
 - Wire Backend API ↔ Trading Engine ↔ Bot per `04_System_Architecture.md` Section 3.3/3.4.
 - WebSocket layer (`06_API_Specification.md` Section 11) — bot status, trade events, equity updates streaming live.
@@ -96,7 +96,7 @@ Only start this once Phase 3's deterministic core is proven — this is where th
 
 ## Phase 9 — Limited Live Rollout
 
-- Paper-trading validation gate (`08_Bot_Architecture.md` Section 11) formally passed before any real account goes live.
+- ~~Paper-trading validation gate formally passed before any real account goes live~~ — **removed, per explicit decision in `08_Bot_Architecture.md` Section 11.** No minimum trade count or graduation criteria gates the transition to live capital. Live trading may begin as soon as implementation is complete.
 - Onboard toward the confirmed initial target of 5 real users, on the self-hosted + Cloudflare Tunnel setup.
 - Close monitoring via `bot_decision_log` and Notifications during this phase — this is where the design gets its first real-world feedback.
 
