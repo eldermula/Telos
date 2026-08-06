@@ -1,0 +1,57 @@
+# Telos — local Phase 1 stack (Postgres + Redis + Backend)
+# Usage: docker compose up --build
+# Requires Docker Desktop. HDD-friendly alpine images (CIG-11.1).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: telos
+      POSTGRES_PASSWORD: telos
+      POSTGRES_DB: telos
+    ports:
+      - "5432:5432"
+    volumes:
+      - telos_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telos -d telos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    # Cache/ephemeral only — no AOF/RDB persistence (05 Section 2)
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://telos:telos@postgres:5432/telos
+      REDIS_URL: redis://redis:6379
+      PORT: "3000"
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  telos_pgdata:
