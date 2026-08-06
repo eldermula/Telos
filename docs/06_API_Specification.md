@@ -194,6 +194,8 @@ Read-only server-side composition of Broker Connections + Trading + Portfolio + 
 }
 ```
 
+**`GET /trading/orders` returns `[]` by design, not as an unfinished endpoint.** The bot's execution model (`08_Bot_Architecture.md` Module 7, position sizing keyed on entry/stop distance) only ever places immediate market orders with an attached `stop_price`/`target_price` — never a resting limit/stop order awaiting a trigger price. There is consequently no "pending, not yet filled" state for this system to hold, and no `orders` table in `05_Database_Design.md`. The endpoint stays in this contract for shape-completeness against a future resting-order feature, but is not expected to ever return data under the current execution model — revisit only if that model changes.
+
 **Schema gap now resolved** (`05_Database_Design.md` Section 1.2): `trades.origin enum('bot','manual')` distinguishes bot-originated trades from `FR-TRADE-5` manual orders — both still route through the same `bot_instance_id`/execution path, this only records who decided it.
 
 `GET /trading/decision-log` (new) — direct paginated read of `bot_decision_log`, satisfying `FR-BOT-6`/`NFR-6` and the Vision's "watch it work" transparency goal, which wasn't exposed to the Frontend at all in the first draft:
@@ -278,6 +280,7 @@ Server → Frontend events:
 
 | Event | Payload shape | Fires on |
 |---|---|---|
+| `connection.ready` | `{ user_id, bot_instance_id, channel }` | WS auth succeeded, subscription established — added during Phase 4 implementation; fits the existing `connection.*` namespace alongside `connection.error` below |
 | `bot.status_changed` | `{ status, timestamp }` | Start/Stop/error (`FR-NOTIF-1`) |
 | `trade.opened` / `trade.closed` | `trades` row shape (Section 6) | Trade execution |
 | `equity.updated` | `{ active_trading_balance, peak_equity, timestamp }` | Near-real-time ticks while trading (`FR-DASH-2`) |
@@ -330,7 +333,7 @@ Every `/admin/*` route requires `role: admin` on the JWT — enforced server-sid
 - ~~Per-endpoint rate limits~~ → general default: 60/min for `GET`, 10/min for state-changing methods, per `09_Security.md` Section 11. Auth login keeps its own tighter limit (Section 3).
 - ~~`/reports/:id/download` mechanism~~ → streams the file directly from the backend. No signed-URL scheme needed — there's no separate object storage service in this setup (`05_Database_Design.md` Section 4: reports live on local disk on the same self-hosted machine).
 - ~~`FR-AI-2` scope~~ → read-only/advisory for V1, as Section 7 already assumed. The Assistant does not call `/trading/*` and has no path to influence bot behavior. Revisit only if a real need for action-taking emerges.
-- ~~SMTP provider for password-reset emails~~ → a free-tier transactional email provider (e.g. Brevo, ~300 emails/day free — comfortably enough for 5 users). Needs a free signup and the resulting SMTP credentials dropped into `.env`; the dev-placeholder logging (Section 3) stays in place until that's done.
+- ~~SMTP provider for password-reset emails~~ → **Brevo — account created.** Free tier (~300 emails/day, comfortably enough for 5 users). Only remaining step is dropping the resulting SMTP credentials (host, port, user, API/SMTP key) into `.env` — an implementation task, not a docs decision. The dev-placeholder logging (Section 3) stays in place in code until that wiring is actually done.
 
 **Still open — user-dependent, not a design decision:**
 - MFA endpoint(s), once `FR-AUTH-5` scope is confirmed (deliberately deferred, not blocking).
