@@ -202,7 +202,7 @@ Two distinct sub-responsibilities, on two different cadences:
 - **Selection** (real-time, every tick — unchanged from the original design): evaluates current market structure against the pool of *validated* candidate strategies and picks the best fit. Outputs: `trade_direction` (BUY/SELL/WAIT), `strategy_confidence` (0.0–1.0), proposed entry/stop/target prices. This is the "human trader picking the right tool for current conditions" behavior — not a fixed single strategy.
 - **Discovery** (periodic — weekly/monthly, not per-tick, to keep this cheap): the AI researches established trading methodologies and proposes new candidate strategies as structured rule-sets, expanding the pool Selection draws from over time. Full mechanics in Section 9.4.
 
-**Every candidate strategy — hand-written or AI-discovered — must pass the `FR-BOT-8` paper-trading gate (Section 11) before Selection is allowed to use it live.** The gate doesn't care where a strategy came from; this is the same safety mechanism already designed, just applied to a growing pool instead of a fixed one.
+**Every candidate strategy — hand-written or AI-discovered — enters the same pool Selection draws from.** The pre-live paper-trading gate that previously validated additions here has been removed (Section 11) — this applies equally to AI-discovered strategies, which are not human-reviewed before being eligible for live selection.
 
 ### 9.4 Strategy Discovery Mechanics
 
@@ -293,11 +293,23 @@ APIRS's response back to the Master Orchestrator:
 
 Field names here are a starting proposal — they'll likely need to match whatever shape the Backend API/Cursor implements, but this establishes the contract.
 
-## 11. Pre-Live Validation Policy (Proposed) — resolves `FR-BOT-8`
+## 11. Pre-Live Validation Policy — REMOVED (this revision)
 
-- Any **new or materially modified strategy**, or any change to a tier's Base Risk / Max Risk Ceiling — **including the Section 3a bootstrap-phase risk curve introduced in this revision** — must run in **paper-trading mode** (simulated execution, no real broker orders — zero cost, which fits the cost priority directly) for a minimum sample window, proposed to match the Learning Engine's existing 50-trade rolling window (Section 8).
-- **Minimum bar to graduate to live**, proposed as a starting point: positive net P&L over the paper window, and `live_win_probability` above 45%. Both are easy to tune later.
-- **Tier progression itself (Sections 3–5) doesn't need re-validation** — it's risk-scaling on an already-validated strategy, not a new strategy. Only new strategies or changed formulas trigger this gate. **Section 3a counts as a changed formula** and should not go live without passing this gate first, given how far outside prior tested ranges its risk levels sit.
+**Original policy (superseded):** this section previously required any new or materially modified strategy, or any change to a tier's risk parameters — including the Section 3a bootstrap curve — to run through a minimum paper-trading window (proposed at 50 trades, matching the Learning Engine's rolling window) before being permitted to go live, with a minimum bar of positive net P&L and >45% win probability to graduate.
+
+**Decision (explicit, this revision): the paper-trading validation gate is removed entirely.** The system is permitted to go live with real capital as soon as implementation is complete, with no minimum simulated-trade window and no automated graduation criteria.
+
+**Reasoning on record, per this project's own flag-rather-than-silently-resolve discipline:**
+- The gate's original purpose was to validate that newly-implemented code behaves correctly under real trade sequences before real capital depends on it — distinct from the Learning Engine (Module 6, Section 8), which continues adjusting `live_win_probability` and related inputs indefinitely regardless of this decision.
+- Removing it means the first live trade this system ever places may also be the first time the full implementation — including Sections 6–8, not yet built as of this revision — has ever executed against a real, live trade sequence.
+- This was raised explicitly as a tradeoff before this decision was made. The decision to accept that risk in exchange for reaching live trading sooner was made deliberately, not by omission.
+
+**What still exists, unaffected by this removal:**
+- The Learning Engine (Section 8) continues operating continuously in production, live or otherwise — it was never gated by this section.
+- The macro and micro circuit breakers (Sections 6, 7) remain fully in effect from the first live trade onward — this removal affects only the pre-live *validation* gate, not any in-production safety mechanism.
+- Unit-level test coverage (as built for Sections 3–5 so far, and to continue for Sections 6–8) is unaffected — this removal is specifically about the *live-capital* gate, not about testing the code at all.
+
+**Not addressed by this change, still open:** whether any reduced or informal verification step happens between "implementation complete" and "first live trade" is left to the person's discretion at that time, not specified here.
 
 ## 12. Core Management Principles
 
@@ -317,7 +329,7 @@ Field names here are a starting proposal — they'll likely need to match whatev
 **Settled** — confirmed given `05_Database_Design.md`, `06_API_Specification.md`, and everything built since have already assumed these without issue:
 - ~~Strategy B~~ → Section 6.1 (flat 1% risk, 0.90 confidence bar, 60%-from-peak secondary halt floor).
 - ~~Penalty parameter formulas~~ → Section 4.
-- ~~`FR-BOT-8` backtesting/paper-trading gate~~ → Section 11 (50-trade window, positive P&L + 45% win probability).
+- ~~`FR-BOT-8` backtesting/paper-trading gate~~ → **removed entirely, this revision** (Section 11). No pre-live validation window applies to any strategy, tier change, or AI-discovered addition.
 - ~~Module failure/timeout fallback values~~ → Section 9.1.
 - ~~AI-call latency/cadence~~ → Section 9.2.
 - ~~Data Payload Structure~~ → Section 10.
@@ -331,7 +343,7 @@ A starter *pool* — not a permanent limit — of three well-established, free-t
 2. **Breakout** — price breaks above a recent high / below a recent low with momentum confirmation. Favored in high-volatility, directional conditions.
 3. **Mean reversion (RSI-based)** — oversold/overbought RSI levels trigger counter-trend entries. Favored when `trend_quality` is low (ranging market).
 
-This pool grows over time via the Discovery process (Section 9.4) — new strategies the AI proposes join this same pool once they pass the `FR-BOT-8` paper-trading gate (Section 11). The point of that gate is exactly to validate additions like these before they touch a live account, whether a human wrote them or the AI discovered them.
+This pool grows over time via the Discovery process (Section 9.4) — new strategies the AI proposes join this same pool once registered. **No pre-live validation gate applies to these additions (Section 11 removed)** — an AI-discovered strategy becomes eligible for live selection with no more scrutiny than tier progression already gets, whether a human wrote it or the AI invented it.
 
 **Settled — all four Section 3a interaction questions, this revision:**
 
