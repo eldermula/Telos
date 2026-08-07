@@ -3,6 +3,7 @@
 const notificationsService = require('../services/notifications.service');
 const settingsService = require('../services/settings.service');
 const { parsePagination } = require('../utils/pagination');
+const { parseUuid } = require('../utils/parse-uuid');
 const { z } = require('zod');
 const { AppError } = require('../utils/app-error');
 const { updateNotificationPreferencesSchema } = require('../validators/settings.schemas');
@@ -37,9 +38,10 @@ async function list(req, res, next) {
 async function patch(req, res, next) {
   try {
     const body = parseBody(patchNotificationSchema, req.body);
+    const id = parseUuid(req.params.id, 'notification id');
     const data = await notificationsService.updateReadStatus(
       req.user.id,
-      req.params.id,
+      id,
       body.read_status
     );
     res.status(200).json(data);

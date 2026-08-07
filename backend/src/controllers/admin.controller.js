@@ -3,6 +3,7 @@
 const { z } = require('zod');
 const adminService = require('../services/admin.service');
 const { parsePagination } = require('../utils/pagination');
+const { parseUuid } = require('../utils/parse-uuid');
 const { AppError } = require('../utils/app-error');
 
 function parseBody(schema, body) {
@@ -45,7 +46,8 @@ async function listUsers(req, res, next) {
 
 async function getUser(req, res, next) {
   try {
-    const data = await adminService.getUser(req.params.id);
+    const id = parseUuid(req.params.id, 'user id');
+    const data = await adminService.getUser(id);
     res.status(200).json(data);
   } catch (err) {
     next(err);
@@ -93,9 +95,10 @@ async function listCandidateStrategies(req, res, next) {
 async function patchCandidateStrategy(req, res, next) {
   try {
     const body = parseBody(candidatePatchSchema, req.body);
+    const id = parseUuid(req.params.id, 'strategy id');
     const data = await adminService.patchCandidateStrategy(
       req.user.id,
-      req.params.id,
+      id,
       body
     );
     res.status(200).json(data);

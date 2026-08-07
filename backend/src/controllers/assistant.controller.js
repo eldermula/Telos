@@ -3,6 +3,7 @@
 const { z } = require('zod');
 const assistantService = require('../services/assistant.service');
 const { parsePagination } = require('../utils/pagination');
+const { parseUuid } = require('../utils/parse-uuid');
 const { AppError } = require('../utils/app-error');
 
 function parseBody(schema, body) {
@@ -44,9 +45,10 @@ async function listConversations(req, res, next) {
 async function listMessages(req, res, next) {
   try {
     const pagination = parsePagination(req.query);
+    const id = parseUuid(req.params.id, 'conversation id');
     const data = await assistantService.listMessages(
       req.user.id,
-      req.params.id,
+      id,
       pagination
     );
     res.status(200).json(data);
@@ -58,9 +60,10 @@ async function listMessages(req, res, next) {
 async function postMessage(req, res, next) {
   try {
     const body = parseBody(messageSchema, req.body);
+    const id = parseUuid(req.params.id, 'conversation id');
     const data = await assistantService.postMessage(
       req.user.id,
-      req.params.id,
+      id,
       body.content
     );
     res.status(201).json(data);

@@ -5,6 +5,7 @@ const fs = require('fs');
 const { z } = require('zod');
 const reportsService = require('../services/reports.service');
 const { parsePagination } = require('../utils/pagination');
+const { parseUuid } = require('../utils/parse-uuid');
 const { AppError } = require('../utils/app-error');
 
 function parseBody(schema, body) {
@@ -48,7 +49,8 @@ async function list(req, res, next) {
 
 async function getOne(req, res, next) {
   try {
-    const data = await reportsService.getReport(req.user.id, req.params.id);
+    const id = parseUuid(req.params.id, 'report id');
+    const data = await reportsService.getReport(req.user.id, id);
     const { file_path: _ignored, ...publicReport } = data;
     res.status(200).json(publicReport);
   } catch (err) {
@@ -58,7 +60,8 @@ async function getOne(req, res, next) {
 
 async function download(req, res, next) {
   try {
-    const report = await reportsService.getReportForDownload(req.user.id, req.params.id);
+    const id = parseUuid(req.params.id, 'report id');
+    const report = await reportsService.getReportForDownload(req.user.id, id);
     const filename = path.basename(report.file_path);
     res.setHeader(
       'Content-Type',
