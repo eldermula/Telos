@@ -7,6 +7,7 @@ const brokerConnectionsRouter = require('./routes/broker-connections.routes');
 const tradingRouter = require('./routes/trading.routes');
 const settingsRouter = require('./routes/settings.routes');
 const notificationsRouter = require('./routes/notifications.routes');
+const portfolioRouter = require('./routes/portfolio.routes');
 const { errorHandler } = require('./middleware/error-handler');
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/api/v1/broker-connections', brokerConnectionsRouter);
 app.use('/api/v1/trading', tradingRouter);
 app.use('/api/v1/settings', settingsRouter);
 app.use('/api/v1/notifications', notificationsRouter);
+app.use('/api/v1/portfolio', portfolioRouter);
 
 app.use((req, res) => {
   res.status(404).json({

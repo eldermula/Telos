@@ -195,6 +195,8 @@
   - **Frontend:** `/notifications` list with mark-read/unread.
   - Smoke: `node backend/scripts/smoke-notifications-72.js` → `NOTIFICATIONS_72_PASS` (includes preference-gating check). Frontend build success.
 
+- **7.3 (code complete, VERIFIED)** Portfolio — `06` §8 / `FR-PORT-1`/`FR-PORT-2`. Holdings + performance derived from `trades` (settled in `05`/`06`: no holdings table). `?range=` accepts `7d|30d|90d|all`. Empty/no-broker returns empty payload rather than hard-failing. Frontend `/portfolio` replaces placeholder. Smoke: `PORTFOLIO_73_PASS`; frontend build success.
+
 ## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
 
 **2026-08-06**

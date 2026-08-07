@@ -12,7 +12,7 @@ import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { UiShowcasePage } from './pages/dev/UiShowcasePage';
 import { BrokerOnboardingPage } from './pages/onboarding/BrokerOnboardingPage';
 import { NotificationsPage } from './pages/notifications/NotificationsPage';
-import { PlaceholderPage } from './pages/placeholders';
+import { PortfolioPage } from './pages/portfolio/PortfolioPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { TradingPage } from './pages/trading/TradingPage';
 
@@ -35,10 +35,7 @@ export default function App() {
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/trading" element={<TradingPage />} />
                 <Route path="/onboarding/broker" element={<BrokerOnboardingPage />} />
-                <Route
-                  path="/portfolio"
-                  element={<PlaceholderPage title="Portfolio" />}
-                />
+                <Route path="/portfolio" element={<PortfolioPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
