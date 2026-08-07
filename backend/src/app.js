@@ -6,6 +6,7 @@ const authRouter = require('./routes/auth.routes');
 const brokerConnectionsRouter = require('./routes/broker-connections.routes');
 const tradingRouter = require('./routes/trading.routes');
 const settingsRouter = require('./routes/settings.routes');
+const notificationsRouter = require('./routes/notifications.routes');
 const { errorHandler } = require('./middleware/error-handler');
 
 const app = express();
@@ -19,6 +20,7 @@ app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/broker-connections', brokerConnectionsRouter);
 app.use('/api/v1/trading', tradingRouter);
 app.use('/api/v1/settings', settingsRouter);
+app.use('/api/v1/notifications', notificationsRouter);
 
 app.use((req, res) => {
   res.status(404).json({

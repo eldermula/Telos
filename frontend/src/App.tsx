@@ -11,6 +11,7 @@ import {
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { UiShowcasePage } from './pages/dev/UiShowcasePage';
 import { BrokerOnboardingPage } from './pages/onboarding/BrokerOnboardingPage';
+import { NotificationsPage } from './pages/notifications/NotificationsPage';
 import { PlaceholderPage } from './pages/placeholders';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { TradingPage } from './pages/trading/TradingPage';
@@ -38,10 +39,7 @@ export default function App() {
                   path="/portfolio"
                   element={<PlaceholderPage title="Portfolio" />}
                 />
-                <Route
-                  path="/notifications"
-                  element={<PlaceholderPage title="Notifications" />}
-                />
+                <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Route>

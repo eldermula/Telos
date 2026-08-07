@@ -14,6 +14,7 @@ const botInstanceRepository = require('./bot-instance.repository');
 const botStatusCache = require('./bot-status.cache');
 const { startRuntime, stopRuntime } = require('./bot-runtime');
 const { publishBotEvent } = require('./event-publisher');
+const notificationsService = require('../services/notifications.service');
 
 async function ensureBotInstance(userId) {
   const instance = await botInstanceRepository.ensureForUser(userId);
@@ -66,6 +67,8 @@ async function startSession(userId, runtimeOptions = {}) {
     status: 'running',
     timestamp: cached.updated_at,
   });
+  // FR-NOTIF-1 — preference-gated; must not block Start if notify fails.
+  await notificationsService.maybeNotifyUser(userId, 'bot_start', 'Trading bot started.');
   return cached;
 }
 
@@ -89,6 +92,8 @@ async function stopSession(userId) {
     status: 'stopped',
     timestamp: cached.updated_at,
   });
+  // FR-NOTIF-1 — preference-gated; must not block Stop if notify fails.
+  await notificationsService.maybeNotifyUser(userId, 'bot_stop', 'Trading bot stopped.');
   return cached;
 }
 

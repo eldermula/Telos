@@ -8,6 +8,7 @@ const tradesRepository = require('./trades.repository');
 const { publishBotEvent } = require('./event-publisher');
 const mt5Connector = require('../services/mt5-connector.client');
 const strategySelectionService = require('./strategy-selection.service');
+const notificationsService = require('../services/notifications.service');
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
 const { evaluateEntry, resolveExit } = require(path.join(apirsPath, 'paperTradingHarness.js'));
@@ -84,7 +85,7 @@ async function logEntryDecision(botInstanceId, tradeInput, entryResult, selectio
  * opened and closed in the same tick — now split because opening and
  * resolving are separate events in time.
  */
-async function logExitDecisions(botInstanceId, previousMode, trace) {
+async function logExitDecisions(botInstanceId, userId, previousMode, trace) {
   await decisionLogRepository.insertDecision({
     botInstanceId,
     decisionType: 'trade_closed',
@@ -125,6 +126,12 @@ async function logExitDecisions(botInstanceId, previousMode, trace) {
       reason: `${previousMode} → ${newMode}`,
       timestamp: new Date().toISOString(),
     });
+    // FR-NOTIF-3 — preference-gated persistence; paper-mode side effect only.
+    await notificationsService.maybeNotifyUser(
+      userId,
+      'strategy_switch',
+      `Strategy switched ${previousMode} → ${newMode}.`
+    );
   }
 
   if (trace.macroResult && newMode && newMode !== previousMode) {
@@ -435,7 +442,7 @@ class BotRuntime {
       pnl: pnlAmount,
     });
 
-    await logExitDecisions(this.botInstanceId, previousMode, trace);
+    await logExitDecisions(this.botInstanceId, this.userId, previousMode, trace);
 
     if (closedTrade) {
       await publishBotEvent(this.botInstanceId, 'trade.closed', closedTrade);

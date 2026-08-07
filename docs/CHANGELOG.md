@@ -189,6 +189,12 @@
   - **Frontend:** `/settings` replaces the placeholder — Profile form, Notification Preferences toggles, Broker Connection link.
   - Smoke: `node backend/scripts/smoke-settings-71.js` → `SETTINGS_71_PASS`. `npm run build` (frontend) → success.
 
+- **7.2 (code complete, VERIFIED)** Notifications — `06` §11 / `FR-NOTIF-1`–`FR-NOTIF-3`.
+  - **API:** `GET /notifications` (paginated), `PATCH /notifications/:id` (`read_status`), plus `/notifications/preferences` alias of Settings prefs.
+  - **Production:** Start/Stop write `bot_start`/`bot_stop` (preference-gated, never blocks the session transition). Strategy switches write `strategy_switch` from `bot-runtime.js`'s existing exit-decision path — persistence only; no change to the automatic trade loop, and Option 2/`placeOrder` untouched.
+  - **Frontend:** `/notifications` list with mark-read/unread.
+  - Smoke: `node backend/scripts/smoke-notifications-72.js` → `NOTIFICATIONS_72_PASS` (includes preference-gating check). Frontend build success.
+
 ## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
 
 **2026-08-06**
