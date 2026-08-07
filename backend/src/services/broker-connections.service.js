@@ -8,6 +8,11 @@ function toPublicConnection(row) {
     id: row.id,
     broker_name: row.broker_name,
     connection_status: row.connection_status,
+    // 08_Bot_Architecture.md §13 / 09_Security.md §11 — system-detected
+    // from MT5 at validate time (never user-supplied); surfaced here so
+    // the user can see whether the linked account is demo/contest/real,
+    // not just hidden as an internal-only field.
+    account_type: row.account_type,
     linked_at: row.linked_at,
     last_validated_at: row.last_validated_at,
   };
@@ -15,7 +20,7 @@ function toPublicConnection(row) {
 
 async function listConnections(userId) {
   const result = await pool.query(
-    `SELECT id, broker_name, connection_status, linked_at, last_validated_at
+    `SELECT id, broker_name, connection_status, account_type, linked_at, last_validated_at
      FROM broker_connections
      WHERE user_id = $1
      ORDER BY linked_at ASC`,
@@ -26,7 +31,7 @@ async function listConnections(userId) {
 
 async function getConnection(userId, id) {
   const result = await pool.query(
-    `SELECT id, broker_name, connection_status, linked_at, last_validated_at
+    `SELECT id, broker_name, connection_status, account_type, linked_at, last_validated_at
      FROM broker_connections
      WHERE id = $1 AND user_id = $2`,
     [id, userId]
@@ -60,10 +65,10 @@ async function createConnection(userId, { broker_name, credentials }) {
 
   const result = await pool.query(
     `INSERT INTO broker_connections
-       (user_id, broker_name, encrypted_credentials, connection_status, linked_at, last_validated_at)
-     VALUES ($1, $2, $3, $4, now(), now())
-     RETURNING id, broker_name, connection_status, linked_at, last_validated_at`,
-    [userId, broker_name, encrypted, validation.connection_status]
+       (user_id, broker_name, encrypted_credentials, connection_status, account_type, linked_at, last_validated_at)
+     VALUES ($1, $2, $3, $4, $5, now(), now())
+     RETURNING id, broker_name, connection_status, account_type, linked_at, last_validated_at`,
+    [userId, broker_name, encrypted, validation.connection_status, validation.account_type]
   );
 
   return toPublicConnection(result.rows[0]);
@@ -89,10 +94,11 @@ async function updateConnection(userId, id, { credentials }) {
     `UPDATE broker_connections
      SET encrypted_credentials = $1,
          connection_status = $2,
+         account_type = $3,
          last_validated_at = now()
-     WHERE id = $3 AND user_id = $4
-     RETURNING id, broker_name, connection_status, linked_at, last_validated_at`,
-    [encrypted, validation.connection_status, id, userId]
+     WHERE id = $4 AND user_id = $5
+     RETURNING id, broker_name, connection_status, account_type, linked_at, last_validated_at`,
+    [encrypted, validation.connection_status, validation.account_type, id, userId]
   );
 
   return toPublicConnection(result.rows[0]);

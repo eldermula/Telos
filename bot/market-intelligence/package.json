@@ -1,0 +1,13 @@
+{
+  "name": "telos-market-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telos Trading Bot — Market Intelligence Worker (Module 2, 08_Bot_Architecture.md Section 9.0/9.2)",
+  "main": "src/marketIntelligence.js",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

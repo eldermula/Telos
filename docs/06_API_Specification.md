@@ -129,10 +129,13 @@ Response — matches `broker_connections` columns directly:
   "id": "...",
   "broker_name": "mt5",
   "connection_status": "connected | disconnected | error",
+  "account_type": "demo | contest | real",
   "linked_at": "ISO-8601",
   "last_validated_at": "ISO-8601"
 }
 ```
+
+**`account_type` (added post-Phase-6, `08_Bot_Architecture.md` §13 / `09_Security.md` §11):** system-detected from the live MT5 terminal at validate time, never accepted as request input on `POST`/`PATCH` — there is no `account_type` field in the request body schema. Re-detected on every validate call, so it tracks whichever account the currently-stored credentials point at.
 
 **Cardinality note (settled — see `04_System_Architecture.md` Section 3.6/9):** `05`'s schema is `users ──1:N──> broker_connections` and stays that way, but is application-enforced to one active connection per user for now. `GET /broker-connections` still returns an array (empty or single-item) rather than a single object, so the Frontend doesn't need rebuilding if multi-account is enabled later.
 
@@ -172,9 +175,13 @@ Read-only server-side composition of Broker Connections + Trading + Portfolio + 
   "active_strategy_mode": "STRATEGY_A | STRATEGY_B | HALTED",
   "current_tier": 0,
   "active_trading_balance": 0.00,
-  "peak_equity": 0.00
+  "peak_equity": 0.00,
+  "bootstrap_phase": true,
+  "bootstrap_risk_ceiling_pct": 0.70
 }
 ```
+
+**`bootstrap_phase` / `bootstrap_risk_ceiling_pct` — added during Frontend Increment 5.6.** `current_tier` stays `0`/undefined-in-effect for the entire sub-$50 bootstrap phase (`08_Bot_Architecture.md` Section 3a) — displaying "Tier 0" during bootstrap would misreport it as the real Tier 0 of the standard matrix. `bootstrap_phase = active_trading_balance < 50`; `bootstrap_risk_ceiling_pct = bootstrapRiskPct(active_trading_balance)` (the same tested pure function `bot/apirs/src/tierMatrix.js` uses for real position sizing) when in bootstrap phase, else `null`. Computed server-side in `bot-status.cache.js` — the Frontend does not re-implement the Section 3a formula.
 
 `GET /trading/positions` / `/orders` / `/history` response items — matches `trades` columns directly:
 ```json

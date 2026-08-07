@@ -26,6 +26,22 @@ except ImportError:  # pragma: no cover
 HOST = "127.0.0.1"
 PORT = 3100
 
+# 08_Bot_Architecture.md Section 13 / 09_Security.md Section 11 — the
+# real/demo/contest distinction MT5 itself already tracks per account,
+# surfaced here rather than left undetected. Detected automatically from
+# the live terminal at validate time, not user-supplied, since a
+# user-entered flag could be wrong (accidentally or otherwise) in
+# exactly the case this exists to protect against.
+ACCOUNT_TRADE_MODES = (
+    {
+        mt5.ACCOUNT_TRADE_MODE_DEMO: "demo",
+        mt5.ACCOUNT_TRADE_MODE_CONTEST: "contest",
+        mt5.ACCOUNT_TRADE_MODE_REAL: "real",
+    }
+    if mt5
+    else {}
+)
+
 
 def validate(payload: dict) -> tuple[int, dict]:
     if mt5 is None:
@@ -68,11 +84,23 @@ def validate(payload: dict) -> tuple[int, dict]:
                 "message": "Attached MT5 account login does not match provided credentials.login",
             }
 
+        account_type = ACCOUNT_TRADE_MODES.get(info.trade_mode)
+        if account_type is None:
+            # Fail closed rather than guess — an unrecognized trade_mode
+            # is exactly the kind of thing this check exists to catch,
+            # not something to silently default past.
+            return 422, {
+                "ok": False,
+                "connection_status": "error",
+                "message": f"Unrecognized MT5 account trade_mode: {info.trade_mode}",
+            }
+
         return 200, {
             "ok": True,
             "connection_status": "connected",
             "account_login": int(info.login),
             "server": getattr(info, "server", None),
+            "account_type": account_type,
         }
     finally:
         # Leave the terminal running; only detach this process's IPC handle.
@@ -134,6 +162,80 @@ def get_symbol_info(symbol: str | None) -> tuple[int, dict]:
             "bid": tick.bid if tick else None,
             "ask": tick.ask if tick else None,
             "tick_time": tick.time if tick else None,
+        }
+    finally:
+        mt5.shutdown()
+
+
+# 08_Bot_Architecture.md Section 9.0/Module 2 — historical bars for
+# technical indicators (ADX/ATR). No endpoint for this existed before
+# the watchlist revision; a single current tick (/symbol-info) isn't
+# enough to compute trend/volatility.
+
+TIMEFRAMES = (
+    {
+        "M1": mt5.TIMEFRAME_M1,
+        "M5": mt5.TIMEFRAME_M5,
+        "M15": mt5.TIMEFRAME_M15,
+        "M30": mt5.TIMEFRAME_M30,
+        "H1": mt5.TIMEFRAME_H1,
+        "H4": mt5.TIMEFRAME_H4,
+        "D1": mt5.TIMEFRAME_D1,
+    }
+    if mt5
+    else {}
+)
+MAX_RATES_COUNT = 1000
+
+
+def get_rates(symbol: str | None, timeframe_raw: str | None, count_raw: str | None) -> tuple[int, dict]:
+    if mt5 is None:
+        return 500, {"ok": False, "message": "MetaTrader5 package is not installed."}
+    if not symbol:
+        return 400, {"ok": False, "message": "symbol query param is required"}
+
+    timeframe = (timeframe_raw or "M15").upper()
+    tf = TIMEFRAMES.get(timeframe)
+    if tf is None:
+        return 400, {
+            "ok": False,
+            "message": f"timeframe must be one of {sorted(TIMEFRAMES.keys())}",
+        }
+
+    try:
+        count = int(count_raw) if count_raw else 100
+    except ValueError:
+        return 400, {"ok": False, "message": "count must be an integer"}
+    if count <= 0 or count > MAX_RATES_COUNT:
+        return 400, {"ok": False, "message": f"count must be between 1 and {MAX_RATES_COUNT}"}
+
+    if not mt5.initialize():
+        err = mt5.last_error()
+        return 422, {"ok": False, "message": f"MT5 initialize failed: {err}"}
+
+    try:
+        if not mt5.symbol_select(symbol, True):
+            return 422, {"ok": False, "message": f"Unable to select symbol {symbol}"}
+        rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
+        if rates is None or len(rates) == 0:
+            err = mt5.last_error()
+            return 422, {"ok": False, "message": f"No rates available for {symbol}: {err}"}
+
+        return 200, {
+            "ok": True,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "bars": [
+                {
+                    "time": int(r["time"]),
+                    "open": float(r["open"]),
+                    "high": float(r["high"]),
+                    "low": float(r["low"]),
+                    "close": float(r["close"]),
+                    "tick_volume": int(r["tick_volume"]),
+                }
+                for r in rates
+            ],
         }
     finally:
         mt5.shutdown()
@@ -344,6 +446,14 @@ class Handler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             symbol = (qs.get("symbol") or [None])[0]
             status, body = get_symbol_info(symbol)
+            self._send(status, body)
+            return
+        if parsed.path == "/rates":
+            qs = parse_qs(parsed.query)
+            symbol = (qs.get("symbol") or [None])[0]
+            timeframe = (qs.get("timeframe") or [None])[0]
+            count = (qs.get("count") or [None])[0]
+            status, body = get_rates(symbol, timeframe, count)
             self._send(status, body)
             return
         if parsed.path == "/positions":

@@ -1,7 +1,13 @@
 /**
- * Phase 4.4 smoke — WebSocket live events via Redis pub/sub.
- * Boots HTTP+WS on an ephemeral port; forces paper ticks; asserts
+ * Phase 4.4 / 6.1 / 6.4 smoke — WebSocket live events via Redis
+ * pub/sub. Boots HTTP+WS on an ephemeral port; forces paper ticks
+ * against real MT5 price (6.1) until the position resolves; asserts
  * bot.status_changed / trade.closed / equity.updated over the socket.
+ * Injects a deterministic fake Module 4 Selection (6.4) so this
+ * doesn't depend on a real, edge-triggered signal happening to fire
+ * live within the test window — see
+ * test-helpers/fake-strategy-selection.js. Requires the MT5 connector
+ * + a terminal attached to the linked demo account.
  */
 const path = require('path');
 const http = require('http');
@@ -15,11 +21,27 @@ const { connectRedis, redis } = require('../src/db/redis');
 const app = require('../src/app');
 const { attachWebSocketServer } = require('../src/ws/websocket-server');
 const tradingEngine = require('../src/engine/trading-engine');
-const { getRuntime, buildStubTradeInput } = require('../src/engine/bot-runtime');
+const { getRuntime } = require('../src/engine/bot-runtime');
 const botStatusCache = require('../src/engine/bot-status.cache');
+const { makeFakeStrategySelection } = require('./test-helpers/fake-strategy-selection');
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function tickUntilClosed(runtime, { maxTicks = 100, intervalMs = 300 } = {}) {
+  for (let i = 0; i < maxTicks; i += 1) {
+    const result = await runtime.tickOnce();
+    if (result && result.trade && result.trade.status === 'closed') {
+      return result;
+    }
+    await sleep(intervalMs);
+  }
+  throw new Error(`position did not resolve within ${maxTicks} ticks`);
 }
 
 async function req(base, method, urlPath, { token, body } = {}) {
@@ -103,8 +125,8 @@ async function main() {
   await client.connect();
   await client.query(
     `INSERT INTO broker_connections
-       (user_id, broker_name, encrypted_credentials, connection_status, linked_at, last_validated_at)
-     VALUES ($1, 'mt5', decode('00', 'hex'), 'connected', now(), now())`,
+       (user_id, broker_name, encrypted_credentials, connection_status, account_type, linked_at, last_validated_at)
+     VALUES ($1, 'mt5', decode('00', 'hex'), 'connected', 'demo', now(), now())`,
     [userId]
   );
 
@@ -127,16 +149,22 @@ async function main() {
   const startedWait = waitForEvent(socket, 'bot.status_changed', {
     predicate: (m) => m.payload && m.payload.status === 'running',
   });
-  await tradingEngine.startSession(userId, { autoTick: false });
+  await tradingEngine.startSession(userId, {
+    autoTick: false,
+    strategySelection: makeFakeStrategySelection(),
+  });
   const started = await startedWait;
   console.log('ws_started', started.payload);
 
   const runtime = getRuntime(botInstanceId);
   assert(runtime, 'runtime missing');
 
-  const tradeWait = waitForEvent(socket, 'trade.closed');
-  const equityWait = waitForEvent(socket, 'equity.updated');
-  await runtime.tickOnce(buildStubTradeInput(0));
+  const openResult = await runtime.tickOnce();
+  assert(openResult && openResult.trade && openResult.trade.status === 'open', 'expected an open position');
+
+  const tradeWait = waitForEvent(socket, 'trade.closed', { timeoutMs: 30000 });
+  const equityWait = waitForEvent(socket, 'equity.updated', { timeoutMs: 30000 });
+  await tickUntilClosed(runtime);
   const tradeMsg = await tradeWait;
   const equityMsg = await equityWait;
   console.log('ws_trade', { pnl: tradeMsg.payload && tradeMsg.payload.pnl });

@@ -65,8 +65,8 @@ async function main() {
   await client.connect();
   await client.query(
     `INSERT INTO broker_connections
-       (user_id, broker_name, encrypted_credentials, connection_status, linked_at, last_validated_at)
-     VALUES ($1, 'mt5', decode('00', 'hex'), 'connected', now(), now())`,
+       (user_id, broker_name, encrypted_credentials, connection_status, account_type, linked_at, last_validated_at)
+     VALUES ($1, 'mt5', decode('00', 'hex'), 'connected', 'demo', now(), now())`,
     [userId]
   );
 

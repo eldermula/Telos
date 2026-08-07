@@ -44,6 +44,7 @@ users ──1:1──> settings
 | broker_name | text | which broker/MT5 endpoint (`FR-ONB-1`) |
 | encrypted_credentials | bytea | field-level encrypted, never plaintext (`NFR-2`) |
 | connection_status | enum('connected','disconnected','error') | `FR-ONB-4` |
+| account_type | enum('demo','contest','real') | **Added this revision (post-Phase-6, Bot Architecture §13 / Security §11).** Detected automatically from the live MT5 terminal at validate time (`mt5.account_info().trade_mode`) — never user-supplied, since a user-entered flag could be wrong in exactly the case this exists to protect against. Set on every `POST`/`PATCH /broker-connections` (re-validated on each, so it stays current with whichever account the stored credentials currently point at). `NOT NULL`, backfilled to `'demo'` — every connection this project has ever linked was against MetaQuotes-Demo, an honest backfill (same justification as `trades.symbol`'s in migration 005). Exposed via the public API (unlike `trades.conditions`) — this is useful, non-sensitive information the user should be able to see. Fixes the previously-flagged gap that every real-order code path (Module 7, `mt5Connector.placeOrder`/`closeOrder`) ran identically regardless of account type; consuming this field to actually gate/differentiate execution is Option 2's own responsibility when it's built, not retrofitted here |
 | linked_at | timestamptz | |
 | last_validated_at | timestamptz | |
 
@@ -67,6 +68,7 @@ users ──1:1──> settings
 |---|---|---|
 | id | UUID (PK) | |
 | bot_instance_id | UUID (FK → bot_instances) | |
+| symbol | text, not null | **Added this revision (Bot Architecture §9.0, watchlist).** Which instrument this trade was in (e.g. `"EURUSD"`, `"XAUUSD"`) — the table was implicitly single-instrument before the watchlist existed, with no way to record which of several instruments a row referred to. `text`, not an enum, deliberately: the watchlist (Bot Architecture §9.0/§13) is admin-configured and may be revised without a schema migration each time, unlike `direction`/`status` below, which are fixed by the trading model itself, not by a config the Admin module can change |
 | origin | enum('bot','manual') | distinguishes bot-originated trades from `FR-TRADE-5` manual orders — both still route through the same `bot_instance_id`/execution path, this only records who decided it |
 | direction | enum('BUY','SELL') | from Bot Architecture §9 Module 4 output |
 | entry_price | numeric | |
@@ -79,6 +81,7 @@ users ──1:1──> settings
 | opened_at | timestamptz | |
 | closed_at | timestamptz, nullable | |
 | pnl | numeric, nullable | |
+| conditions | jsonb, nullable | **Added this revision (6.5, Bot Architecture §8 — Learning Engine).** Snapshot of the scalar trade-input conditions present when this trade opened (`strategyConfidence`, `marketQuality`, `trendQuality`, `marketVolatility`, `currentATR`, `rollingAvgATR`, `dailyDrawdownPct`, `direction`, `strategy_id`, `strategy_name`) — written once, at open time only, never on close. `chosen_instrument` deliberately excluded (already `trades.symbol`); the raw Module 4 `selection`/`marketIntelligence` object is never stored here (it carries a ~100-bar OHLC array that would balloon every row). Nullable, no backfill — trades closed before this column existed have no honest value to backfill. Internal-only: read by `loadTradeHistoryForLearning` for the Learning Engine's rolling window; not added to the API-facing trade shape, not exposed via `GET /trading/positions`/`GET /trading/history`. `strategy_id` stays inside this jsonb blob rather than becoming its own FK column — a dedicated per-strategy analytics column is a larger, separate scope, deferred |
 
 **`bot_decision_log`** — satisfies `FR-BOT-6` / `NFR-6` (auditability)
 | Column | Type | Notes |
@@ -170,6 +173,25 @@ Tracks every strategy the Strategy Engine (`08_Bot_Architecture.md` Module 4/Sec
 | activated_at | timestamptz, nullable | |
 | reviewed_by_admin | boolean, default false | ties to the Admin visibility requirement in `08_Bot_Architecture.md` Section 9.4 — a person should see what's proposed, not just what's live |
 
+**`rule_set` concrete shape — confirmed, this revision (Increment 6.4):**
+
+```json
+{
+  "regime_fit": { "trend_quality_min": 0.6 },
+  "signal": { "type": "ema_cross", "fast_period": 12, "slow_period": 26 },
+  "stop": { "type": "atr_multiple", "multiple": 1.5 },
+  "target": { "type": "reward_risk_ratio", "ratio": 2 },
+  "base_confidence": 0.70
+}
+```
+
+- `regime_fit` — a cheap pre-check against Module 2/3's current reading for an instrument (`trend_quality_min`, `trend_quality_max`, or `market_volatility_in`, mutually exclusive per strategy so far). A strategy whose regime doesn't fit isn't evaluated for a signal at all that tick.
+- `signal.type` — one of `ema_cross`, `breakout`, `rsi_reversion` (the three seeded strategies, migration `004_seed_candidate_strategies.sql`); each has its own params (`fast_period`/`slow_period`, `lookback_bars`, `period`/`oversold`/`overbought` respectively).
+- `stop`/`target` — both ATR-multiple based, off Module 2's shared ATR reading for whichever instrument Selection ends up choosing. Pure price-level math, so it's instrument-agnostic (works the same for a 5-digit pair, a 3-digit JPY pair, or gold).
+- `base_confidence` — combined with how far past its own `regime_fit` threshold the current reading is (`bot/strategy-engine/src/ruleEngine.js`'s `computeConfidence`, scale factor `0.5`, confirmed as a conservative starting point pending recalibration once real trade outcomes exist) to produce `strategy_confidence`, not stored pre-computed here.
+
+Anything the Discovery process (Section 9.4) proposes later must use this same shape — Selection has no special-case parsing per strategy, only per `signal.type`.
+
 ## 2. Redis — Fast-Changing / Ephemeral State
 
 | Key pattern | Purpose |
@@ -179,8 +201,12 @@ Tracks every strategy the Strategy Engine (`08_Bot_Architecture.md` Module 4/Sec
 | `ratelimit:{user_id}:{endpoint}` | API rate-limiting counters |
 | `bot-events:{bot_instance_id}` (pub/sub channel) | Fanout channel so multiple backend instances all receive the same Bot events for WebSocket broadcast (`04_System_Architecture.md` §5) |
 | `password_reset:{token}` (TTL-bound) | Password reset tokens (`FR-AUTH-4`, `06_API_Specification.md` Section 3) — settled during Phase 1 planning |
+| `market:{symbol}:intelligence` (TTL-bound, ~15–30s per `08_Bot_Architecture.md` §9.2) | Module 2's `trend_quality`/`market_volatility`/`volatility_penalty` per watchlist instrument. **Instrument-keyed, not `bot_instance`-keyed** (`08_Bot_Architecture.md` §9.0) — every bot instance evaluating the same symbol shares one cached read instead of each independently re-fetching/re-computing. |
+| `news:intelligence` (TTL-bound, ~15–30s per `08_Bot_Architecture.md` §9.2) | Module 3's per-watchlist-instrument `market_quality`/`news_impact_score` map — one combined key for the whole watchlist, not per-instrument, since Module 3 parses headlines/calendar once per cycle and fans the result out programmatically (§9.0), not once per instrument. |
+| `news:seen-hash:{sha256(headline)}` (TTL-bound, 24h) | Module 3's content-hash dedup (§9.3) — an already-classified headline doesn't trigger a repeat, billable LLM call on the next cycle. |
+| `news:health:{source}` (`calendar` \| `headlines`) | Module 3's per-source health tracker (§9.3) — `{consecutiveFailures, degradedUntil}`; 5 consecutive failures marks a source degraded for a 5-minute cooldown so a known-down free source doesn't add latency to every cycle. |
 
-Redis is not the source of truth for most of the above — every other value cached here has a durable counterpart in PostgreSQL (`bot_instances`, `trades`, `bot_decision_log`) that Redis is refreshed from. **`password_reset:{token}` is the one deliberate exception:** it has no Postgres counterpart by design, since a lost/expired reset token just means the user requests a new one — no data worth durably persisting. Worth remembering as an exception rather than assuming the principle above is absolute.
+Redis is not the source of truth for most of the above — every other value cached here has a durable counterpart in PostgreSQL (`bot_instances`, `trades`, `bot_decision_log`) that Redis is refreshed from. **`password_reset:{token}`, `market:{symbol}:intelligence`, and the three `news:*` keys are the deliberate exceptions:** a lost/expired reset token just means the user requests a new one; a lost/expired market- or news-intelligence cache entry just means the next read recomputes it from a fresh pull (worst case, a headline gets re-classified once); none of these have data worth durably persisting in Postgres. Worth remembering as exceptions rather than assuming the principle above is absolute.
 
 ## 3. Encryption & Security Notes
 
@@ -197,6 +223,7 @@ Redis is not the source of truth for most of the above — every other value cac
 - ~~Report file storage location~~ → local disk on the self-hosted machine (per infrastructure decision — the same PC running the Backend API/Bot stores `reports.file_path` contents directly).
 - ~~Report generation: sync vs. async~~ → **synchronous.** No `status` column added — given the self-hosted, resource-constrained setup (System Architecture §8), adding an async job queue is extra infrastructure for a report-generation task that doesn't need it yet. `POST /reports` (`06_API_Specification.md`) returns the finished resource directly. Revisit only if report generation time becomes a real problem.
 - ~~Portfolio "current holdings" storage~~ → **derived, not stored.** No `holdings` table. `GET /portfolio/holdings` (`06_API_Specification.md`) computes net position per instrument from open `trades` rows at query time — avoids a second source of truth that could drift from `trades`, and there's no `trades` volume yet where the computation would be a performance problem.
+- ~~`trades.symbol` missing~~ → **added, this revision (Section 1.2).** `08_Bot_Architecture.md` Section 9.0 introduces a multi-instrument watchlist; `trades` had no column recording which instrument a given row was in, since the engine was implicitly single-instrument (`EURUSD`-only) until now. This blocked Module 2–4 implementation directly (a trade can no longer be persisted without knowing which watchlist instrument it belongs to), so it's fixed here rather than deferred. `text`, not an enum — the watchlist itself is admin-configurable and can change without a schema migration.
 
 ---
 

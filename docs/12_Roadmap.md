@@ -79,6 +79,10 @@ Only start this once Phase 3's deterministic core is proven — this is where th
 
 **Exit criteria:** the full multi-agent loop runs in paper mode, producing sensible (not necessarily profitable — that's a separate question) trade signals, at the designed cadence and cost profile.
 
+**Status: Phase 6 complete, as of Increment 6.5 (see `CHANGELOG.md`).** The literal exit criteria above is met — the full loop (Modules 1–7 plus the Learning Engine hookup) runs end-to-end in paper mode at the designed cadence. Explicit, on-record decision: real LLM classification for Module 3 (currently a dry-run stub) and Module 4b Strategy Discovery are **not** required for this exit criteria and become their own later increments (possibly Phase 7+) rather than blocking Phase 6's close. `dailyDrawdownPct`'s hardcoded stub and Module 7's cosmetic-only per-instrument lot-sizing are tracked the same way.
+
+**Post-Phase-6, pre-Option-2 increment (small, standalone):** the demo/live account distinction gap in `broker_connections` (flagged in `08_Bot_Architecture.md` §13 / `09_Security.md` §11) — fixed before touching Option 2 (real order placement) at all, per explicit decision. See those two sections' "Resolved" notes and `CHANGELOG.md` for detail.
+
 ## Phase 7 — Remaining Modules
 
 - Portfolio (derived holdings), Analytics, Reports (synchronous), Notifications, Settings, AI Assistant, Admin (`06_API_Specification.md` Sections 5–13).

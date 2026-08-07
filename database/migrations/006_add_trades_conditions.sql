@@ -1,0 +1,28 @@
+-- 006_add_trades_conditions.sql
+-- 08_Bot_Architecture.md Section 8 (Learning Engine) — "logs each trade's
+-- outcome against the conditions present when it opened." bot/apirs's
+-- resolveExit/recordTradeOutcome already accept a `conditions` param, but
+-- until now there was nowhere to persist it and bot-runtime.js never
+-- populated it, so it was always effectively null.
+--
+-- Option A (this column, on `trades` directly) over Option B (joining
+-- against bot_decision_log.details): no FK exists either direction
+-- between trades and bot_decision_log today, and bot_decision_log is an
+-- audit trail with its own 6-month archival lifecycle, while the
+-- Learning Engine's rolling window is a live hot-path read on every
+-- BotRuntime.initialize() — coupling that read path to an audit log's
+-- retention policy conflates two concerns that only happen to overlap
+-- today. A trade's own defining facts (conditions, same category as
+-- direction/entry_price/symbol) belong on the trade's own row, same
+-- reasoning as trades.symbol in 005.
+--
+-- Nullable, no backfill: unlike trades.symbol (honestly backfillable to
+-- 'EURUSD', the only symbol ever traded pre-6.4), there is no honest
+-- value to backfill existing closed trades' conditions to — their real
+-- tradeInput/selection at open time was never captured, so fabricating
+-- one would be worse than NULL. loadTradeHistoryForLearning's two actual
+-- consumers (computeLiveWinProbability/computeConsecutiveLosses) never
+-- read `conditions` at all, so NULL on old rows is functionally
+-- harmless. No index needed — this is only ever read whole, per-row.
+
+ALTER TABLE trades ADD COLUMN conditions jsonb;

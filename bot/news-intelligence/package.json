@@ -1,0 +1,13 @@
+{
+  "name": "telos-news-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telos Trading Bot — News & Sentiment Intelligence Worker (Module 3, 08_Bot_Architecture.md Section 9.0/9.3)",
+  "main": "src/newsIntelligence.js",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

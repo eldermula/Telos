@@ -1,7 +1,12 @@
 /**
- * Phase 4.5 smoke — positions/orders/history/decision-log GETs.
- * Starts a paper session, runs a few controlled ticks, then reads back
- * each endpoint and asserts shape + pagination.
+ * Phase 4.5 / 6.1 / 6.4 smoke — positions/orders/history/decision-log
+ * GETs. Starts a paper session, runs a couple of full open->resolve
+ * position cycles against real MT5 price (6.1), then reads back each
+ * endpoint and asserts shape + pagination. Injects a deterministic
+ * fake Module 4 Selection (6.4) so this doesn't depend on a real,
+ * edge-triggered signal happening to fire live within the test window
+ * — see test-helpers/fake-strategy-selection.js. Requires the MT5
+ * connector + a terminal attached to the linked demo account.
  */
 const path = require('path');
 require(path.join(__dirname, '..', 'node_modules', 'dotenv')).config({
@@ -12,12 +17,28 @@ const { Client } = require(path.join(__dirname, '..', 'node_modules', 'pg'));
 const { connectRedis, redis } = require('../src/db/redis');
 const app = require('../src/app');
 const tradingEngine = require('../src/engine/trading-engine');
-const { getRuntime, buildStubTradeInput } = require('../src/engine/bot-runtime');
+const { getRuntime } = require('../src/engine/bot-runtime');
 const botStatusCache = require('../src/engine/bot-status.cache');
 const http = require('http');
+const { makeFakeStrategySelection } = require('./test-helpers/fake-strategy-selection');
 
 function assert(cond, msg) {
   if (!cond) throw new Error(msg);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function tickUntilClosed(runtime, { maxTicks = 100, intervalMs = 300 } = {}) {
+  for (let i = 0; i < maxTicks; i += 1) {
+    const result = await runtime.tickOnce();
+    if (result && result.trade && result.trade.status === 'closed') {
+      return result;
+    }
+    await sleep(intervalMs);
+  }
+  throw new Error(`position did not resolve within ${maxTicks} ticks`);
 }
 
 async function req(base, method, urlPath, { token, body } = {}) {
@@ -68,8 +89,8 @@ async function main() {
   await client.connect();
   await client.query(
     `INSERT INTO broker_connections
-       (user_id, broker_name, encrypted_credentials, connection_status, linked_at, last_validated_at)
-     VALUES ($1, 'mt5', decode('00', 'hex'), 'connected', now(), now())`,
+       (user_id, broker_name, encrypted_credentials, connection_status, account_type, linked_at, last_validated_at)
+     VALUES ($1, 'mt5', decode('00', 'hex'), 'connected', 'demo', now(), now())`,
     [userId]
   );
 
@@ -91,24 +112,49 @@ async function main() {
   r = await req(base, 'GET', '/trading/decision-log', { token });
   assert(r.status === 200 && r.json.data.length === 0 && r.json.meta.total === 0, 'expected empty decision-log');
 
-  await tradingEngine.startSession(userId, { autoTick: false });
+  await tradingEngine.startSession(userId, {
+    autoTick: false,
+    strategySelection: makeFakeStrategySelection(),
+  });
   const runtime = getRuntime(botInstanceId);
   assert(runtime, 'runtime missing');
 
-  const tickResults = [];
-  tickResults.push(await runtime.tickOnce(buildStubTradeInput(0)));
-  tickResults.push(await runtime.tickOnce(buildStubTradeInput(1)));
-  tickResults.push(await runtime.tickOnce(buildStubTradeInput(2)));
-  // Circuit breakers/confidence gating can reject a tick (e.g. dropping
-  // into STRATEGY_B raises the confidence bar) — don't hardcode a count,
-  // derive the expected total from what actually got approved.
-  const approvedCount = tickResults.filter((t) => t.trace.tradeApproved).length;
-  console.log('approved_of_3_ticks', approvedCount);
-  assert(approvedCount >= 2, `expected at least 2 approved trades, got ${approvedCount}`);
+  // First tick opens a position — 6.1's positions endpoint should now
+  // actually reflect it (previously always empty under the old
+  // instant-open+close convention).
+  const openResult = await runtime.tickOnce();
+  assert(openResult && openResult.trade && openResult.trade.status === 'open', 'expected an open position');
+
+  r = await req(base, 'GET', '/trading/positions', { token });
+  console.log('positions_while_open', r.status, r.json.length);
+  assert(r.status === 200 && r.json.length === 1, 'expected exactly one open position while unresolved');
+  assert(r.json[0].status === 'open', 'expected status open');
+  assert(r.json[0].symbol === 'EURUSD', `expected symbol='EURUSD', got ${r.json[0].symbol}`);
+
+  const closedResults = [];
+  closedResults.push(await tickUntilClosed(runtime));
+  // Second tick legitimately may not open — a loss on cycle1 at the
+  // bootstrap 70%-ceiling correctly fires the Section 3a/7 single-loss
+  // override into STRATEGY_B, and STRATEGY_B's 0.90 confidence bar
+  // (Section 6.1) then correctly rejects the stub's fixed 0.85
+  // confidence (see smoke-bot-runtime-43.js for the full explanation).
+  // Assert on whichever real outcome occurred rather than assuming the
+  // win path is the only one.
+  const open2 = await runtime.tickOnce();
+  if (open2 && open2.trade && open2.trade.status === 'open') {
+    closedResults.push(await tickUntilClosed(runtime));
+  } else {
+    assert(open2 && open2.entryResult && open2.entryResult.reason === 'BELOW_STRATEGY_B_CONFIDENCE_BAR',
+      `expected second tick to either open or be rejected on the Strategy B confidence bar, got: ${JSON.stringify(open2 && open2.entryResult)}`);
+    console.log('second_tick_rejected_strategy_b_confidence_bar', open2.entryResult.reason);
+  }
+
+  const approvedCount = closedResults.length;
+  console.log('resolved_cycles', approvedCount);
 
   r = await req(base, 'GET', '/trading/positions', { token });
   console.log('positions_after_ticks', r.status, r.json.length);
-  assert(r.status === 200 && r.json.length === 0, 'paper harness should never leave a trade open');
+  assert(r.status === 200 && r.json.length === 0, 'expected no open positions once both cycles resolved');
 
   r = await req(base, 'GET', '/trading/orders', { token });
   assert(r.status === 200 && r.json.length === 0, 'orders should stay empty (no orders table yet)');

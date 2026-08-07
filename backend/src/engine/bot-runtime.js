@@ -6,35 +6,27 @@ const botStatusCache = require('./bot-status.cache');
 const decisionLogRepository = require('./decision-log.repository');
 const tradesRepository = require('./trades.repository');
 const { publishBotEvent } = require('./event-publisher');
+const mt5Connector = require('../services/mt5-connector.client');
+const strategySelectionService = require('./strategy-selection.service');
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
-const { runTradeCycle } = require(path.join(apirsPath, 'paperTradingHarness.js'));
+const { evaluateEntry, resolveExit } = require(path.join(apirsPath, 'paperTradingHarness.js'));
+const { computeLiveWinProbability, computeConsecutiveLosses } = require(
+  path.join(apirsPath, 'learningEngine.js')
+);
 
 /** Default paper tick interval (ms). Overridable via PAPER_TICK_MS. */
 const DEFAULT_TICK_MS = Number(process.env.PAPER_TICK_MS) || 2000;
 
 /**
- * Stub Strategy-A signal inputs (Phase 3/4 — no AI modules yet).
- * Alternate win/loss R-multiples so circuit breakers / learning get exercise.
+ * 08_Bot_Architecture.md Section 2's stub — `daily_drawdown_pct` isn't
+ * one of Modules 2-4's outputs (it's an account-level "how far down
+ * are we today" metric), and giving it a real computation needs its
+ * own design (day-boundary definition, timezone, peak-of-day vs.
+ * start-of-day baseline) unrelated to Selection's signals. Explicitly
+ * deferred past 6.4 — flagged, not silently left stubbed.
  */
-function buildStubTradeInput(tickIndex) {
-  const win = tickIndex % 2 === 0;
-  return {
-    strategyConfidence: 0.85,
-    marketQuality: 0.7,
-    trendQuality: 0.75,
-    marketVolatility: 'NORMAL',
-    currentATR: 1.0,
-    rollingAvgATR: 1.0,
-    dailyDrawdownPct: 0.02,
-    outcomeRMultiple: win ? 1.5 : -1.0,
-    direction: win ? 'BUY' : 'SELL',
-    // Synthetic prices for trades row audit — not used by APIRS math
-    entryPrice: 1.1,
-    stopPrice: win ? 1.09 : 1.11,
-    targetPrice: win ? 1.13 : 1.07,
-  };
-}
+const STUB_DAILY_DRAWDOWN_PCT = 0.02;
 
 function instanceToApirsState(instance, tradeHistory) {
   return {
@@ -47,24 +39,26 @@ function instanceToApirsState(instance, tradeHistory) {
   };
 }
 
-async function persistDecisionsFromTrace(botInstanceId, previousMode, tradeInput, trace) {
-  const envSnapshot = {
-    trade_input: tradeInput,
-    learning_inputs: trace.learningInputs || null,
-    risk_result: trace.riskResult
-      ? {
-          appliedRisk: trace.riskResult.appliedRisk,
-          riskSource: trace.riskResult.riskSource,
-        }
-      : null,
+/**
+ * Logged when APIRS approves or rejects opening a new position.
+ * `selection` (6.4) is Module 4's chosen_instrument/strategy_name —
+ * carried into the decision log even on rejection, so the Decision
+ * Log UI can show *which* instrument/strategy Selection had picked
+ * before APIRS said no, not just that something was rejected.
+ */
+async function logEntryDecision(botInstanceId, tradeInput, entryResult, selection) {
+  const selectionSummary = {
+    chosen_instrument: selection.chosen_instrument,
+    strategy_name: selection.strategy_name,
+    strategy_id: selection.strategy_id,
   };
 
-  if (!trace.tradeApproved) {
+  if (!entryResult.tradeApproved) {
     await decisionLogRepository.insertDecision({
       botInstanceId,
       decisionType: 'trade_rejected',
-      triggeringCondition: trace.reason || 'trade_not_approved',
-      details: envSnapshot,
+      triggeringCondition: entryResult.reason || 'trade_not_approved',
+      details: { trade_input: tradeInput, selection: selectionSummary },
     });
     return;
   }
@@ -72,12 +66,34 @@ async function persistDecisionsFromTrace(botInstanceId, previousMode, tradeInput
   await decisionLogRepository.insertDecision({
     botInstanceId,
     decisionType: 'trade_approved',
-    triggeringCondition: `paper fill pnl=${trace.pnlAmount}`,
+    triggeringCondition: `${tradeInput.direction} ${selection.chosen_instrument} opened via ${selection.strategy_name}, applied_risk=${entryResult.riskResult.appliedRisk}`,
     details: {
-      ...envSnapshot,
+      trade_input: tradeInput,
+      selection: selectionSummary,
+      risk_result: {
+        appliedRisk: entryResult.riskResult.appliedRisk,
+        riskSource: entryResult.riskResult.riskSource,
+      },
+    },
+  });
+}
+
+/**
+ * Logged once an open position resolves against real price. Covers what
+ * `persistDecisionsFromTrace` used to log in one shot back when a trade
+ * opened and closed in the same tick — now split because opening and
+ * resolving are separate events in time.
+ */
+async function logExitDecisions(botInstanceId, previousMode, trace) {
+  await decisionLogRepository.insertDecision({
+    botInstanceId,
+    decisionType: 'trade_closed',
+    triggeringCondition: `resolved pnl=${trace.pnlAmount}`,
+    details: {
       pnl_amount: trace.pnlAmount,
       balance_before: trace.balanceBeforeTrade,
       balance_after: trace.balanceAfterTrade,
+      was_win: trace.wasWin,
     },
   });
 
@@ -133,17 +149,25 @@ async function persistDecisionsFromTrace(botInstanceId, previousMode, tradeInput
 class BotRuntime {
   /**
    * @param {object} instance - bot_instances row
-   * @param {{ tickMs?: number, autoTick?: boolean }} [options]
+   * @param {{ tickMs?: number, autoTick?: boolean, strategySelection?: object }} [options]
+   *   `strategySelection` defaults to the real Module 4 orchestration
+   *   service — overridable so tests can inject a deterministic
+   *   selection instead of depending on live market timing (real
+   *   crossover/breakout/RSI-extreme signals are edge-triggered and
+   *   won't reliably fire within a short test window; the live
+   *   Module 4 wiring itself is already verified independently by
+   *   smoke-strategy-selection-64.js).
    */
   constructor(instance, options = {}) {
     this.botInstanceId = instance.id;
     this.userId = instance.user_id;
     this.tickMs = options.tickMs ?? DEFAULT_TICK_MS;
     this.autoTick = options.autoTick !== false;
-    this.tickIndex = 0;
+    this.strategySelection = options.strategySelection || strategySelectionService;
     this.timer = null;
     this.running = false;
     this.state = null;
+    this.openPosition = null;
     this._tickInFlight = false;
   }
 
@@ -154,6 +178,41 @@ class BotRuntime {
     }
     const tradeHistory = await tradesRepository.loadTradeHistoryForLearning(this.botInstanceId);
     this.state = instanceToApirsState(instance, tradeHistory);
+
+    // Resume a position left open across a process restart (paper mode
+    // only — no real capital at stake). The exact entryResult from the
+    // original tick isn't persisted, so this rebuilds an approximation
+    // from the trade row + current state rather than the original
+    // learning/risk snapshot. This doesn't depend on Module 4's real
+    // signals either way (it reads back already-persisted direction/
+    // prices/risk, not tradeInput) — flagged as a known simplification,
+    // accepted as permanent unless real capital is ever introduced.
+    const openTrades = await tradesRepository.listOpenTradesForResume(this.botInstanceId);
+    if (openTrades.length > 0) {
+      const row = openTrades[0];
+      const appliedRisk = Number(row.final_applied_position_risk);
+      this.openPosition = {
+        tradeRowId: row.id,
+        symbol: row.symbol,
+        direction: row.direction,
+        entryPrice: Number(row.entry_price),
+        stopPrice: Number(row.stop_price),
+        targetPrice: Number(row.target_price),
+        // Read back verbatim (006) — already fully known at open time,
+        // no reconstruction needed, same as symbol/direction above.
+        conditions: row.conditions ?? null,
+        entryResult: {
+          tradeApproved: true,
+          learningInputs: {
+            liveWinProbability: computeLiveWinProbability(tradeHistory),
+            consecutiveLosses: computeConsecutiveLosses(tradeHistory),
+          },
+          riskResult: { appliedRisk, riskSource: 'resumed_after_restart' },
+          balanceBeforeTrade: this.state.balance,
+          riskedAmount: appliedRisk * this.state.balance,
+        },
+      };
+    }
   }
 
   start() {
@@ -189,10 +248,12 @@ class BotRuntime {
   }
 
   /**
-   * One paper-trading cycle using APIRS (paperTradingHarness.runTradeCycle).
-   * @param {object} [overrideInput] optional tradeInput for tests/smoke
+   * One tick: if a position is open, check it against real MT5 price;
+   * otherwise consider opening a new one. Never both in the same tick —
+   * a freshly-opened position waits for the next tick to be monitored,
+   * same as a real position would.
    */
-  async tickOnce(overrideInput) {
+  async tickOnce() {
     if (!this.running) {
       return null;
     }
@@ -201,61 +262,203 @@ class BotRuntime {
     }
     this._tickInFlight = true;
     try {
-      const tradeInput = overrideInput || buildStubTradeInput(this.tickIndex);
-      this.tickIndex += 1;
-
-      const previousMode = this.state.activeStrategyMode;
-      const { state: nextState, trace } = runTradeCycle(this.state, tradeInput);
-      this.state = nextState;
-
-      await persistDecisionsFromTrace(this.botInstanceId, previousMode, tradeInput, trace);
-
-      let tradeRow = null;
-      if (trace.tradeApproved) {
-        const direction = tradeInput.direction === 'SELL' ? 'SELL' : 'BUY';
-        const entry = tradeInput.entryPrice ?? 1.1;
-        const stop = tradeInput.stopPrice ?? entry;
-        const target = tradeInput.targetPrice ?? entry;
-        // Paper lot size: proportional placeholder (Module 7 not wired yet)
-        const lotSize = Number((trace.riskResult.appliedRisk * 0.1).toFixed(4)) || 0.01;
-        const exitPrice = trace.wasWin
-          ? target
-          : stop;
-
-        tradeRow = await tradesRepository.insertClosedPaperTrade({
-          botInstanceId: this.botInstanceId,
-          direction,
-          entryPrice: entry,
-          stopPrice: stop,
-          targetPrice: target,
-          exitPrice,
-          lotSize,
-          finalAppliedPositionRisk: trace.riskResult.appliedRisk,
-          pnl: trace.pnlAmount,
-        });
-
-        await publishBotEvent(this.botInstanceId, 'trade.closed', tradeRow);
+      if (this.openPosition) {
+        return await this._monitorOpenPosition();
       }
-
-      const updated = await botInstanceRepository.updateStatusFields(this.botInstanceId, {
-        status: 'running',
-        active_strategy_mode: nextState.activeStrategyMode,
-        active_trading_balance: nextState.balance,
-        peak_equity: nextState.peakEquity,
-        current_tier: nextState.currentTier,
-      });
-      const cached = await botStatusCache.setStatus(updated);
-
-      await publishBotEvent(this.botInstanceId, 'equity.updated', {
-        active_trading_balance: cached.active_trading_balance,
-        peak_equity: cached.peak_equity,
-        timestamp: cached.updated_at,
-      });
-
-      return { state: nextState, trace, trade: tradeRow, session: cached };
+      return await this._maybeOpenPosition();
     } finally {
       this._tickInFlight = false;
     }
+  }
+
+  async _maybeOpenPosition() {
+    // Module 4 — Selection (08_Bot_Architecture.md Section 9.0/13):
+    // evaluates every active strategy against every watchlist
+    // instrument and returns at most one candidate. `null` is a
+    // legitimate no-trade tick — nothing fired anywhere this
+    // instant — not a failure, so it's handled exactly like APIRS
+    // rejecting a trade: quietly wait for the next tick.
+    const selection = await this.strategySelection.selectTradeAcrossWatchlist();
+    if (!selection) {
+      return null;
+    }
+
+    const tradeInput = {
+      strategyConfidence: selection.strategy_confidence,
+      // Module 3's fallback still returns a real (neutral) market_quality
+      // for every instrument even when degraded, so this should always
+      // be present — the `?? 0.5` is defensive, not an expected path.
+      marketQuality: selection.newsIntelligence?.market_quality ?? 0.5,
+      trendQuality: selection.marketIntelligence.trend_quality,
+      marketVolatility: selection.marketIntelligence.market_volatility,
+      currentATR: selection.marketIntelligence.diagnostics.currentATR,
+      rollingAvgATR: selection.marketIntelligence.diagnostics.rollingAvgATR,
+      dailyDrawdownPct: STUB_DAILY_DRAWDOWN_PCT,
+      direction: selection.direction,
+    };
+
+    const entryResult = evaluateEntry(this.state, tradeInput);
+    await logEntryDecision(this.botInstanceId, tradeInput, entryResult, selection);
+
+    if (!entryResult.tradeApproved) {
+      return { state: this.state, entryResult, trade: null };
+    }
+
+    const symbol = selection.chosen_instrument;
+    let symbolInfo;
+    try {
+      symbolInfo = await mt5Connector.getSymbolInfo(symbol);
+    } catch (err) {
+      console.error('[bot-runtime] price fetch failed, will retry next tick:', err.message);
+      return null;
+    }
+    if (symbolInfo.bid == null || symbolInfo.ask == null) {
+      console.error('[bot-runtime] MT5 returned no live tick for', symbol, '- will retry next tick');
+      return null;
+    }
+
+    // Entry is fetched fresh here (not reused from whatever price
+    // Selection last saw) since a moment may have passed between
+    // Selection running and APIRS approving — stop/target are then
+    // derived from *this* live entry using Selection's ATR-based
+    // stop/target rule, so they're anchored to the real fill price.
+    const direction = selection.direction;
+    const entryPrice = direction === 'BUY' ? symbolInfo.ask : symbolInfo.bid;
+    const { stopPrice, targetPrice } = strategySelectionService.computeSelectionStopTarget(selection, entryPrice);
+    // Paper lot size: proportional placeholder (Module 7's real
+    // per-instrument contract-size/pip-value specs are explicitly
+    // deferred, confirmed this revision — P&L below is risked-dollar-
+    // amount x R-multiple, not lot-size-derived, so this placeholder
+    // only affects the displayed lot_size number, not the math).
+    const lotSize = Number((entryResult.riskResult.appliedRisk * 0.1).toFixed(4)) || 0.01;
+
+    // Learning Engine (08 Section 8) input — "the conditions present
+    // when it opened." Same scalar tradeInput shape already built above,
+    // plus the two strategy-identity fields tradeInput doesn't carry.
+    // `chosen_instrument` deliberately excluded — it's already
+    // trades.symbol, a first-class indexed column since 6.4; duplicating
+    // it here risks the two silently diverging later for no benefit.
+    // Must stay these extracted scalars, never `selection` wholesale —
+    // `selection.marketIntelligence` carries the raw 100-bar OHLC array
+    // (cached alongside the indicators since 6.4) and serializing that
+    // would balloon every trade row with ~100 redundant bars.
+    const conditions = {
+      ...tradeInput,
+      strategy_id: selection.strategy_id,
+      strategy_name: selection.strategy_name,
+    };
+
+    const tradeRow = await tradesRepository.insertOpenPaperTrade({
+      botInstanceId: this.botInstanceId,
+      symbol,
+      direction,
+      entryPrice,
+      stopPrice,
+      targetPrice,
+      lotSize,
+      finalAppliedPositionRisk: entryResult.riskResult.appliedRisk,
+      conditions,
+    });
+
+    this.openPosition = {
+      tradeRowId: tradeRow.id,
+      symbol,
+      direction,
+      entryPrice,
+      stopPrice,
+      targetPrice,
+      conditions,
+      entryResult,
+    };
+
+    // 06_API_Specification.md Section 11 documents `trade.opened` /
+    // `trade.closed` as a pair. Before 6.1 this never mattered — open
+    // and close happened in the same tick, so `trade.closed` alone
+    // covered it. Now that a position can sit open for real time
+    // (Section "What was built" above), the Frontend has no other way
+    // to learn a position just opened; without this, positions.tsx
+    // stays stale until the position later resolves.
+    await publishBotEvent(this.botInstanceId, 'trade.opened', tradeRow);
+
+    return { state: this.state, entryResult, trade: tradeRow };
+  }
+
+  async _monitorOpenPosition() {
+    const pos = this.openPosition;
+
+    let symbolInfo;
+    try {
+      symbolInfo = await mt5Connector.getSymbolInfo(pos.symbol);
+    } catch (err) {
+      console.error('[bot-runtime] price fetch failed, will retry next tick:', err.message);
+      return null;
+    }
+    if (symbolInfo.bid == null || symbolInfo.ask == null) {
+      return null;
+    }
+
+    // Exiting a position transacts on the opposite side of the book from
+    // opening it — closing a BUY sells at bid, closing a SELL buys at
+    // ask (matches bot/mt5-connector/server.py's real close_order logic).
+    const current = pos.direction === 'BUY' ? symbolInfo.bid : symbolInfo.ask;
+
+    let hit = null;
+    if (pos.direction === 'BUY') {
+      if (current >= pos.targetPrice) hit = 'target';
+      else if (current <= pos.stopPrice) hit = 'stop';
+    } else {
+      if (current <= pos.targetPrice) hit = 'target';
+      else if (current >= pos.stopPrice) hit = 'stop';
+    }
+
+    if (!hit) {
+      return null; // still open — nothing resolved this tick
+    }
+
+    const exitPrice = current;
+    const stopDistance = Math.abs(pos.entryPrice - pos.stopPrice);
+    const signedMove = (exitPrice - pos.entryPrice) * (pos.direction === 'BUY' ? 1 : -1);
+    const realRMultiple = stopDistance > 0 ? signedMove / stopDistance : 0;
+    const pnlAmount = pos.entryResult.riskedAmount * realRMultiple;
+    const wasWin = pnlAmount > 0;
+
+    const previousMode = this.state.activeStrategyMode;
+    const { state: nextState, trace } = resolveExit(this.state, pos.entryResult, {
+      wasWin,
+      pnlAmount,
+      conditions: pos.conditions ?? null,
+    });
+    this.state = nextState;
+
+    const closedTrade = await tradesRepository.closePaperTrade(pos.tradeRowId, {
+      exitPrice,
+      pnl: pnlAmount,
+    });
+
+    await logExitDecisions(this.botInstanceId, previousMode, trace);
+
+    if (closedTrade) {
+      await publishBotEvent(this.botInstanceId, 'trade.closed', closedTrade);
+    }
+
+    const updated = await botInstanceRepository.updateStatusFields(this.botInstanceId, {
+      status: 'running',
+      active_strategy_mode: nextState.activeStrategyMode,
+      active_trading_balance: nextState.balance,
+      peak_equity: nextState.peakEquity,
+      current_tier: nextState.currentTier,
+    });
+    const cached = await botStatusCache.setStatus(updated);
+
+    await publishBotEvent(this.botInstanceId, 'equity.updated', {
+      active_trading_balance: cached.active_trading_balance,
+      peak_equity: cached.peak_equity,
+      timestamp: cached.updated_at,
+    });
+
+    this.openPosition = null;
+
+    return { state: nextState, trace, trade: closedTrade, session: cached };
   }
 }
 
@@ -291,9 +494,9 @@ function getRuntime(botInstanceId) {
 
 module.exports = {
   BotRuntime,
-  buildStubTradeInput,
   startRuntime,
   stopRuntime,
   getRuntime,
   DEFAULT_TICK_MS,
+  STUB_DAILY_DRAWDOWN_PCT,
 };

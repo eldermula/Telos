@@ -1,0 +1,13 @@
+{
+  "name": "telos-strategy-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telos Trading Bot — Strategy Engine / Selection (Module 4, 08_Bot_Architecture.md Section 9.0/13)",
+  "main": "src/selectTrade.js",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -160,15 +160,22 @@ function computeAppliedRisk(state, tradeInput, learningInputs) {
 }
 
 /**
- * Runs one simulated trade against the full APIRS pipeline. Pure
- * function: returns the resulting state and a full trace of every
- * intermediate decision, without mutating the input state.
+ * Phase 6.1 split: entry-evaluation (approval + risk sizing) is now
+ * separable from exit-resolution (outcome + state transition), so a
+ * caller with a real open position (bot-runtime.js) can evaluate/approve
+ * a trade at open time, then resolve it later — once real MT5 price
+ * data crosses the stop or target — instead of requiring a
+ * pre-determined `outcomeRMultiple` up front. `runTradeCycle` below
+ * remains the single-call, pre-determined-outcome convenience wrapper
+ * this test suite already exercises; it is now implemented in terms of
+ * `evaluateEntry` + `resolveExit` rather than inlining both.
  *
- * tradeInput shape:
+ * tradeInput shape (entry evaluation only — `outcomeRMultiple` is not
+ * read here, only by the `runTradeCycle` convenience wrapper below):
  *   { strategyConfidence, marketQuality, trendQuality, marketVolatility,
- *     currentATR, rollingAvgATR, dailyDrawdownPct, outcomeRMultiple }
+ *     currentATR, rollingAvgATR, dailyDrawdownPct }
  */
-function runTradeCycle(state, tradeInput) {
+function evaluateEntry(state, tradeInput) {
   const learningInputs = {
     liveWinProbability: computeLiveWinProbability(state.tradeHistory),
     consecutiveLosses: computeConsecutiveLosses(state.tradeHistory),
@@ -176,24 +183,40 @@ function runTradeCycle(state, tradeInput) {
 
   const approval = determineTradeApproval(state, tradeInput);
   if (!approval.tradeApproved) {
-    return {
-      state,
-      trace: { tradeApproved: false, reason: approval.reason, learningInputs },
-    };
+    return { tradeApproved: false, reason: approval.reason, learningInputs };
   }
 
   const riskResult = computeAppliedRisk(state, tradeInput, learningInputs);
-
   const balanceBeforeTrade = state.balance;
   const riskedAmount = riskResult.appliedRisk * balanceBeforeTrade;
-  const pnlAmount = riskedAmount * tradeInput.outcomeRMultiple;
+
+  return {
+    tradeApproved: true,
+    learningInputs,
+    riskResult,
+    balanceBeforeTrade,
+    riskedAmount,
+  };
+}
+
+/**
+ * Resolves an already-approved entry (from `evaluateEntry`) against a
+ * known outcome — `{ wasWin, pnlAmount }`, either supplied directly
+ * (`runTradeCycle`, tests) or derived from real price movement against
+ * stop/target (bot-runtime.js's position monitor: `pnlAmount =
+ * riskedAmount * realRMultiple`, where `realRMultiple` is the signed
+ * price move divided by the stop distance — same convention as the
+ * `outcomeRMultiple` this module has always used, just measured from
+ * real prices instead of supplied directly).
+ */
+function resolveExit(state, entryResult, { wasWin, pnlAmount, conditions = null }) {
+  const { learningInputs, riskResult, balanceBeforeTrade } = entryResult;
   const balanceAfterTrade = balanceBeforeTrade + pnlAmount;
-  const wasWin = pnlAmount > 0;
 
   const newTradeHistory = recordTradeOutcome(state.tradeHistory, {
     wasWin,
     pnlAmount,
-    conditions: tradeInput,
+    conditions,
   });
 
   const macroResult = evaluateMacroCircuitBreaker({
@@ -252,6 +275,36 @@ function runTradeCycle(state, tradeInput) {
 }
 
 /**
+ * Runs one simulated trade against the full APIRS pipeline in a single
+ * call, given a pre-determined `outcomeRMultiple`. Pure function:
+ * returns the resulting state and a full trace of every intermediate
+ * decision, without mutating the input state. Kept for tests and any
+ * caller that doesn't need the real open/monitor/close lifecycle
+ * `evaluateEntry`/`resolveExit` split provides.
+ *
+ * tradeInput shape:
+ *   { strategyConfidence, marketQuality, trendQuality, marketVolatility,
+ *     currentATR, rollingAvgATR, dailyDrawdownPct, outcomeRMultiple }
+ */
+function runTradeCycle(state, tradeInput) {
+  const entryResult = evaluateEntry(state, tradeInput);
+  if (!entryResult.tradeApproved) {
+    return {
+      state,
+      trace: {
+        tradeApproved: false,
+        reason: entryResult.reason,
+        learningInputs: entryResult.learningInputs,
+      },
+    };
+  }
+
+  const pnlAmount = entryResult.riskedAmount * tradeInput.outcomeRMultiple;
+  const wasWin = pnlAmount > 0;
+  return resolveExit(state, entryResult, { wasWin, pnlAmount, conditions: tradeInput });
+}
+
+/**
  * Runs a full sequence of simulated trades, folding runTradeCycle over
  * the list. Returns the final state plus the per-trade trace array, so
  * tests can assert against both the end state and any intermediate step.
@@ -269,6 +322,8 @@ function runSequence(initialState, tradeInputs) {
 
 module.exports = {
   createInitialState,
+  evaluateEntry,
+  resolveExit,
   runTradeCycle,
   runSequence,
 };

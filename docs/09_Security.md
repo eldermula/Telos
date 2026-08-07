@@ -88,6 +88,9 @@ Given the current scale (5 initial users, self-hosted), a lightweight plan beats
 **Still genuinely open — not a technical decision, flagged for you specifically:**
 - **Regulatory/compliance considerations** — running an automated trading platform, even non-custodial, may carry jurisdiction-specific obligations depending on where users are located and how the platform is described. Worth checking with someone qualified before real users connect real accounts (Roadmap Phase 9) — this isn't something any of these documents can resolve.
 
+**Resolved (post-Phase-6, before Option 2 — see `CHANGELOG.md`):**
+- ~~No demo/live account distinction anywhere in `broker_connections`~~ → fixed as its own small increment, deliberately sequenced before Option 2 (real order placement) rather than discovered partway through it. `broker_connections.account_type` (`demo`/`contest`/`real`) is detected automatically from the live MT5 terminal's `account_info().trade_mode` at every validate call — never accepted as user input, since a wrong self-reported flag would recreate the exact risk this closes. Migration `007_add_broker_connections_account_type.sql`; verified live against MetaQuotes-Demo (`account_type: 'demo'` returned end-to-end). **Scope boundary:** this makes the distinction knowable and persisted; it does not itself gate `placeOrder`/`closeOrder` — no code path calls those from the automatic loop yet. Deciding how Option 2 should behave differently (if at all) per account type is that increment's own design decision, not pre-empted here. See `08_Bot_Architecture.md` Section 13 for the same item from the architecture angle.
+
 ---
 
 *This closes out the core technical doc set (01–09). `10_AI_Rules.md` and `11_AI_Prompt_Library.md` are process documents rather than system design; `12_Roadmap.md` sequences implementation from here.*

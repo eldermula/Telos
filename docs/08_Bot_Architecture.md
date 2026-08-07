@@ -186,29 +186,62 @@ APIRS Risk Engine  ←  Learning Engine feeds in live_win_probability / drawdown
 Execution Engine → places trade via Broker API
 ```
 
+### 9.0 Watchlist — Bounded Multi-Instrument Scope (New, this revision — confirmed)
+
+**What changed:** Modules 2–4 previously operated against a single, implicitly fixed instrument (the paper harness hardcodes `EURUSD` via `PAPER_SYMBOL`). This revision removes that assumption: the bot now evaluates a fixed, admin-configured **watchlist** of instruments every tick and autonomously decides which one (if any) to trade — not user-selected, and not fully open to anything the broker offers.
+
+**Why bounded, not fully open:** an unbounded instrument universe multiplies per-tick work linearly with instrument count for Module 2 (technical structure) and Module 4 (strategy fit), and multiplies the surface area Module 7 needs correct execution specs for. Section 9.2's cost/latency design (rule-based fast path, LLM reserved for what genuinely needs language understanding) already assumes a small, known set of things evaluated per tick — an unbounded watchlist would break that assumption. A fixed watchlist keeps this bounded and auditable while still letting the bot pick the best opportunity across several distinct markets rather than being stuck waiting on one instrument that happens to be quiet.
+
+**Confirmed watchlist — 5 forex majors + gold:**
+
+| Instrument | Type | Why included |
+|---|---|---|
+| EURUSD | Forex major | Highest liquidity/lowest spread pair traded globally; already the pair this project has tested against |
+| GBPUSD | Forex major | Second-most-liquid major, meaningfully different volatility/session profile than EUR |
+| USDJPY | Forex major | Asian-session coverage the other majors don't give; JPY pip-value math is a genuinely different case worth having in the pool from day one (Module 7, below) |
+| AUDUSD | Forex major | Commodity-currency behavior distinct from the EUR/GBP/JPY cluster — diversifies what Module 2's trend/volatility signals actually see across the watchlist |
+| USDCAD | Forex major | Another commodity-linked pair with a different correlation profile than AUDUSD (oil vs. broader commodities) |
+| XAUUSD (Gold) | Metal (CFD) | Session-independent (trades all major sessions), classic "risk-off" instrument that behaves differently than any FX pair — meaningfully diversifies the news-driven trades Module 3/4 can act on |
+
+All six are standard on MetaQuotes-Demo and any real MT5 broker — no exotic pairs, no CFDs beyond gold.
+
+**Verified tradable on MetaQuotes-Demo, this revision** — reused the `/symbol-info` connector endpoint from 4.6a against the live-attached terminal, same check already done for EURUSD:
+
+| Instrument | `trade_mode_full` | Live bid/ask at check time | digits / point |
+|---|---|---|---|
+| EURUSD | `true` | 1.15351 / 1.15351 | 5 / 0.00001 |
+| GBPUSD | `true` | 1.34481 / 1.34481 | 5 / 0.00001 |
+| USDJPY | `true` | 158.333 / 158.334 | 3 / 0.001 |
+| AUDUSD | `true` | 0.70411 / 0.70411 | 5 / 0.00001 |
+| USDCAD | `true` | 1.40056 / 1.40057 | 5 / 0.00001 |
+| XAUUSD | `true` | 4312.87 / 4313.13 | 2 / 0.01 |
+
+All six returned `ok: true` and `trade_mode_full: true` — fully tradable, not just quoted. One operational detail worth carrying into Module 2's design: XAUUSD's *first* `/symbol-info` call returned a zero tick (`bid: 0.0, ask: 0.0, tick_time: 0`) even though `trade_mode_full` was already `true` — a symbol not previously in Market Watch needs a moment after `symbol_select` before the terminal receives its first real tick from the feed. A second call ~2s later returned a live tick normally. Module 2 (and any other module polling ticks for the first time per watchlist instrument) should treat a `0`/`null` bid or ask as "not warmed up yet, retry" rather than a hard failure — this isn't specific to XAUUSD, just more likely to surface on whichever watchlist instrument hasn't been queried recently.
+
 **Module 1 — Master Orchestrator**
-Central router. On every new price tick or news event, triggers Modules 2–4 in parallel, collects their outputs into a single environment dictionary, and passes it to APIRS (Module 5). If APIRS approves a risk size greater than 0.00, routes the trade vector to Module 7 (Execution); otherwise discards the opportunity.
+Central router. Holds the watchlist (Section 9.0) as config. On every new price tick or news event, triggers Module 2 once per watchlist instrument and Module 4's cross-instrument Selection pass, plus Module 3 once per new headline batch (not per instrument — see Module 3 below), collects all outputs into a single environment dictionary per evaluated instrument, and passes the set to Module 4 for cross-instrument selection, then APIRS (Module 5). If APIRS approves a risk size greater than 0.00 for whichever instrument Module 4 selected, routes the trade vector to Module 7 (Execution); otherwise discards the opportunity for that tick.
 
 **Module 2 — Market Intelligence Worker**
-Evaluates technical structure and trend state. Outputs: `trend_quality` (0.0–1.0), `market_volatility` (LOW/NORMAL/HIGH), `volatility_penalty` (0.0–1.0, based on ATR/spread).
+Evaluates technical structure and trend state — now once per instrument in the watchlist (Section 9.0), not a single fixed instrument. Outputs, per instrument: `trend_quality` (0.0–1.0), `market_volatility` (LOW/NORMAL/HIGH), `volatility_penalty` (0.0–1.0, based on ATR/spread). Stays rule-based/free per Section 9.2 — evaluating six instruments instead of one adds CPU work, not LLM cost.
 
 **Module 3 — News & Sentiment Intelligence Worker**
-Parses free RSS feeds, economic calendars, and announcements for macroeconomic impact. Outputs: `market_quality` (0.0–1.0), `news_impact_score` (weighted positive/negative).
+Parses free RSS feeds, economic calendars, and announcements for macroeconomic impact — **once per headline, not once per headline per instrument** (cost control: an LLM call is already the most expensive step in this pipeline, so multiplying it by watchlist size would be the single largest cost increase this revision could introduce). Each headline's one LLM-parsed output includes which of the watchlist's instruments it's relevant to (e.g. a Fed statement tags USD-quoted pairs; an RBA statement tags AUDUSD; a safe-haven-demand headline tags XAUUSD) plus a sentiment/impact score. A lightweight, rule-based keyword/entity matcher (no second LLM call) then fans that single classification out to per-instrument `market_quality` / `news_impact_score` — an instrument a given headline doesn't concern gets a neutral contribution from that headline, not a repeated API call spent finding out it doesn't apply.
 
 **Module 4 — Strategy Engine (Selection + Discovery)**
 
 Two distinct sub-responsibilities, on two different cadences:
 
-- **Selection** (real-time, every tick — unchanged from the original design): evaluates current market structure against the pool of *validated* candidate strategies and picks the best fit. Outputs: `trade_direction` (BUY/SELL/WAIT), `strategy_confidence` (0.0–1.0), proposed entry/stop/target prices. This is the "human trader picking the right tool for current conditions" behavior — not a fixed single strategy.
+- **Selection** (real-time, every tick): **materially new responsibility this revision** — evaluates every instrument in the watchlist (Section 9.0) against the pool of *validated* candidate strategies, and now decides both **which instrument to trade** and **which strategy fits it**, rather than only the latter (previously the instrument was a given). Outputs: `chosen_instrument` (one of the watchlist, or none if nothing across the whole watchlist clears the bar this tick), `trade_direction` (BUY/SELL/WAIT), `strategy_confidence` (0.0–1.0), proposed entry/stop/target prices — all scoped to whichever instrument was chosen. Still rule-based JSON-matching per Section 9.2, so evaluating six instruments × the strategy pool stays zero-LLM-cost; the search space grows linearly with watchlist size, not with API call count.
 - **Discovery** (periodic — weekly/monthly, not per-tick, to keep this cheap): the AI researches established trading methodologies and proposes new candidate strategies as structured rule-sets, expanding the pool Selection draws from over time. Full mechanics in Section 9.4.
 
-**Every candidate strategy — hand-written or AI-discovered — enters the same pool Selection draws from.** The pre-live paper-trading gate that previously validated additions here has been removed (Section 11) — this applies equally to AI-discovered strategies, which are not human-reviewed before being eligible for live selection.
+**Every candidate strategy — hand-written or AI-discovered — enters the same pool, but Selection only draws from strategies that have reached `active` status.** Getting there requires passing the scoped `FR-BOT-8` paper-trading gate described in Section 9.4/Section 11 — this applies equally regardless of source (`manual` or `ai_discovered`); nothing skips straight to `active` just because a person wrote it instead of the AI, or vice versa.
 
 ### 9.4 Strategy Discovery Mechanics
 
 - **Cadence:** weekly or monthly, not real-time — strategy discovery doesn't need to react to market ticks, and running it rarely keeps API cost minimal (consistent with the cost priority applied throughout Section 9.2).
 - **Process:** the AI (Claude/OpenAI, same models as `FR-BOT-1`) researches known trading approaches — classic technical systems, established trader/author frameworks, price-action patterns — and outputs a structured rule-set: entry/exit conditions, the market regime it's suited for (trending/ranging/high-volatility), and a plain-language description.
-- **Registration:** each proposed strategy is stored with a status (`proposed` → `paper_testing` → `active` or `rejected`) — schema in `05_Database_Design.md`. Nothing skips straight to `active`.
+- **Registration:** each proposed strategy is stored with a status (`proposed` → `paper_testing` → `active` or `rejected`) — schema in `05_Database_Design.md`. Nothing skips straight to `active`, for either `source` value (`manual` or `ai_discovered`) — this is the scoped gate reinstated in Section 11.
+- **Graduation bar:** reuses the original `FR-BOT-8` criteria this project already had on record before Section 11's system-level gate was removed — a minimum paper-trading window (proposed: 50 trades, matching the Learning Engine's rolling window in Section 8) with positive net P&L and >45% win probability. A strategy that doesn't clear this bar stays `paper_testing` or moves to `rejected`; it does not become eligible for Selection.
 - **Human visibility:** proposed/paper-testing strategies should be visible somewhere reviewable (Admin module is the natural fit) even though the gate itself is automatic — a person should be able to see what the AI is proposing, not just what's already live.
 
 **Module 5 — APIRS Risk Engine**
@@ -219,6 +252,8 @@ Post-trade review. Logs each trade's outcome against the conditions present when
 
 **Module 7 — Execution Engine**
 Translates the approved risk percentage into exact lot/contract sizes based on entry/stop distance, and places the order via the broker's API. Stays blind to market sentiment — only acts on parameters explicitly verified by the Master Orchestrator and APIRS. Logs latency, flagging broker delays over 200ms.
+
+**New requirement, this revision — per-instrument execution specs:** the watchlist (Section 9.0) means Module 7 can no longer assume one EURUSD-shaped lot-sizing formula. It needs a per-instrument execution spec (contract size, pip-value formula, minimum lot) for every watchlist instrument, not just the one forex pair tested so far. The MT5 connector's existing `/symbol-info` endpoint (`04_System_Architecture.md` Section 3.6) already returns per-instrument `volume_min`/`volume_step`/`digits`/`point` on request — that part is already instrument-agnostic. What's new: JPY-quoted pairs (USDJPY) and gold (XAUUSD) compute pip value/contract size differently than a standard non-JPY forex pair, so Module 7's lot-sizing math needs to branch on instrument type rather than assume one fixed formula.
 
 **Confirmed implementation:** this module runs as a local Python service using the official `MetaTrader5` package (`04_System_Architecture.md` Section 3.6) — the one scoped exception to the Node.js stack (Blueprint Section 6), since MT5's free/native integration library is Python-only. It communicates with the rest of the Bot (Node.js) over a local internal API. One MT5 terminal instance runs per linked broker account, and since one account per user is now confirmed (Section 13), that's a predictable, bounded resource footprint at the 5-user initial scale.
 
@@ -236,11 +271,12 @@ Translates the approved risk percentage into exact lot/contract sizes based on e
 - **Slow path (periodic, cached):** Modules 2–4's AI-backed analysis runs on a fixed interval — proposed every 15–30 seconds, or event-triggered (e.g. a new economic calendar release) — rather than on every tick. The latest result is cached and reused by the fast path until the next update. This is both faster *and* cheaper: forex conditions don't meaningfully change tick-to-tick, and a 15–30s cadence cuts LLM API call volume dramatically compared to calling per-tick.
 - **Prefer free/rule-based computation wherever it's genuinely sufficient:** Module 2's `trend_quality`/`volatility_penalty` (moving averages, ATR, RSI-style indicators) don't need an LLM at all — plain technical calculation is free and faster. Reserve Claude/OpenAI API calls for what actually needs language understanding: Module 3's unstructured news/RSS parsing, and higher-level confidence reasoning in Module 4. Calling an LLM for every input regardless of whether it needs one is the expensive, slow option — this design avoids that by default.
 
-### 9.3 Module 3 Data Source Reliability (Proposed)
+### 9.3 Module 3 Data Source Reliability (Confirmed, this revision — implemented in 6.3)
 
-- Maintain 2–3 **free** RSS/economic-calendar sources in priority order (no paid data feeds, per the cost priority) — short timeout (3–5s) on the primary before falling back to the next.
-- If all sources fail for a cycle, treat it as a Module 3 failure per Section 9.1 (neutral values + forced HIGH volatility).
-- Lightweight health tracker: if News AI fails N consecutive cycles (proposed: 5), mark it "degraded" and skip attempting it for a cooldown period (proposed: 5 minutes) rather than repeatedly timing out and adding latency to every tick — keeps the fast path fast even when a free source is temporarily down.
+- Maintain 2–3 **free** RSS/economic-calendar sources in priority order (no paid data feeds, per the cost priority) — short timeout (3–5s) on the primary before falling back to the next. **Confirmed set:** Forex Factory's public calendar JSON (structured) + `forexlive.com/feed/news` primary / `fxstreet.com/rss/news` secondary (unstructured, RSS).
+- **Best-effort, not strict, on partial failure:** if the calendar feed fails but headlines succeed (or vice versa), Module 3 returns a real result using whichever source(s) succeeded. Only a *total* outage — both fail — is treated as a Module 3 failure per Section 9.1 (neutral values + forced HIGH volatility).
+- Lightweight per-source health tracker (calendar and the RSS chain tracked independently): if a source fails N consecutive cycles (5), mark it "degraded" and skip attempting it for a cooldown period (5 minutes) rather than repeatedly timing out and adding latency to every tick — keeps the fast path fast even when a free source is temporarily down.
+- **Rate-limiting (`429`) is tracked separately from a hard failure, not folded into the same counter — discovered as a real, recurring condition, not a hypothetical.** During 6.3's own live verification, Forex Factory's calendar endpoint (Cloudflare-fronted, `cache-control: public, max-age=60`) actually rate-limited under this project's own repeated test-cadence requests. A source that's rate-limiting you is *up and responding* — a fundamentally different signal than a network error or a 5xx, and treating repeated 429s as "the source looks broken" would degrade a perfectly healthy free feed for 5 minutes over nothing more than calling it too often. Instead: a `429` sets a separate `rateLimitedUntil` backoff (honoring the response's `Retry-After` header if present, else defaulting to 60s — matching the calendar feed's own observed cache lifetime) and explicitly does **not** increment the hard-failure counter or set `degradedUntil`. Both `degradedUntil` and `rateLimitedUntil` gate the same "skip this source for now" check — they're just two different reasons to skip, tracked independently so a string of 429s can't accidentally mask (or get masked by) a genuine outage on the same source.
 
 ## 10. Data Payload Structure (Proposed)
 
@@ -293,23 +329,27 @@ APIRS's response back to the Master Orchestrator:
 
 Field names here are a starting proposal — they'll likely need to match whatever shape the Backend API/Cursor implements, but this establishes the contract.
 
-## 11. Pre-Live Validation Policy — REMOVED (this revision)
+## 11. Pre-Live Validation Policy — system-level gate removed; strategy-pool gate reinstated (Phase 6 revision)
+
+This section has two distinct decisions layered on it, kept on record separately rather than one silently overwriting the other, per this project's flag-rather-than-silently-resolve discipline.
 
 **Original policy (superseded):** this section previously required any new or materially modified strategy, or any change to a tier's risk parameters — including the Section 3a bootstrap curve — to run through a minimum paper-trading window (proposed at 50 trades, matching the Learning Engine's rolling window) before being permitted to go live, with a minimum bar of positive net P&L and >45% win probability to graduate.
 
-**Decision (explicit, this revision): the paper-trading validation gate is removed entirely.** The system is permitted to go live with real capital as soon as implementation is complete, with no minimum simulated-trade window and no automated graduation criteria.
+**Decision 1 (system-level "go live" gate — still removed, unchanged from the prior revision):** the engine as a whole — APIRS's implementation, tier parameters, the Section 3a bootstrap curve — is permitted to go live with real capital as soon as implementation is complete, with no minimum simulated-trade window and no automated graduation criteria gating *the system's* transition from paper to live. This is about whether Telos starts trading a real linked account at all, independent of which individual strategies Module 4 is allowed to select from.
 
-**Reasoning on record, per this project's own flag-rather-than-silently-resolve discipline:**
+**Decision 2 (strategy-pool gate — reinstated, this revision, narrower scope than the original policy):** independent of Decision 1, each individual entry in the `candidate_strategies` pool (Module 4, Section 9.4) — whether `source = manual` or `source = ai_discovered` — must still pass its own `FR-BOT-8` paper-trading window before Selection is allowed to draw from it live. Reasoning: Decision 1 was about not blocking the *system's* live-capital readiness on an arbitrary global trade count; it was never meant to mean "let an AI-discovered strategy with a plain-language rule-set start trading real money with zero prior verification that it behaves sensibly against real price sequences." Those are different risks — the first is about engine correctness, already covered by unit tests (Sections 3–5) and code review; the second is about whether a specific set of trading rules (which no human necessarily reviewed line-by-line, especially `ai_discovered` ones) actually produces sane behavior before it's trusted with real capital. Mechanics: Section 9.4's `proposed → paper_testing → active | rejected` status flow, using the same graduation bar as the original policy above (≥50 simulated trades, positive net P&L, >45% win probability) — `05_Database_Design.md`'s `candidate_strategies` schema and `03_SRS.md`'s `FR-BOT-8` were already written this way and did not need updating; only this section's earlier "removed entirely" language was too broad and is corrected here.
+
+**Reasoning on record for Decision 1, per this project's own flag-rather-than-silently-resolve discipline:**
 - The gate's original purpose was to validate that newly-implemented code behaves correctly under real trade sequences before real capital depends on it — distinct from the Learning Engine (Module 6, Section 8), which continues adjusting `live_win_probability` and related inputs indefinitely regardless of this decision.
-- Removing it means the first live trade this system ever places may also be the first time the full implementation — including Sections 6–8, not yet built as of this revision — has ever executed against a real, live trade sequence.
-- This was raised explicitly as a tradeoff before this decision was made. The decision to accept that risk in exchange for reaching live trading sooner was made deliberately, not by omission.
+- Removing the *system-level* gate means the first live trade this system ever places may also be the first time the full implementation — including Sections 6–8, not yet built as of the prior revision — has ever executed against a real, live trade sequence.
+- This was raised explicitly as a tradeoff before that decision was made. The decision to accept that risk in exchange for reaching live trading sooner was made deliberately, not by omission.
 
-**What still exists, unaffected by this removal:**
+**What still exists, unaffected by either decision:**
 - The Learning Engine (Section 8) continues operating continuously in production, live or otherwise — it was never gated by this section.
-- The macro and micro circuit breakers (Sections 6, 7) remain fully in effect from the first live trade onward — this removal affects only the pre-live *validation* gate, not any in-production safety mechanism.
-- Unit-level test coverage (as built for Sections 3–5 so far, and to continue for Sections 6–8) is unaffected — this removal is specifically about the *live-capital* gate, not about testing the code at all.
+- The macro and micro circuit breakers (Sections 6, 7) remain fully in effect from the first live trade onward — neither decision here affects any in-production safety mechanism.
+- Unit-level test coverage (as built for Sections 3–5 so far, and to continue for Sections 6–8) is unaffected by Decision 1 — that removal is specifically about the *live-capital* gate, not about testing the code at all.
 
-**Not addressed by this change, still open:** whether any reduced or informal verification step happens between "implementation complete" and "first live trade" is left to the person's discretion at that time, not specified here.
+**Not addressed by this change, still open:** whether any reduced or informal verification step happens between "implementation complete" and "first live trade" for the *system-level* gate (Decision 1) is left to the person's discretion at that time, not specified here. This is separate from the *strategy-level* gate (Decision 2), which is now fully specified above.
 
 ## 12. Core Management Principles
 
@@ -329,7 +369,7 @@ Field names here are a starting proposal — they'll likely need to match whatev
 **Settled** — confirmed given `05_Database_Design.md`, `06_API_Specification.md`, and everything built since have already assumed these without issue:
 - ~~Strategy B~~ → Section 6.1 (flat 1% risk, 0.90 confidence bar, 60%-from-peak secondary halt floor).
 - ~~Penalty parameter formulas~~ → Section 4.
-- ~~`FR-BOT-8` backtesting/paper-trading gate~~ → **removed entirely, this revision** (Section 11). No pre-live validation window applies to any strategy, tier change, or AI-discovered addition.
+- ~~`FR-BOT-8` backtesting/paper-trading gate~~ → **two-part resolution, Section 11.** The *system-level* go-live gate (engine/tier-parameter readiness) is removed. The *strategy-pool* gate is reinstated (Phase 6 revision): every `candidate_strategies` entry, `manual` or `ai_discovered`, still passes its own paper-trading window before Selection can draw from it live.
 - ~~Module failure/timeout fallback values~~ → Section 9.1.
 - ~~AI-call latency/cadence~~ → Section 9.2.
 - ~~Data Payload Structure~~ → Section 10.
@@ -343,7 +383,15 @@ A starter *pool* — not a permanent limit — of three well-established, free-t
 2. **Breakout** — price breaks above a recent high / below a recent low with momentum confirmation. Favored in high-volatility, directional conditions.
 3. **Mean reversion (RSI-based)** — oversold/overbought RSI levels trigger counter-trend entries. Favored when `trend_quality` is low (ranging market).
 
-This pool grows over time via the Discovery process (Section 9.4) — new strategies the AI proposes join this same pool once registered. **No pre-live validation gate applies to these additions (Section 11 removed)** — an AI-discovered strategy becomes eligible for live selection with no more scrutiny than tier progression already gets, whether a human wrote it or the AI invented it.
+This pool grows over time via the Discovery process (Section 9.4) — new strategies the AI proposes join this same pool once registered, starting at `status = proposed`. **The strategy-pool paper-trading gate applies to these additions (Section 11, Decision 2, reinstated)** — an AI-discovered strategy must clear the same `proposed → paper_testing → active` bar as a hand-written one before it's eligible for live Selection; it gets no more and no less scrutiny than a strategy a human wrote.
+
+**Now resolved — `rule_set` concrete shape and Selection implementation (6.4):** the schema referenced above as `jsonb`/"structured entry/exit conditions" now has a fixed, implemented shape — `regime_fit` (cheap pre-check against Module 2/3's current reading), `signal` (`ema_cross`/`breakout`/`rsi_reversion`, one per strategy above), `stop`/`target` (both ATR-multiple based off Module 2's shared ATR — pure price-level math, works identically across all six watchlist instruments without per-instrument branching), `base_confidence`. Full shape and worked example in `05_Database_Design.md` Section 1.4. `strategy_confidence` is `base_confidence` nudged by how far past its own `regime_fit` threshold the current reading is (scale factor `0.5`, clamped `[0,1]`) — a deliberately conservative starting point, flagged to revisit once real trade outcomes exist to calibrate against.
+
+**Settled — Watchlist / multi-instrument scope (Section 9.0, this revision):**
+
+- **Watchlist membership** — confirmed: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD, XAUUSD (Section 9.0), verified tradable (`trade_mode_full: true`, live ticks) against MetaQuotes-Demo via the same `/symbol-info` connector endpoint 4.6a used for EURUSD.
+- **Concurrent positions across instruments — settled, this revision: one open position at a time, system-wide, not concurrent across instruments.** Module 4 picks at most one instrument to trade per tick (Section 9.0); `BotRuntime`'s existing single-open-position behavior stays exactly as-is regardless of which instrument gets chosen — no new APIRS/Execution code path for holding multiple simultaneous positions. **Reasoning on record:** this preserves the already-validated risk math in Sections 4–8 without requiring new aggregate cross-position exposure logic, and specifically avoids correlation risk given 4 of the 6 watchlist instruments (EURUSD, GBPUSD, AUDUSD, USDCAD) share USD as one leg — two "independently risk-sized" simultaneous positions in correlated pairs isn't the same risk as two positions in genuinely uncorrelated instruments, and the macro/micro circuit breakers (Sections 6–7) were designed around a single exposure, not an aggregate across several. **Not dismissed as a future option:** concurrent multi-instrument execution is a legitimate enhancement to revisit later — it would let the bot use idle time on a quiet instrument to act on an opportunity elsewhere instead of waiting — but it requires new APIRS-level aggregate-exposure rules (e.g. a correlation-aware combined risk cap across simultaneously-open positions) that don't exist yet and are explicitly out of scope for this revision.
+- **`05_Database_Design.md` schema gap, confirmed by inspection this revision:** the `trades` table had no `symbol`/`instrument` column — documented at the time (see `05_Database_Design.md` Section 1.2, `trades.symbol`) as blocking Module 2–4 implementation directly, not a later cleanup item, but the actual migration (`005_add_trades_symbol.sql`) didn't land until 6.4, immediately before Selection needed it to persist which instrument it chose. Applied and verified against the live DB (backfilled pre-existing rows to `'EURUSD'`, then set `NOT NULL`) as part of 6.4.
 
 **Settled — all four Section 3a interaction questions, this revision:**
 
@@ -351,6 +399,10 @@ This pool grows over time via the Discovery process (Section 9.4) — new strate
 - ~~Interaction with the macro circuit breaker~~ → confirmed intended. A single loss can trigger the 45% macro breaker outright at bootstrap risk levels — accepted as the deliberate tradeoff of allowing 70% risk at very small balances (Section 6).
 - ~~Interaction with the micro circuit breaker~~ → resolved with a new bootstrap-specific rule: a single loss at the 70% flat-cap risk level (balance ≤ $10) triggers an immediate switch to Strategy B, rather than waiting for the standard two-strike threshold (Section 7).
 - ~~Permanent feature vs. one-time bootstrap~~ → **permanent by design, deliberately minimal.** Section 3a is intended to stay light-touch — few rules, maximum room for the account to grow from a very small starting balance — rather than accumulating the same constraint layers as the standard matrix. This is an intentional, accepted tension with Core Management Principle 1 (Section 12), not a gap to close later.
+
+**Resolved (post-Phase-6, before Option 2 — see `CHANGELOG.md`):**
+
+- ~~No demo/live account distinction anywhere in `broker_connections`~~ → fixed as its own small increment, sequenced deliberately before touching Option 2 at all. `broker_connections.account_type` (`demo`/`contest`/`real`) is now detected automatically from the live MT5 terminal (`mt5.account_info().trade_mode`) at every validate call — never user-supplied — and exposed via the public API. **What this does not do:** it doesn't itself gate or differentiate any real-order code path (Module 7 Execution, `mt5Connector.placeOrder`/`closeOrder`) — there still isn't one wired into the automatic loop. It makes the distinction *knowable and persisted* so that when Option 2 (real order placement) is eventually designed, it has a real field to consult rather than having to retrofit detection partway through. Consuming this field to actually restrict/differentiate execution is Option 2's own design responsibility, not resolved here. See `09_Security.md` Section 11 for the same item from the security-review angle.
 
 ---
 

@@ -48,6 +48,10 @@ async function validateBrokerCredentials(credentials) {
   return {
     connection_status: body.connection_status || 'connected',
     account_login: body.account_login,
+    // 08_Bot_Architecture.md §13 / 09_Security.md §11 — detected by the
+    // connector from the live terminal (mt5.account_info().trade_mode),
+    // never user-supplied.
+    account_type: body.account_type,
   };
 }
 
@@ -91,6 +95,20 @@ async function getSymbolInfo(symbol) {
   return body;
 }
 
+/**
+ * 08_Bot_Architecture.md Section 9.0/9.2 — historical OHLC bars for
+ * Module 2's ADX/ATR calculations. `timeframe` and `count` mirror the
+ * connector's own defaults (M15 / 100 bars) if not supplied.
+ */
+async function getRates(symbol, { timeframe = 'M15', count = 100 } = {}) {
+  const qs = new URLSearchParams({ symbol, timeframe, count: String(count) }).toString();
+  const { ok, body } = await connectorRequest(`/rates?${qs}`);
+  if (!ok || !body.ok) {
+    throw new AppError(422, 'MT5_RATES_FAILED', body.message || 'Failed to fetch rates');
+  }
+  return body;
+}
+
 async function getPositions(symbol) {
   const qs = symbol ? `?symbol=${encodeURIComponent(symbol)}` : '';
   const { ok, body } = await connectorRequest(`/positions${qs}`);
@@ -129,6 +147,7 @@ async function closeOrder(ticket) {
 module.exports = {
   validateBrokerCredentials,
   getSymbolInfo,
+  getRates,
   getPositions,
   placeOrder,
   closeOrder,

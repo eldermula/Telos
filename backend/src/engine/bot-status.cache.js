@@ -1,6 +1,12 @@
 'use strict';
 
+const path = require('path');
 const { redis } = require('../db/redis');
+
+const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
+const { bootstrapRiskPct, STANDARD_MATRIX_FLOOR_BALANCE } = require(
+  path.join(apirsPath, 'tierMatrix.js'),
+);
 
 /**
  * Redis live status cache per 05_Database_Design.md Section 2:
@@ -16,13 +22,23 @@ function statusKey(botInstanceId) {
 }
 
 function toCachePayload(instance, updatedAt = new Date()) {
+  const activeTradingBalance = Number(instance.active_trading_balance);
+  const bootstrapPhase = activeTradingBalance < STANDARD_MATRIX_FLOOR_BALANCE;
+
   return {
     bot_instance_id: instance.id,
     status: instance.status,
     active_strategy_mode: instance.active_strategy_mode,
     current_tier: instance.current_tier,
-    active_trading_balance: Number(instance.active_trading_balance),
+    active_trading_balance: activeTradingBalance,
     peak_equity: Number(instance.peak_equity),
+    // 08_Bot_Architecture.md Section 3a: current_tier stays 0/undefined-in-effect
+    // for the entire bootstrap phase — these two fields let the Frontend show
+    // "Bootstrap Phase" + the real risk ceiling instead of a misleading "Tier 0".
+    bootstrap_phase: bootstrapPhase,
+    bootstrap_risk_ceiling_pct: bootstrapPhase
+      ? bootstrapRiskPct(activeTradingBalance)
+      : null,
     updated_at:
       updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt),
   };

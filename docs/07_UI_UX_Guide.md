@@ -43,7 +43,7 @@ Telos should read as **software from an established private-banking or instituti
 
 ### 3.2 Typography
 
-Three roles, per the frontend-design principle that type carries personality — avoiding an all-Inter, all-default look while staying free (Google Fonts, no license cost):
+Three roles, per the frontend-design principle that type carries personality — avoiding an all-Inter, all-default look while staying free (open-license typefaces; self-hosted delivery — see Section 9):
 
 | Role | Typeface | Notes |
 |---|---|---|
@@ -167,7 +167,7 @@ Matches the "calm, precise, professional" brand (Vision Section 2) rather than a
 
 ## 9. Tooling & Cost Notes ($0-cost, per current project constraint)
 
-- **Fonts:** Fraunces, Public Sans, IBM Plex Mono — all free, open-license, served via Google Fonts or self-hosted (self-hosting avoids a runtime dependency on Google's CDN and is still free).
+- **Fonts:** Fraunces, Public Sans, IBM Plex Mono — all free, open-license families (also available on Google Fonts). **Delivery (Phase 5+):** self-hosted/bundled under `frontend/public/fonts/`, not loaded from the Google Fonts CDN at runtime — same typefaces, no visitor requests to Google.
 - **Icons:** Lucide — MIT license, free, no attribution requirement beyond standard OSS license inclusion.
 - **Charts:** Recharts — MIT license, free.
 - **Design/mockup tooling:** if Figma or similar is used for mockups before implementation, the free tier is sufficient for a single-editor project at this stage — no paid seat needed yet.

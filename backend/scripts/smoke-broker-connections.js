@@ -70,20 +70,26 @@ async function main() {
     id: r.json.id,
     broker_name: r.json.broker_name,
     connection_status: r.json.connection_status,
+    account_type: r.json.account_type,
   });
   assert(r.status === 201, `create failed: ${JSON.stringify(r.json)}`);
   assert(r.json.connection_status === 'connected', 'expected connected');
+  // Live MetaQuotes-Demo terminal — detected from mt5.account_info(),
+  // never user-supplied (08_Bot_Architecture.md §13 / 09_Security.md §11).
+  assert(r.json.account_type === 'demo', `expected account_type demo, got ${r.json.account_type}`);
   assertNoSecrets(r.json);
   const id = r.json.id;
 
   r = await req('GET', '/broker-connections', { token });
-  console.log('list_one', r.status, `len=${r.json.length}`, r.json[0] && r.json[0].connection_status);
+  console.log('list_one', r.status, `len=${r.json.length}`, r.json[0] && r.json[0].connection_status, r.json[0] && r.json[0].account_type);
   assert(r.status === 200 && r.json.length === 1, 'expected one connection');
+  assert(r.json[0].account_type === 'demo', 'expected account_type demo in list');
   assertNoSecrets(r.json);
 
   r = await req('GET', `/broker-connections/${id}`, { token });
-  console.log('get_by_id', r.status, r.json.connection_status);
+  console.log('get_by_id', r.status, r.json.connection_status, r.json.account_type);
   assert(r.status === 200 && r.json.id === id, 'get by id failed');
+  assert(r.json.account_type === 'demo', 'expected account_type demo on get by id');
   assertNoSecrets(r.json);
 
   r = await req('POST', '/broker-connections', {
@@ -103,8 +109,9 @@ async function main() {
       credentials: { login: LOGIN, password: PLACEHOLDER_PASSWORD, server: SERVER },
     },
   });
-  console.log('patch', r.status, r.json.connection_status);
+  console.log('patch', r.status, r.json.connection_status, r.json.account_type);
   assert(r.status === 200 && r.json.connection_status === 'connected', 'patch failed');
+  assert(r.json.account_type === 'demo', 'expected account_type demo after patch/re-validate');
   assertNoSecrets(r.json);
 
   // Verify ciphertext at rest (no plaintext password in bytea as utf8)
