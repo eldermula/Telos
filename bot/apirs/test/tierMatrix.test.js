@@ -128,3 +128,44 @@ test('getTierRiskParameters — standard regime at higher tiers/balances', () =>
 test('getTierRiskParameters — rejects non-finite balance', () => {
   assert.throws(() => getTierRiskParameters({ balance: NaN, completedBlocks: 0 }), RangeError);
 });
+
+// --- Phase 7.8 — tierRows injection (live risk_tier_config) ---------------
+
+test('getStandardTier — accepts an injected tierRows override', () => {
+  const overrideRows = TIER_MATRIX.map((row) => ({ ...row, maxRiskCeiling: 0.99 }));
+  const row = getStandardTier(3, overrideRows);
+  assert.equal(row.tier, 3);
+  assert.equal(row.maxRiskCeiling, 0.99);
+});
+
+test('getStandardTier — omitting tierRows behaves exactly as the hardcoded matrix', () => {
+  assert.deepEqual(getStandardTier(3), getStandardTier(3, undefined));
+  assert.deepEqual(getStandardTier(3, undefined), TIER_MATRIX[3]);
+});
+
+test('getStandardTier — falls back to TIER_MATRIX on a malformed override (empty array)', () => {
+  const row = getStandardTier(3, []);
+  assert.deepEqual(row, TIER_MATRIX[3]);
+});
+
+test('getStandardTier — falls back to TIER_MATRIX on a malformed override (not an array)', () => {
+  const row = getStandardTier(3, { not: 'an array' });
+  assert.deepEqual(row, TIER_MATRIX[3]);
+});
+
+test('getTierRiskParameters — injected tierRows changes standard-regime output', () => {
+  const overrideRows = TIER_MATRIX.map((row) =>
+    row.tier === 3 ? { ...row, maxRiskCeiling: 0.99 } : row
+  );
+  const params = getTierRiskParameters({ balance: 1200, completedBlocks: 3, tierRows: overrideRows });
+  assert.equal(params.regime, 'standard');
+  assert.equal(params.tier, 3);
+  assertClose(params.maxRiskCeiling, 0.99);
+});
+
+test('getTierRiskParameters — injected tierRows has no effect in bootstrap regime', () => {
+  const overrideRows = TIER_MATRIX.map((row) => ({ ...row, maxRiskCeiling: 0.99 }));
+  const params = getTierRiskParameters({ balance: 20, completedBlocks: 0, tierRows: overrideRows });
+  assert.equal(params.regime, 'bootstrap');
+  assertClose(params.baseRisk, 0.5375);
+});

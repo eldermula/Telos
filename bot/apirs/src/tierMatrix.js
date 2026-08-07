@@ -5,10 +5,15 @@
  * Applies once active_trading_balance >= $50.
  *
  * This is a hardcoded mirror of database/migrations/002_seed_risk_tier_config.sql.
- * That migration is the eventual source of truth once the bot is wired to
- * Postgres (Phase 4+). Until then, this array is APIRS's own authoritative
- * copy for its deterministic logic and paper-trading harness. If the seed
- * migration values ever change, this array must be updated to match.
+ * It remains this module's default/fallback — used whenever a caller
+ * doesn't supply `tierRows` (see `getStandardTier`/`getTierRiskParameters`
+ * below), and always used by `profitLock.js`'s `getTierRow`, which isn't
+ * live-wired as of Phase 7.8 (flagged in CHANGELOG.md, pending a decision).
+ * `positionSizing.js`'s consumers, as of Phase 7.8, resolve a live
+ * `risk_tier_config` read via `backend/src/engine/risk-tier-config.service.js`
+ * and pass it in per-tick instead of relying on this default — see that
+ * service for the Postgres-backed, Redis-cached source of truth. If the
+ * seed migration's values ever change, this array must be updated to match.
  */
 const TIER_MATRIX = [
   { tier: 0, completedBlocksMin: 0, stepSize: 150, baseRisk: 0.02, maxRiskCeiling: 0.05 },
@@ -52,13 +57,21 @@ function getTierRow(tier) {
 /**
  * Section 3 — resolves the standard tier row from total completed profit
  * blocks. Tier 7 covers "7+" blocks, i.e. it's the ceiling tier.
+ *
+ * `tierRows` (optional) lets a caller supply a live-fetched matrix (e.g.
+ * from `risk_tier_config`, Phase 7.8) instead of this module's own
+ * hardcoded copy — defaults to `TIER_MATRIX` so every existing call site
+ * and test is unaffected unless it explicitly opts in. Falls back to
+ * `TIER_MATRIX` on a malformed/empty override rather than trusting it
+ * blindly — APIRS stays a deterministic gatekeeper even when fed live data.
  */
-function getStandardTier(completedBlocks) {
+function getStandardTier(completedBlocks, tierRows = TIER_MATRIX) {
   if (!Number.isFinite(completedBlocks) || completedBlocks < 0) {
     throw new RangeError(`completedBlocks must be a non-negative number, got ${completedBlocks}`);
   }
-  const tierIndex = Math.min(Math.floor(completedBlocks), TIER_MATRIX.length - 1);
-  return TIER_MATRIX[tierIndex];
+  const rows = Array.isArray(tierRows) && tierRows.length > 0 ? tierRows : TIER_MATRIX;
+  const tierIndex = Math.min(Math.floor(completedBlocks), rows.length - 1);
+  return rows[tierIndex];
 }
 
 /**
@@ -88,14 +101,17 @@ function bootstrapRiskPct(balance) {
  * balance/completed-blocks pair falls into and returns a normalized shape.
  * In the bootstrap regime there is only one risk number, so it serves as
  * both baseRisk and maxRiskCeiling (Section 4 Rule 2/3 reads it this way).
+ *
+ * `tierRows` (optional, standard regime only — bootstrap never consults
+ * the matrix) — see `getStandardTier` above for the injection contract.
  */
-function getTierRiskParameters({ balance, completedBlocks = 0 }) {
+function getTierRiskParameters({ balance, completedBlocks = 0, tierRows }) {
   if (!Number.isFinite(balance)) {
     throw new RangeError(`balance must be a finite number, got ${balance}`);
   }
 
   if (balance >= STANDARD_MATRIX_FLOOR_BALANCE) {
-    const row = getStandardTier(completedBlocks);
+    const row = getStandardTier(completedBlocks, tierRows);
     return {
       regime: 'standard',
       tier: row.tier,

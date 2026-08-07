@@ -104,8 +104,14 @@ function determineTradeApproval({ activeStrategyMode }, tradeInput) {
  * what currentTier already represents. Below $50 this parameter is
  * unused entirely (bootstrap regime keys off balance only), so the
  * equivalence is moot there.
+ *
+ * `tierRows` (optional, Phase 7.8) — a live-fetched `risk_tier_config`
+ * snapshot, resolved by the caller (bot-runtime.js, once per tick) and
+ * passed in here rather than read internally, so this module stays pure/
+ * synchronous. Omitted entirely, `computeFinalAppliedRisk` falls back to
+ * the hardcoded matrix — identical to pre-7.8 behavior.
  */
-function computeAppliedRisk(state, tradeInput, learningInputs) {
+function computeAppliedRisk(state, tradeInput, learningInputs, { tierRows } = {}) {
   const drawdownPenalty = computeDrawdownPenalty({
     peakEquity: state.peakEquity,
     activeTradingBalance: state.balance,
@@ -119,6 +125,7 @@ function computeAppliedRisk(state, tradeInput, learningInputs) {
   const sizing = computeFinalAppliedRisk({
     balance: state.balance,
     completedBlocks: state.currentTier,
+    tierRows,
     strategyConfidence: tradeInput.strategyConfidence,
     liveWinProbability: learningInputs.liveWinProbability,
     marketQuality: tradeInput.marketQuality,
@@ -174,8 +181,14 @@ function computeAppliedRisk(state, tradeInput, learningInputs) {
  * read here, only by the `runTradeCycle` convenience wrapper below):
  *   { strategyConfidence, marketQuality, trendQuality, marketVolatility,
  *     currentATR, rollingAvgATR, dailyDrawdownPct }
+ *
+ * Third param `{ tierRows }` (optional, Phase 7.8) — see
+ * `computeAppliedRisk` above. Deliberately not part of `tradeInput`:
+ * `tradeInput` gets spread verbatim into `trades.conditions` by
+ * bot-runtime.js, and tier config is account-level state, not a
+ * per-trade market/strategy condition — it doesn't belong in that record.
  */
-function evaluateEntry(state, tradeInput) {
+function evaluateEntry(state, tradeInput, { tierRows } = {}) {
   const learningInputs = {
     liveWinProbability: computeLiveWinProbability(state.tradeHistory),
     consecutiveLosses: computeConsecutiveLosses(state.tradeHistory),
@@ -186,7 +199,7 @@ function evaluateEntry(state, tradeInput) {
     return { tradeApproved: false, reason: approval.reason, learningInputs };
   }
 
-  const riskResult = computeAppliedRisk(state, tradeInput, learningInputs);
+  const riskResult = computeAppliedRisk(state, tradeInput, learningInputs, { tierRows });
   const balanceBeforeTrade = state.balance;
   const riskedAmount = riskResult.appliedRisk * balanceBeforeTrade;
 

@@ -4,6 +4,7 @@ const { pool } = require('../db/pool');
 const { redis } = require('../db/redis');
 const { AppError } = require('../utils/app-error');
 const { toMeta } = require('../utils/pagination');
+const riskTierConfigService = require('../engine/risk-tier-config.service');
 
 const STRATEGY_STATUSES = new Set(['proposed', 'paper_testing', 'active', 'rejected']);
 
@@ -207,6 +208,10 @@ async function patchRiskTier(adminUserId, tierParam, patch) {
     action: 'risk_tier.update',
     details: { tier, patch: Object.fromEntries(entries) },
   });
+
+  // Phase 7.8 — invalidate-on-write: don't make every running bot
+  // instance wait out the cache TTL to see this change on its next tick.
+  await riskTierConfigService.invalidateCache();
 
   const row = result.rows[0];
   return {

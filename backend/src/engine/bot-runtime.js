@@ -9,6 +9,7 @@ const { publishBotEvent } = require('./event-publisher');
 const mt5Connector = require('../services/mt5-connector.client');
 const strategySelectionService = require('./strategy-selection.service');
 const notificationsService = require('../services/notifications.service');
+const riskTierConfigService = require('./risk-tier-config.service');
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
 const { evaluateEntry, resolveExit } = require(path.join(apirsPath, 'paperTradingHarness.js'));
@@ -304,7 +305,16 @@ class BotRuntime {
       direction: selection.direction,
     };
 
-    const entryResult = evaluateEntry(this.state, tradeInput);
+    // Phase 7.8 — resolved fresh each tick (Redis-cached, ~20s TTL,
+    // hardcoded-matrix fallback on failure — see risk-tier-config.service.js)
+    // rather than read once at bot-instance startup, so an admin's
+    // risk_tier_config edit reaches this tick's evaluation without a
+    // restart. Only affects *this* not-yet-opened decision — an already
+    // open position's appliedRisk was frozen into its trade record at
+    // its own entry tick and is never recomputed here.
+    const tierRows = await riskTierConfigService.getTierRows();
+
+    const entryResult = evaluateEntry(this.state, tradeInput, { tierRows });
     await logEntryDecision(this.botInstanceId, tradeInput, entryResult, selection);
 
     if (!entryResult.tradeApproved) {

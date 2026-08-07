@@ -92,9 +92,12 @@ function computeRiskScore({
 /**
  * Section 4 Rules 2-4 — combines the Section 3/3a tier lookup with the
  * risk_score equation to produce the final applied position risk.
+ *
+ * `tierRows` (optional) — forwarded to `getTierRiskParameters` untouched;
+ * omitted entirely, this behaves exactly as before (hardcoded matrix).
  */
-function computeFinalAppliedRisk({ balance, completedBlocks = 0, ...scoreInputs }) {
-  const tierParams = getTierRiskParameters({ balance, completedBlocks });
+function computeFinalAppliedRisk({ balance, completedBlocks = 0, tierRows, ...scoreInputs }) {
+  const tierParams = getTierRiskParameters({ balance, completedBlocks, tierRows });
   const riskScore = computeRiskScore(scoreInputs);
   const calculatedRisk = tierParams.baseRisk * riskScore;
   const finalRisk = Math.max(EMERGENCY_FLOOR_RISK, Math.min(calculatedRisk, tierParams.maxRiskCeiling));

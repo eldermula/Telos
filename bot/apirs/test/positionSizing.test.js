@@ -233,3 +233,57 @@ test('final risk — bootstrap regime, worst-case score clamped at the 1% floor'
   assert.ok(result.calculatedRisk < 0);
   assertClose(result.finalRisk, 0.01);
 });
+
+// --- computeFinalAppliedRisk — Phase 7.8 tierRows injection ---------------
+
+test('final risk — injected tierRows raises the effective ceiling for that tier', () => {
+  const { TIER_MATRIX } = require('../src/tierMatrix');
+  const overrideRows = TIER_MATRIX.map((row) =>
+    row.tier === 0 ? { ...row, maxRiskCeiling: 0.5 } : row
+  );
+  const result = computeFinalAppliedRisk({
+    balance: 60,
+    completedBlocks: 0,
+    tierRows: overrideRows,
+    strategyConfidence: 1,
+    liveWinProbability: 1,
+    marketQuality: 1,
+    trendQuality: 1,
+    drawdownPenalty: 0,
+    volatilityPenalty: 0,
+    lossPenalty: 0,
+  });
+  // Same inputs as the "clamped at the tier ceiling" test above, but the
+  // ceiling is now 0.5 instead of 0.05 — calculatedRisk (0.08) is under
+  // the new ceiling, so it's no longer clamped.
+  assertClose(result.calculatedRisk, 0.08);
+  assertClose(result.finalRisk, 0.08);
+  assertClose(result.tierParams.maxRiskCeiling, 0.5);
+});
+
+test('final risk — omitting tierRows is identical to the hardcoded matrix', () => {
+  const withDefault = computeFinalAppliedRisk({
+    balance: 1200,
+    completedBlocks: 3,
+    strategyConfidence: 0.7,
+    liveWinProbability: 0.7,
+    marketQuality: 0.6,
+    trendQuality: 0.5,
+    drawdownPenalty: 0,
+    volatilityPenalty: 0,
+    lossPenalty: 0,
+  });
+  const withExplicitUndefined = computeFinalAppliedRisk({
+    balance: 1200,
+    completedBlocks: 3,
+    tierRows: undefined,
+    strategyConfidence: 0.7,
+    liveWinProbability: 0.7,
+    marketQuality: 0.6,
+    trendQuality: 0.5,
+    drawdownPenalty: 0,
+    volatilityPenalty: 0,
+    lossPenalty: 0,
+  });
+  assert.deepEqual(withDefault, withExplicitUndefined);
+});

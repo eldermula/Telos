@@ -3,8 +3,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createInitialState, runTradeCycle, runSequence } = require('../src/paperTradingHarness');
+const {
+  createInitialState,
+  runTradeCycle,
+  runSequence,
+  evaluateEntry,
+} = require('../src/paperTradingHarness');
 const { STRATEGY_A, STRATEGY_B, HALTED } = require('../src/macroCircuitBreaker');
+const { TIER_MATRIX } = require('../src/tierMatrix');
 
 function assertClose(actual, expected, epsilon = 1e-9) {
   assert.ok(
@@ -244,4 +250,52 @@ test('runTradeCycle does not mutate the input state', () => {
   const snapshot = JSON.parse(JSON.stringify(state));
   runTradeCycle(state, { ...neutralBootstrapTrade, outcomeRMultiple: 1 });
   assert.deepEqual(state, snapshot);
+});
+
+// --- Phase 7.8 — evaluateEntry's tierRows injection point -----------------
+
+test('evaluateEntry — third-arg tierRows reaches the standard-regime sizing', () => {
+  // Tier 0 (baseRisk 0.02, ceiling 0.05): a best-case score (riskScore=4)
+  // calculates to 0.08, which the default ceiling clamps down to 0.05 —
+  // same setup as positionSizing.test.js's "clamped at tier ceiling" case,
+  // chosen deliberately so raising the ceiling is observable in appliedRisk.
+  const state = {
+    balance: 60,
+    peakEquity: 60,
+    activeStrategyMode: STRATEGY_A,
+    currentTier: 0,
+    initialBalance: 10,
+    tradeHistory: [],
+  };
+  const tradeInput = { ...neutralBootstrapTrade, marketVolatility: 'NORMAL' };
+
+  const withoutOverride = evaluateEntry(state, tradeInput);
+  assertClose(withoutOverride.riskResult.sizing.tierParams.maxRiskCeiling, 0.05); // Tier 0 default
+  assertClose(withoutOverride.riskResult.appliedRisk, 0.05); // clamped
+
+  const overrideRows = TIER_MATRIX.map((row) =>
+    row.tier === 0 ? { ...row, maxRiskCeiling: 0.99 } : row
+  );
+  const withOverride = evaluateEntry(state, tradeInput, { tierRows: overrideRows });
+  assertClose(withOverride.riskResult.sizing.tierParams.maxRiskCeiling, 0.99);
+  // No longer clamped by the (now much higher) ceiling — appliedRisk should
+  // equal the raw calculatedRisk rather than the old 0.05 ceiling.
+  assertClose(withOverride.riskResult.appliedRisk, withOverride.riskResult.sizing.calculatedRisk);
+  assert.notEqual(withOverride.riskResult.appliedRisk, withoutOverride.riskResult.appliedRisk);
+});
+
+test('evaluateEntry — omitting the third arg behaves exactly as before (hardcoded matrix)', () => {
+  const state = {
+    balance: 1200,
+    peakEquity: 1200,
+    activeStrategyMode: STRATEGY_A,
+    currentTier: 3,
+    initialBalance: 10,
+    tradeHistory: [],
+  };
+  const tradeInput = { ...neutralBootstrapTrade, marketVolatility: 'NORMAL' };
+
+  const noThirdArg = evaluateEntry(state, tradeInput);
+  const explicitEmpty = evaluateEntry(state, tradeInput, {});
+  assert.deepEqual(noThirdArg, explicitEmpty);
 });

@@ -34,6 +34,14 @@ const MT5_CONNECTOR_URL = process.env.MT5_CONNECTOR_URL || 'http://127.0.0.1:310
 const REPORTS_DIR =
   process.env.REPORTS_DIR || require('path').join(__dirname, '..', '..', 'storage', 'reports');
 
+/**
+ * Phase 7.8 — risk_tier_config live-read cache TTL. Matches Module 2's
+ * 15-30s slow-path convention (market-intelligence.service.js's default
+ * is 20s) rather than inventing a different cadence for tiers.
+ */
+const RISK_TIER_CONFIG_CACHE_TTL_SECONDS =
+  Number(process.env.RISK_TIER_CONFIG_CACHE_TTL_SECONDS) || 20;
+
 module.exports = {
   PORT,
   NODE_ENV,
@@ -55,5 +63,6 @@ module.exports = {
   BROKER_CREDENTIALS_KEY,
   MT5_CONNECTOR_URL,
   REPORTS_DIR,
+  RISK_TIER_CONFIG_CACHE_TTL_SECONDS,
   isProduction: NODE_ENV === 'production',
 };
