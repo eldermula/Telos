@@ -52,6 +52,16 @@ const ACCESS_GATE_SECRET = process.env.ACCESS_GATE_SECRET || '';
 const ACCESS_GATE_TTL_DAYS = Number(process.env.ACCESS_GATE_TTL_DAYS) || 30;
 const ACCESS_GATE_COOKIE_NAME = process.env.ACCESS_GATE_COOKIE_NAME || 'telos_gate';
 
+/**
+ * Option 2 (real order placement) Layer 1 — the deploy-level kill
+ * switch. Deliberately strict, exact-string parsing, not a general
+ * truthy check: only the literal 'true' enables it. Any typo ('True',
+ * '1', 'yes') or omission resolves to disabled — the safe-direction
+ * foot-gun, since a mistake here should always land on "still off,"
+ * never "accidentally on." See execution-mode.js / CHANGELOG.md.
+ */
+const REAL_TRADING_ENABLED = process.env.REAL_TRADING_ENABLED === 'true';
+
 module.exports = {
   PORT,
   NODE_ENV,
@@ -78,5 +88,6 @@ module.exports = {
   ACCESS_GATE_SECRET,
   ACCESS_GATE_TTL_DAYS,
   ACCESS_GATE_COOKIE_NAME,
+  REAL_TRADING_ENABLED,
   isProduction: NODE_ENV === 'production',
 };
