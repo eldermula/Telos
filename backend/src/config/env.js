@@ -30,6 +30,10 @@ const BROKER_CREDENTIALS_KEY = process.env.BROKER_CREDENTIALS_KEY || '';
 /** Local Python MT5 connector (04 System Architecture §3.6) */
 const MT5_CONNECTOR_URL = process.env.MT5_CONNECTOR_URL || 'http://127.0.0.1:3100';
 
+/** Local directory for synchronous report files (05 §4) */
+const REPORTS_DIR =
+  process.env.REPORTS_DIR || require('path').join(__dirname, '..', '..', 'storage', 'reports');
+
 module.exports = {
   PORT,
   NODE_ENV,
@@ -50,5 +54,6 @@ module.exports = {
   LOGIN_RATE_LIMIT_WINDOW_SECONDS,
   BROKER_CREDENTIALS_KEY,
   MT5_CONNECTOR_URL,
+  REPORTS_DIR,
   isProduction: NODE_ENV === 'production',
 };

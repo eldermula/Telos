@@ -197,6 +197,14 @@
 
 - **7.3 (code complete, VERIFIED)** Portfolio — `06` §8 / `FR-PORT-1`/`FR-PORT-2`. Holdings + performance derived from `trades` (settled in `05`/`06`: no holdings table). `?range=` accepts `7d|30d|90d|all`. Empty/no-broker returns empty payload rather than hard-failing. Frontend `/portfolio` replaces placeholder. Smoke: `PORTFOLIO_73_PASS`; frontend build success.
 
+- **7.4 (code complete, VERIFIED)** Analytics — `06` §9 / `FR-ANLY-1`. Trading metrics (win rate, net P&L, avg win/loss, profit factor, current drawdown from peak equity, series). `GET /analytics/business-metrics` returns a stable `available: false` envelope rather than inventing firm metrics.
+  - **FLAGGED FOR USER REVIEW:** `FR-ANLY-2` business/consultant metrics — SRS metric set is still TBD and there is no firm entity in the schema. Endpoint exists with an honest unavailable response; implementing real firm analytics needs a product decision.
+  - Smoke: `ANALYTICS_74_PASS`. Frontend `/analytics` page + nav entry.
+
+- **7.5 (code complete, VERIFIED)** Reports — `06` §10 / `FR-REP-1`/`FR-REP-2`. Synchronous CSV generate/list/get/download. Files land under `backend/storage/reports` (gitignored; `REPORTS_DIR` env). Empty broker → empty CSV rather than hard-fail. Frontend `/reports` replaces placeholder.
+  - **FLAGGED FOR USER REVIEW:** PDF format — `POST /reports` with `format=pdf` returns `422 PDF_NOT_IMPLEMENTED`. Shipping PDF needs a new dependency (e.g. PDF kit) which is a product/security call; CSV path is fully working.
+  - Smoke: `node backend/scripts/smoke-reports-75.js` → `REPORTS_75_PASS`.
+
 ## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
 
 **2026-08-06**

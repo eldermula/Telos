@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 __pycache__/
 *.pyc
 
+# Generated report files (local disk path from 05 §4)
+backend/storage/
+
