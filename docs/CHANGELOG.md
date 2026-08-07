@@ -179,6 +179,16 @@
 
   **This increment is now complete.** The demo/live distinction is real, detected automatically, persisted, and user-visible — resolved before Option 2 was ever touched, per the explicit sequencing decision above. Option 2 (real order placement) remains not started; when it is, it has a real `account_type` field to design against rather than needing to retrofit detection mid-implementation.
 
+## Phase 7 — Remaining Modules (in progress)
+
+**2026-08-07**
+
+- **7.1 (code complete, VERIFIED)** Settings — `06_API_Specification.md` §12 / `FR-SET-1` / `FR-SET-3`.
+  - **Backend:** `GET|PATCH /api/v1/settings/profile` (email + password change; password requires `current_password`), `GET|PATCH /api/v1/settings/notifications` (preference jsonb). Broker management stays under `/broker-connections` (linked from the UI), not duplicated.
+  - **Preference shape confirmed** (was undocumented beyond `jsonb`): `{ bot_start, bot_stop, connection_error, trading_error, strategy_switch }` booleans, keyed 1:1 to `notification_type`. Defaults all `true`. Documented in `05_Database_Design.md`.
+  - **Frontend:** `/settings` replaces the placeholder — Profile form, Notification Preferences toggles, Broker Connection link.
+  - Smoke: `node backend/scripts/smoke-settings-71.js` → `SETTINGS_71_PASS`. `npm run build` (frontend) → success.
+
 ## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
 
 **2026-08-06**

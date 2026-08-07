@@ -118,7 +118,7 @@ users ──1:1──> settings
 | Column | Type | Notes |
 |---|---|---|
 | user_id | UUID (PK, FK → users) | |
-| notification_preferences | jsonb | `FR-SET-3` |
+| notification_preferences | jsonb | `FR-SET-3`. Confirmed shape (Phase 7.1): `{ bot_start, bot_stop, connection_error, trading_error, strategy_switch }` — each a boolean, keyed 1:1 to the `notification_type` enum. Defaults all `true`. Unknown keys ignored; missing keys filled from defaults on read. Profile email itself lives on `users`, not here |
 | updated_at | timestamptz | |
 
 **`ai_assistant_conversations`** / **`ai_assistant_messages`**

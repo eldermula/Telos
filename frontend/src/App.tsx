@@ -12,6 +12,7 @@ import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { UiShowcasePage } from './pages/dev/UiShowcasePage';
 import { BrokerOnboardingPage } from './pages/onboarding/BrokerOnboardingPage';
 import { PlaceholderPage } from './pages/placeholders';
+import { SettingsPage } from './pages/settings/SettingsPage';
 import { TradingPage } from './pages/trading/TradingPage';
 
 export default function App() {
@@ -41,10 +42,7 @@ export default function App() {
                   path="/notifications"
                   element={<PlaceholderPage title="Notifications" />}
                 />
-                <Route
-                  path="/settings"
-                  element={<PlaceholderPage title="Settings" />}
-                />
+                <Route path="/settings" element={<SettingsPage />} />
               </Route>
             </Route>
 
