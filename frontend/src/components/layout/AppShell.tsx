@@ -9,6 +9,7 @@ import {
   BarChart3,
   FileText,
   Shield,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase, mobilePrimary: true },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/reports', label: 'Reports', icon: FileText },
+  { to: '/assistant', label: 'Assistant', icon: MessageSquare },
   { to: '/notifications', label: 'Notifications', icon: Bell, mobilePrimary: true },
   { to: '/settings', label: 'Settings', icon: Settings, mobilePrimary: true },
   { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },

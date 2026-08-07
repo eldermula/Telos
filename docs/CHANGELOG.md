@@ -179,9 +179,11 @@
 
   **This increment is now complete.** The demo/live distinction is real, detected automatically, persisted, and user-visible — resolved before Option 2 was ever touched, per the explicit sequencing decision above. Option 2 (real order placement) remains not started; when it is, it has a real `account_type` field to design against rather than needing to retrofit detection mid-implementation.
 
-## Phase 7 — Remaining Modules (in progress)
+## Phase 7 — Remaining Modules (complete through 7.7)
 
 **2026-08-07**
+
+**Phase 7 complete.** Every module in the Roadmap Phase 7 list has a working API + screen against paper trading. Deferred (flagged, not invented): `FR-ANLY-2` business metrics, Reports PDF dependency, Assistant LLM provider. **Option 2 untouched.**
 
 - **7.1 (code complete, VERIFIED)** Settings — `06_API_Specification.md` §12 / `FR-SET-1` / `FR-SET-3`.
   - **Backend:** `GET|PATCH /api/v1/settings/profile` (email + password change; password requires `current_password`), `GET|PATCH /api/v1/settings/notifications` (preference jsonb). Broker management stays under `/broker-connections` (linked from the UI), not duplicated.
@@ -207,6 +209,10 @@
 
 - **7.6 (code complete, VERIFIED)** Admin — `06` §13 / `FR-ADMIN-1`/`FR-ADMIN-2`. JWT `role: admin` gate (`403`, never filtered). Routes: users list/detail (no credentials), system-health (Postgres+Redis), risk-tiers GET/PATCH, candidate-strategies GET/PATCH. Every admin write → `admin_audit_log`. Frontend `/admin` with slate-blue accent (`#5B7A9C` per `07`), nav visible only to admins.
   - Smoke: `node backend/scripts/smoke-admin-76.js` → `ADMIN_76_PASS`.
+
+- **7.7 (code complete, VERIFIED)** AI Assistant — `06` §7 / `FR-AI-1`. Conversations + messages + insights under `/api/v1/assistant/*`. Read-only/advisory per settled `FR-AI-2` (no `/trading/*`, no bot-runtime/order placement). Replies and insights are a deterministic rule-based stub using session/trade snapshots.
+  - **FLAGGED FOR USER REVIEW:** Real LLM reply generation (provider + key + cost posture) — same class of decision as Module 3’s deferred real classification. Stub ships behind a stable API so the UI and schema are exercised now.
+  - Smoke: `node backend/scripts/smoke-assistant-77.js` → `ASSISTANT_77_PASS`. Frontend `/assistant` + nav entry.
 
 ## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
 

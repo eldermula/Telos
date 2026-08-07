@@ -11,6 +11,7 @@ const portfolioRouter = require('./routes/portfolio.routes');
 const analyticsRouter = require('./routes/analytics.routes');
 const reportsRouter = require('./routes/reports.routes');
 const adminRouter = require('./routes/admin.routes');
+const assistantRouter = require('./routes/assistant.routes');
 const { errorHandler } = require('./middleware/error-handler');
 
 const app = express();
@@ -29,6 +30,7 @@ app.use('/api/v1/portfolio', portfolioRouter);
 app.use('/api/v1/analytics', analyticsRouter);
 app.use('/api/v1/reports', reportsRouter);
 app.use('/api/v1/admin', adminRouter);
+app.use('/api/v1/assistant', assistantRouter);
 
 app.use((req, res) => {
   res.status(404).json({

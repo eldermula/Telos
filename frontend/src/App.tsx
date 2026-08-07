@@ -18,6 +18,7 @@ import { ReportsPage } from './pages/reports/ReportsPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { TradingPage } from './pages/trading/TradingPage';
 import { AdminPage } from './pages/admin/AdminPage';
+import { AssistantPage } from './pages/assistant/AssistantPage';
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/assistant" element={<AssistantPage />} />
                 <Route path="/admin" element={<AdminPage />} />
               </Route>
             </Route>

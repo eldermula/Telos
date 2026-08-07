@@ -88,6 +88,8 @@ Only start this once Phase 3's deterministic core is proven — this is where th
 - Portfolio (derived holdings), Analytics, Reports (synchronous), Notifications, Settings, AI Assistant, Admin (`06_API_Specification.md` Sections 5–13).
 - Admin's `/risk-tiers` endpoints in particular — needed before Phase 8's live rollout, since tuning tiers without a redeploy is the whole point of that table existing.
 
+**Status: Phase 7 complete, as of Increment 7.7 (see `CHANGELOG.md`).** Literal exit criteria met: every PRD module listed above has a working screen and API path against paper trading. Explicit deferred items remain flagged rather than inventing unfinished product surfaces: `FR-ANLY-2` firm business metrics, Reports PDF library choice, and real LLM reply generation for the Assistant (stubbed like Module 3). Option 2 (real order placement into the automatic loop) remains parked and was not touched in this phase.
+
 **Exit criteria:** every module in the PRD has a working screen and API path, still against paper trading.
 
 ## Phase 8 — Security & Operations Hardening
