@@ -8,6 +8,7 @@ const {
   runTradeCycle,
   runSequence,
   evaluateEntry,
+  resolveExit,
 } = require('../src/paperTradingHarness');
 const { STRATEGY_A, STRATEGY_B, HALTED } = require('../src/macroCircuitBreaker');
 const { TIER_MATRIX } = require('../src/tierMatrix');
@@ -298,4 +299,49 @@ test('evaluateEntry — omitting the third arg behaves exactly as before (hardco
   const noThirdArg = evaluateEntry(state, tradeInput);
   const explicitEmpty = evaluateEntry(state, tradeInput, {});
   assert.deepEqual(noThirdArg, explicitEmpty);
+});
+
+// --- Phase 7.9 — resolveExit's tierRows injection point (profit-lock) -----
+
+test('resolveExit — fourth-arg tierRows reaches profit-lock\'s step_size lookup', () => {
+  // Tier 0, net_profit will be 190 on a win — 1 block against the
+  // hardcoded 150 step, but 3 blocks against an injected 50 step.
+  const state = {
+    balance: 60,
+    peakEquity: 60,
+    activeStrategyMode: STRATEGY_A,
+    currentTier: 0,
+    initialBalance: 10, // net_profit = balanceAfterTrade - 10
+    tradeHistory: [],
+  };
+  const entryResult = evaluateEntry(state, { ...neutralBootstrapTrade, marketVolatility: 'NORMAL' });
+  assert.equal(entryResult.tradeApproved, true);
+
+  // Force a deterministic +200 win regardless of appliedRisk sizing, so
+  // both branches below start from an identical balanceAfterTrade (200).
+  const outcome = { wasWin: true, pnlAmount: 200 - entryResult.balanceBeforeTrade };
+
+  const withoutOverride = resolveExit(state, entryResult, outcome);
+  assert.equal(withoutOverride.trace.profitLockResult.completedBlocksThisEvaluation, 1);
+
+  const overrideRows = TIER_MATRIX.map((row) => (row.tier === 0 ? { ...row, stepSize: 50 } : row));
+  const withOverride = resolveExit(state, entryResult, outcome, { tierRows: overrideRows });
+  assert.equal(withOverride.trace.profitLockResult.completedBlocksThisEvaluation, 3);
+});
+
+test('resolveExit — omitting the fourth arg behaves exactly as before (hardcoded matrix)', () => {
+  const state = {
+    balance: 60,
+    peakEquity: 60,
+    activeStrategyMode: STRATEGY_A,
+    currentTier: 0,
+    initialBalance: 10,
+    tradeHistory: [],
+  };
+  const entryResult = evaluateEntry(state, { ...neutralBootstrapTrade, marketVolatility: 'NORMAL' });
+  const outcome = { wasWin: true, pnlAmount: 200 - entryResult.balanceBeforeTrade };
+
+  const noFourthArg = resolveExit(state, entryResult, outcome);
+  const explicitEmpty = resolveExit(state, entryResult, outcome, {});
+  assert.deepEqual(noFourthArg, explicitEmpty);
 });

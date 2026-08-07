@@ -439,12 +439,24 @@ class BotRuntime {
     const pnlAmount = pos.entryResult.riskedAmount * realRMultiple;
     const wasWin = pnlAmount > 0;
 
+    // Phase 7.9 — resolved fresh at close time, independently of
+    // whatever tierRows the entry tick saw (see paperTradingHarness.js's
+    // file-header note): profit-lock's step_size/tier-advancement isn't
+    // frozen-at-entry the way appliedRisk is, so this tick's own live
+    // read is the correct one, not a carried-over snapshot from open.
+    const tierRows = await riskTierConfigService.getTierRows();
+
     const previousMode = this.state.activeStrategyMode;
-    const { state: nextState, trace } = resolveExit(this.state, pos.entryResult, {
-      wasWin,
-      pnlAmount,
-      conditions: pos.conditions ?? null,
-    });
+    const { state: nextState, trace } = resolveExit(
+      this.state,
+      pos.entryResult,
+      {
+        wasWin,
+        pnlAmount,
+        conditions: pos.conditions ?? null,
+      },
+      { tierRows }
+    );
     this.state = nextState;
 
     const closedTrade = await tradesRepository.closePaperTrade(pos.tradeRowId, {

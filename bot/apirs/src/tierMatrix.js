@@ -6,14 +6,13 @@
  *
  * This is a hardcoded mirror of database/migrations/002_seed_risk_tier_config.sql.
  * It remains this module's default/fallback — used whenever a caller
- * doesn't supply `tierRows` (see `getStandardTier`/`getTierRiskParameters`
- * below), and always used by `profitLock.js`'s `getTierRow`, which isn't
- * live-wired as of Phase 7.8 (flagged in CHANGELOG.md, pending a decision).
- * `positionSizing.js`'s consumers, as of Phase 7.8, resolve a live
- * `risk_tier_config` read via `backend/src/engine/risk-tier-config.service.js`
- * and pass it in per-tick instead of relying on this default — see that
- * service for the Postgres-backed, Redis-cached source of truth. If the
- * seed migration's values ever change, this array must be updated to match.
+ * doesn't supply `tierRows` (see `getStandardTier`/`getTierRiskParameters`/
+ * `getTierRow` below). As of Phase 7.8/7.9, both `positionSizing.js`'s and
+ * `profitLock.js`'s consumers resolve a live `risk_tier_config` read via
+ * `backend/src/engine/risk-tier-config.service.js` and pass it in per-tick
+ * instead of relying on this default — see that service for the
+ * Postgres-backed, Redis-cached source of truth. If the seed migration's
+ * values ever change, this array must be updated to match.
  */
 const TIER_MATRIX = [
   { tier: 0, completedBlocksMin: 0, stepSize: 150, baseRisk: 0.02, maxRiskCeiling: 0.05 },
@@ -46,12 +45,20 @@ const BOOTSTRAP_LOWER_RISK = 0.70;
  * Section 5, which already knows the account's current tier (persisted
  * state) and needs that tier's step size, as opposed to getStandardTier
  * below which derives the tier from a completed-blocks count.
+ *
+ * `tierRows` (optional, Phase 7.9) — same injection contract as
+ * `getStandardTier` below: a caller (`profitLock.js`) may supply a
+ * live-fetched matrix instead of this module's own hardcoded copy.
+ * Defaults to `TIER_MATRIX`, falls back to it on a malformed/empty
+ * override, and validates `tier` against whichever array is actually
+ * in use so an override's own length is respected.
  */
-function getTierRow(tier) {
-  if (!Number.isInteger(tier) || tier < 0 || tier >= TIER_MATRIX.length) {
-    throw new RangeError(`tier must be an integer in [0, ${TIER_MATRIX.length - 1}], got ${tier}`);
+function getTierRow(tier, tierRows = TIER_MATRIX) {
+  const rows = Array.isArray(tierRows) && tierRows.length > 0 ? tierRows : TIER_MATRIX;
+  if (!Number.isInteger(tier) || tier < 0 || tier >= rows.length) {
+    throw new RangeError(`tier must be an integer in [0, ${rows.length - 1}], got ${tier}`);
   }
-  return TIER_MATRIX[tier];
+  return rows[tier];
 }
 
 /**

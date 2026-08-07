@@ -57,6 +57,14 @@ const {
  * harness only needs *a* deterministic, risk-proportional way to move
  * the simulated balance so the sequence-level math (tiers, profit-lock,
  * breakers) can be exercised.
+ *
+ * Phase 7.9 note: `evaluateEntry`'s and `resolveExit`'s `tierRows`
+ * (optional, third param on each) are resolved independently by the
+ * caller — bot-runtime.js fetches its own live snapshot at each call
+ * site, once for the entry-time sizing decision and, separately, once
+ * for the close-time profit-lock evaluation, since those are two
+ * distinct ticks that may be far apart. Neither call reuses the
+ * other's snapshot.
  */
 
 /**
@@ -221,8 +229,12 @@ function evaluateEntry(state, tradeInput, { tierRows } = {}) {
  * price move divided by the stop distance — same convention as the
  * `outcomeRMultiple` this module has always used, just measured from
  * real prices instead of supplied directly).
+ *
+ * `tierRows` (optional, Phase 7.9) — forwarded to `evaluateProfitLock`.
+ * See the file header note above for why this is resolved separately
+ * from `evaluateEntry`'s own `tierRows`, not reused across the two.
  */
-function resolveExit(state, entryResult, { wasWin, pnlAmount, conditions = null }) {
+function resolveExit(state, entryResult, { wasWin, pnlAmount, conditions = null }, { tierRows } = {}) {
   const { learningInputs, riskResult, balanceBeforeTrade } = entryResult;
   const balanceAfterTrade = balanceBeforeTrade + pnlAmount;
 
@@ -255,6 +267,7 @@ function resolveExit(state, entryResult, { wasWin, pnlAmount, conditions = null 
       peakEquity: modeResult.peakEquity,
       initialBalance: state.initialBalance,
       currentTier: state.currentTier,
+      tierRows,
     });
     finalBalance = profitLockResult.activeTradingBalance;
     finalPeakEquity = profitLockResult.peakEquity;

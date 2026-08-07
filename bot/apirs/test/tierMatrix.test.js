@@ -169,3 +169,24 @@ test('getTierRiskParameters — injected tierRows has no effect in bootstrap reg
   assert.equal(params.regime, 'bootstrap');
   assertClose(params.baseRisk, 0.5375);
 });
+
+// --- Phase 7.9 — getTierRow's tierRows injection (live risk_tier_config) --
+
+test('getTierRow — accepts an injected tierRows override', () => {
+  const overrideRows = TIER_MATRIX.map((row) => ({ ...row, stepSize: 999 }));
+  assert.equal(getTierRow(4, overrideRows).stepSize, 999);
+});
+
+test('getTierRow — omitting tierRows behaves exactly as the hardcoded matrix', () => {
+  assert.deepEqual(getTierRow(4), getTierRow(4, undefined));
+  assert.deepEqual(getTierRow(4, undefined), TIER_MATRIX[4]);
+});
+
+test('getTierRow — falls back to TIER_MATRIX on a malformed override', () => {
+  assert.deepEqual(getTierRow(4, []), TIER_MATRIX[4]);
+  assert.deepEqual(getTierRow(4, 'not an array'), TIER_MATRIX[4]);
+});
+
+test('getTierRow — still throws for an out-of-range tier against the resolved (fallback) matrix', () => {
+  assert.throws(() => getTierRow(8, []), RangeError);
+});

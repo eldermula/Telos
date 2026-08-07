@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { evaluateProfitLock } = require('../src/profitLock');
+const { TIER_MATRIX } = require('../src/tierMatrix');
 
 function assertClose(actual, expected, epsilon = 1e-9) {
   assert.ok(
@@ -148,4 +149,41 @@ test('does not mutate its inputs', () => {
   const snapshot = { ...input };
   evaluateProfitLock(input);
   assert.deepEqual(input, snapshot);
+});
+
+// --- Phase 7.9 — tierRows injection (live risk_tier_config) ---------------
+
+test('injected tierRows changes which step_size gates block completion', () => {
+  // Tier 0's hardcoded step is 150 — net_profit=190 completes exactly 1
+  // block by default. An injected override dropping Tier 0's step to 50
+  // should complete 3 blocks (floor(190/50)) against the identical input.
+  const overrideRows = TIER_MATRIX.map((row) => (row.tier === 0 ? { ...row, stepSize: 50 } : row));
+  const result = evaluateProfitLock({
+    activeTradingBalance: 200,
+    peakEquity: 200,
+    initialBalance: 10,
+    currentTier: 0,
+    tierRows: overrideRows,
+  });
+  assert.equal(result.profitLockTriggered, true);
+  assert.equal(result.completedBlocksThisEvaluation, 3);
+  assertClose(result.milestoneProfit, 150); // 3 * 50
+});
+
+test('omitting tierRows is identical to the hardcoded matrix', () => {
+  const input = { activeTradingBalance: 200, peakEquity: 200, initialBalance: 10, currentTier: 0 };
+  const withDefault = evaluateProfitLock(input);
+  const withExplicitUndefined = evaluateProfitLock({ ...input, tierRows: undefined });
+  assert.deepEqual(withDefault, withExplicitUndefined);
+});
+
+test('malformed tierRows override falls back to the hardcoded matrix rather than throwing', () => {
+  const result = evaluateProfitLock({
+    activeTradingBalance: 200,
+    peakEquity: 200,
+    initialBalance: 10,
+    currentTier: 0,
+    tierRows: [],
+  });
+  assertClose(result.milestoneProfit, 150); // same as the hardcoded Tier 0 step (150)
 });
