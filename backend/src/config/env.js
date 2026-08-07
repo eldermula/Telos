@@ -62,6 +62,49 @@ const ACCESS_GATE_COOKIE_NAME = process.env.ACCESS_GATE_COOKIE_NAME || 'telos_ga
  */
 const REAL_TRADING_ENABLED = process.env.REAL_TRADING_ENABLED === 'true';
 
+/**
+ * Option 2 Increment E (E1 verification strategy) — non-production
+ * dispatch bypass so the real-mode *methods* can be exercised against
+ * a MetaQuotes-Demo account without real capital. Strict exact-string
+ * `'true'` only, same parsing as REAL_TRADING_ENABLED.
+ *
+ * This flag controls dispatch only (which BotRuntime methods run). It
+ * must NEVER alter `expectedAccountType` passed to placeOrder/
+ * closeOrder — Layer 0 always sees the true detected account type
+ * (`demo` under E1 testing). Production refuses to boot if this env
+ * var is present at all (any value); see
+ * assertRealTradingDemoBypassAtStartup.
+ */
+const REAL_TRADING_ALLOW_DEMO = process.env.REAL_TRADING_ALLOW_DEMO === 'true';
+
+/**
+ * Pure check so unit tests can cover every combination without
+ * reloading this module. `allowDemoEnvPresent` is true when the env
+ * var exists in the process environment at all — including empty
+ * string or `'false'` — not merely when the parsed boolean is true.
+ */
+function assertRealTradingDemoBypassAllowed({ nodeEnv, allowDemoEnvPresent }) {
+  if (nodeEnv === 'production' && allowDemoEnvPresent) {
+    throw new Error(
+      'REAL_TRADING_ALLOW_DEMO must not be set when NODE_ENV=production ' +
+        '(E1 demo-dispatch bypass is non-production only; remove the ' +
+        'variable entirely from the production environment)'
+    );
+  }
+}
+
+/**
+ * Production boot tripwire — mandatory *absence* of
+ * REAL_TRADING_ALLOW_DEMO (inverse of ACCESS_GATE_*'s mandatory
+ * presence). Called from index.js alongside assertGateConfigAtStartup.
+ */
+function assertRealTradingDemoBypassAtStartup() {
+  assertRealTradingDemoBypassAllowed({
+    nodeEnv: NODE_ENV,
+    allowDemoEnvPresent: process.env.REAL_TRADING_ALLOW_DEMO !== undefined,
+  });
+}
+
 module.exports = {
   PORT,
   NODE_ENV,
@@ -89,5 +132,8 @@ module.exports = {
   ACCESS_GATE_TTL_DAYS,
   ACCESS_GATE_COOKIE_NAME,
   REAL_TRADING_ENABLED,
+  REAL_TRADING_ALLOW_DEMO,
+  assertRealTradingDemoBypassAllowed,
+  assertRealTradingDemoBypassAtStartup,
   isProduction: NODE_ENV === 'production',
 };
