@@ -98,9 +98,10 @@ Only start this once Phase 3's deterministic core is proven — this is where th
 - ~~Verified encrypted backups~~ → **8.2, done.** `database/scripts/backup.js` + `restore-backup.js`; AES-256-GCM dump encryption; pushes to a private GitHub repo separate from this code repo. Ops runbook: `docs/OPS.md` §1. One-time: create the private backup repo, set `BACKUP_*` env vars, enroll Windows Task Scheduler.
 - ~~`npm audit`/Dependabot~~ → **8.3, done.** `.github/dependabot.yml` + `.github/workflows/npm-audit.yml` covering `backend/` and `frontend/` (bot packages are dependency-free). Takes effect on the next push to GitHub.
 - ~~Basic uptime monitoring~~ → **8.4, done (config + probe).** `GET /health` is the external target; free-tool setup (UptimeRobot) documented in `docs/OPS.md` §2. Enrolling the monitor against your live Tunnel hostname is a one-time manual step (needs the hostname).
-- Minor Zod consistency gap on a few query/path inputs — pending an explicit inventory review before fixing.
+- ~~Site-wide access gate~~ → **8.5, done.** See `09_Security.md` §2a. Set `ACCESS_GATE_PHRASE` + `ACCESS_GATE_SECRET` in production `.env`.
+- ~~Zod UUID path-param crashes (group A)~~ → **8.6, done.** Groups B (pagination schemas) and C (service-level enums moved to controller Zod) remain flagged cleanup.
 
-**Exit criteria:** the checklist in `09_Security.md` has no unresolved item that blocks handling real user data/credentials. Remaining after 8.1–8.4: (a) one-time account setup you run (backup repo + Task Scheduler + UptimeRobot + Cloudflare WAF), (b) the Zod consistency gap pending review, (c) deliberately deferred (`09` itself: MFA, formal incident runbook, regulatory).
+**Exit criteria:** the checklist in `09_Security.md` has no unresolved item that blocks handling real user data/credentials. Remaining after 8.1–8.6: (a) one-time account setup you run (backup repo + Task Scheduler + UptimeRobot + Cloudflare WAF + access-gate env vars), (b) Zod B/C hygiene, (c) deliberately deferred (`09` itself: MFA, formal incident runbook, regulatory).
 
 ## Phase 9 — Limited Live Rollout
 

@@ -257,6 +257,10 @@
 
 - **8.4 (code complete)** Uptime monitoring for the self-hosted Backend (`09_Security.md` §10). External free-tool setup (UptimeRobot recommended) documented in `docs/OPS.md` §2 — points at existing `GET /health`, not the admin-gated deep check. Smoke: `node backend/scripts/smoke-health-84.js` → `HEALTH_84_PASS`. Enrolling the monitor against the live Cloudflare Tunnel hostname is a one-time manual step (needs the hostname).
 
+- **8.5 (code complete, VERIFIED)** Site-wide access gate (Isaiah 43:18–19 NKJV) — designed and approved before implementing. Server-side verify + normalize, dedicated `ACCESS_GATE_SECRET` (independent of `JWT_SECRET`), httpOnly cookie 30 days, middleware on `/api/v1/*` except verify/status, `/health` ungated, WebSocket checked, verify rate-limited 5/15min/IP, CORS `credentials: true`. Frontend barrier before Auth. Smoke: `smoke-access-gate-85.js` → `ACCESS_GATE_85_PASS`. Production requires both env vars; unset locally = gate off (smokes unaffected).
+
+- **8.6 (code complete, VERIFIED)** Zod group A — UUID path params that could 500 via Postgres `22P02`. Shared `parseUuid` on the 7 routes listed in the inventory (notifications/reports/admin/assistant). Broker-connections already had this. Groups B (soft pagination) and C (service-level enums) tracked as flagged cleanup, not fixed here. Smoke: `smoke-uuid-validation-86.js` → `UUID_VALIDATION_86_PASS`.
+
 ## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
 
 **2026-08-06**

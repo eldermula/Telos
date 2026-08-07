@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { CORS_ORIGIN } = require('./config/env');
 const healthRouter = require('./routes/health');
+const accessGateRouter = require('./routes/access-gate.routes');
 const authRouter = require('./routes/auth.routes');
 const brokerConnectionsRouter = require('./routes/broker-connections.routes');
 const tradingRouter = require('./routes/trading.routes');
@@ -12,15 +13,26 @@ const analyticsRouter = require('./routes/analytics.routes');
 const reportsRouter = require('./routes/reports.routes');
 const adminRouter = require('./routes/admin.routes');
 const assistantRouter = require('./routes/assistant.routes');
+const { requireAccessGate } = require('./middleware/require-access-gate');
 const { errorHandler } = require('./middleware/error-handler');
 
 const app = express();
 
 app.set('trust proxy', 1);
-app.use(cors({ origin: CORS_ORIGIN }));
+// credentials: true — required for the access-gate httpOnly cookie to
+// round-trip cross-origin (Vercel frontend → Tunnel API). Origin stays
+// a single configured value, never a wildcard (09 §4).
+app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json());
 
 app.use(healthRouter);
+
+// Gate endpoints mount BEFORE the requireAccessGate middleware so
+// verify/status stay reachable without a cookie. GET /health above
+// is outside /api/v1 and is never gated (uptime — Phase 8.4).
+app.use('/api/v1/access-gate', accessGateRouter);
+app.use('/api/v1', requireAccessGate);
+
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/broker-connections', brokerConnectionsRouter);
 app.use('/api/v1/trading', tradingRouter);

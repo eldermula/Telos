@@ -3,8 +3,10 @@ const app = require('./app');
 const { PORT } = require('./config/env');
 const { connectRedis } = require('./db/redis');
 const { attachWebSocketServer } = require('./ws/websocket-server');
+const { assertGateConfigAtStartup } = require('./services/access-gate.service');
 
 async function start() {
+  assertGateConfigAtStartup();
   await connectRedis();
   const server = http.createServer(app);
   attachWebSocketServer(server);

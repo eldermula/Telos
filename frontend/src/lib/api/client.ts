@@ -36,6 +36,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     signal,
+    // Required for the access-gate httpOnly cookie to round-trip
+    // (SameSite=None cross-origin in production; Lax locally).
+    credentials: 'include',
   });
 
   if (response.status === 204) {

@@ -42,6 +42,16 @@ const REPORTS_DIR =
 const RISK_TIER_CONFIG_CACHE_TTL_SECONDS =
   Number(process.env.RISK_TIER_CONFIG_CACHE_TTL_SECONDS) || 20;
 
+/**
+ * Site-wide access gate (Phase 8.5 / 09_Security.md).
+ * Both must be set for the gate to enforce; production refuses to start
+ * without them. ACCESS_GATE_SECRET is independent of JWT_SECRET.
+ */
+const ACCESS_GATE_PHRASE = process.env.ACCESS_GATE_PHRASE || '';
+const ACCESS_GATE_SECRET = process.env.ACCESS_GATE_SECRET || '';
+const ACCESS_GATE_TTL_DAYS = Number(process.env.ACCESS_GATE_TTL_DAYS) || 30;
+const ACCESS_GATE_COOKIE_NAME = process.env.ACCESS_GATE_COOKIE_NAME || 'telos_gate';
+
 module.exports = {
   PORT,
   NODE_ENV,
@@ -64,5 +74,9 @@ module.exports = {
   MT5_CONNECTOR_URL,
   REPORTS_DIR,
   RISK_TIER_CONFIG_CACHE_TTL_SECONDS,
+  ACCESS_GATE_PHRASE,
+  ACCESS_GATE_SECRET,
+  ACCESS_GATE_TTL_DAYS,
+  ACCESS_GATE_COOKIE_NAME,
   isProduction: NODE_ENV === 'production',
 };

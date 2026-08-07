@@ -6,6 +6,8 @@
  *
  * Auth: same JWT as REST. Subscribes to Redis `bot-events:{bot_instance_id}`
  * for the user's bot instance and forwards events to the socket.
+ * Access gate (Phase 8.5): when configured, the same httpOnly cookie
+ * required by REST is checked on the upgrade request.
  */
 
 const { WebSocketServer } = require('ws');
@@ -13,6 +15,7 @@ const Redis = require('ioredis');
 const { URL } = require('url');
 const { REDIS_URL } = require('../config/env');
 const { verifyToken, isTokenBlacklisted } = require('../services/session.service');
+const accessGateService = require('../services/access-gate.service');
 const botInstanceRepository = require('../engine/bot-instance.repository');
 const { channelFor } = require('../engine/event-publisher');
 
@@ -44,6 +47,11 @@ function attachWebSocketServer(server) {
   wss.on('connection', async (socket, req) => {
     let sub = null;
     try {
+      if (accessGateService.isGateConfigured() && !accessGateService.hasValidGateCookie(req)) {
+        closeWithError(socket, 4403, 'Access gate required');
+        return;
+      }
+
       const host = req.headers.host || 'localhost';
       const url = new URL(req.url || '/ws', `http://${host}`);
       const token = url.searchParams.get('token');
@@ -62,7 +70,6 @@ function attachWebSocketServer(server) {
       const userId = payload.sub;
       const instance = await botInstanceRepository.findByUserId(userId);
       if (!instance) {
-        // Allowed to connect before ensure — client can still wait; no channel yet.
         sendJson(socket, {
           event: 'connection.ready',
           payload: { user_id: userId, bot_instance_id: null },

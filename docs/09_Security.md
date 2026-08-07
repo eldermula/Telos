@@ -19,6 +19,20 @@ These are already non-negotiable elsewhere in the doc set — repeated here beca
 - Role-based authorization: every `/admin/*` route checks `role: admin` server-side (`06_API_Specification.md` Section 13) — `403`, never a silently filtered response, so a bug can't accidentally leak admin data to a regular user by returning a smaller version of the same payload.
 - MFA (`FR-AUTH-5`) remains explicitly out of scope until designed — noted here so it isn't forgotten, not because it's being deprioritized indefinitely.
 
+### 2a. Site-wide Access Gate (Phase 8.5 — Pre-launch)
+
+Keeps casual visitors and bots off the **entire** app (before login/signup) during this stage. **Not** a replacement for Auth — real JWT sessions stay underneath exactly as before.
+
+- Passphrase: Isaiah 43:18–19 (NKJV) lives only in `ACCESS_GATE_PHRASE` (server `.env`). Never in the frontend bundle.
+- Comparison is **server-side only**: submitted text and the env value are both normalized (lowercase → strip punctuation → collapse whitespace) before equality check.
+- On success: httpOnly cookie `telos_gate` (name configurable) carrying a JWT signed with **`ACCESS_GATE_SECRET`** (dedicated — independent of `JWT_SECRET`), TTL default **30 days**.
+- Cookie flags: production `Secure; SameSite=None; Path=/` (cross-origin Vercel → Tunnel); local/dev `SameSite=Lax` without Secure so http://localhost works.
+- CORS: `credentials: true` with a single configured origin (never `*`).
+- Middleware on every `/api/v1/*` route except `POST /access-gate/verify` and `GET /access-gate/status`. `GET /health` stays outside `/api/v1` and is never gated (uptime — §10 / Phase 8.4). WebSocket `/ws` checks the same cookie when the gate is configured.
+- Rate limit on verify: 5 / 15 min / IP (`rateLimit.preAuth()`, same posture as signup).
+- Gate enforces when both `ACCESS_GATE_PHRASE` and `ACCESS_GATE_SECRET` are set; production refuses to start without them. Local/dev may omit both so smoke tests keep working.
+- Setup: set the two env vars in `backend/.env` (see `.env.example`); frontend already sends `credentials: 'include'` and shows the gate UI before Auth.
+
 ## 3. Broker Credential Security
 
 The single most sensitive data this system holds, given what it unlocks (trade execution on a real account):
