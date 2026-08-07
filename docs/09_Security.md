@@ -40,8 +40,8 @@ This is the area that changes the most compared to a typical cloud deployment, g
 
 ## 5. Data Protection & Backups
 
-- Backup strategy is still an open item (`05_Database_Design.md` Section 4) — narrowed to free-tier storage or manual export, given no credit card is available for paid cloud backup.
-- Whatever backup destination is chosen, **backups of `broker_connections.encrypted_credentials` must remain encrypted in the backup itself** — a backup is not an exception to Section 3's rule, and an unencrypted backup copy would undo the protection entirely.
+- ~~Backup strategy~~ → **implemented, Phase 8.2.** `database/scripts/backup.js` runs a `pg_dump` via `docker compose exec`, wraps the dump in AES-256-GCM (`BACKUP_ENCRYPTION_KEY`, distinct from `BROKER_CREDENTIALS_KEY`), commits into a local clone of a **private GitHub repo separate from this code repo**, and pushes. Retention defaults to the last 14 dumps. One-time setup + Windows Task Scheduler instructions: `docs/OPS.md` §1. Decrypt helper: `database/scripts/restore-backup.js`.
+- `broker_connections.encrypted_credentials` remain field-level ciphertext inside any dump by construction — a backup is not an exception to Section 3's rule. The dump-file encryption is an *additional* layer so non-credential rows aren't plaintext to anyone with GitHub access alone.
 
 ## 6. Audit & Logging
 
