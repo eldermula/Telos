@@ -103,6 +103,20 @@ Only start this once Phase 3's deterministic core is proven — this is where th
 
 **Exit criteria:** the checklist in `09_Security.md` has no unresolved item that blocks handling real user data/credentials. Remaining after 8.1–8.6: (a) one-time account setup you run (backup repo + Task Scheduler + UptimeRobot + Cloudflare WAF + access-gate env vars), (b) Zod B/C hygiene, (c) deliberately deferred (`09` itself: MFA, formal incident runbook, regulatory).
 
+## Option 2 — Real Order Placement (in progress, see `CHANGELOG.md`)
+
+Not "Phase 9" — deliberately a separate section, since live rollout isn't reachable until this is fully built and verified. Full design (automatic-loop wiring, position-monitoring rework for broker-side SL/TP, layered real-vs-demo gating) reviewed and approved before any code, same standard as every Phase 6 increment.
+
+- ~~Schema for execution mode / broker ticket / live-trading opt-in~~ → **A, done.** `trades.execution_mode`, `trades.broker_ticket` (+ per-instance-scoped partial unique index), `bot_instances.live_trading_confirmed_at`. Purely additive — verified zero behavior change.
+- Connector hardening (Layer 0 account/type verification) + new capabilities (real equity read, close-time deal history lookup) — **B, next.**
+- `executionMode` resolver (env kill switch + live account-type read + confirmation timestamp, fails closed) — **C.**
+- Live-trading confirmation endpoint (Layer 2 opt-in, re-required after every Stop) — **D.**
+- `BotRuntime` real-mode lifecycle (open + monitor + close reconciliation, the actual fork) — **E**, highest scrutiny of all five, verified end-to-end against the demo account before any real-money exercise.
+
+UI (including the broker-selector dropdown) stays parked until all five land and are verified.
+
+**Exit criteria:** a real MT5 order can be placed and correctly monitored to close from the automatic loop, only when explicitly enabled at every layer (env, per-instance confirmation, live account-type check), with paper mode's behavior completely unaffected throughout.
+
 ## Phase 9 — Limited Live Rollout
 
 - ~~Paper-trading validation gate formally passed before any real account goes live~~ — **removed, per explicit decision in `08_Bot_Architecture.md` Section 11.** No minimum trade count or graduation criteria gates the transition to live capital. Live trading may begin as soon as implementation is complete.
