@@ -10,6 +10,9 @@ const mt5Connector = require('../services/mt5-connector.client');
 const strategySelectionService = require('./strategy-selection.service');
 const notificationsService = require('../services/notifications.service');
 const riskTierConfigService = require('./risk-tier-config.service');
+const { REAL_TRADING_ENABLED, REAL_TRADING_ALLOW_DEMO } = require('../config/env');
+const { resolveExecutionMode } = require('./execution-mode');
+const { resolveTickDispatch } = require('./tick-dispatch');
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
 const { evaluateEntry, resolveExit } = require(path.join(apirsPath, 'paperTradingHarness.js'));
@@ -199,6 +202,9 @@ class BotRuntime {
     if (openTrades.length > 0) {
       const row = openTrades[0];
       const appliedRisk = Number(row.final_applied_position_risk);
+      // Option 2 E.4 — freeze the row's execution_mode onto the
+      // in-memory position so monitoring dispatches correctly after
+      // resume. Real-mode reconcile against the broker is E.7.
       this.openPosition = {
         tradeRowId: row.id,
         symbol: row.symbol,
@@ -206,6 +212,8 @@ class BotRuntime {
         entryPrice: Number(row.entry_price),
         stopPrice: Number(row.stop_price),
         targetPrice: Number(row.target_price),
+        executionMode: row.execution_mode === 'real' ? 'real' : 'paper',
+        brokerTicket: row.broker_ticket == null ? null : Number(row.broker_ticket),
         // Read back verbatim (006) — already fully known at open time,
         // no reconstruction needed, same as symbol/direction above.
         conditions: row.conditions ?? null,
@@ -256,10 +264,9 @@ class BotRuntime {
   }
 
   /**
-   * One tick: if a position is open, check it against real MT5 price;
-   * otherwise consider opening a new one. Never both in the same tick —
-   * a freshly-opened position waits for the next tick to be monitored,
-   * same as a real position would.
+   * One tick: resolve execution mode fresh (never cached at Start),
+   * then dispatch to paper or real open/monitor methods. Never both
+   * open and monitor in the same tick.
    */
   async tickOnce() {
     if (!this.running) {
@@ -270,16 +277,61 @@ class BotRuntime {
     }
     this._tickInFlight = true;
     try {
-      if (this.openPosition) {
-        return await this._monitorOpenPosition();
+      const resolvedMode = await this._resolveExecutionModeForTick();
+      const dispatch = resolveTickDispatch({
+        resolvedMode,
+        openPosition: this.openPosition,
+      });
+      switch (dispatch) {
+        case 'monitorPaper':
+          return await this._monitorOpenPositionPaper();
+        case 'monitorReal':
+          return await this._monitorOpenPositionReal();
+        case 'openReal':
+          return await this._maybeOpenPositionReal();
+        case 'openPaper':
+        default:
+          return await this._maybeOpenPositionPaper();
       }
-      return await this._maybeOpenPosition();
     } finally {
       this._tickInFlight = false;
     }
   }
 
-  async _maybeOpenPosition() {
+  /**
+   * Layer 3 — per-tick freshness. Reads account_type +
+   * live_trading_confirmed_at from Postgres every tick (not cached at
+   * Start), plus the two env flags.
+   */
+  async _resolveExecutionModeForTick() {
+    const instance = await botInstanceRepository.findById(this.botInstanceId);
+    if (!instance) {
+      return 'paper';
+    }
+    return resolveExecutionMode({
+      realTradingEnabled: REAL_TRADING_ENABLED,
+      accountType: instance.account_type,
+      liveTradingConfirmedAt: instance.live_trading_confirmed_at,
+      allowDemoRealExecution: REAL_TRADING_ALLOW_DEMO,
+    });
+  }
+
+  /**
+   * Option 2 E.5 — not implemented yet. Stub fails loud so an accidental
+   * real-mode dispatch cannot silently fall through to paper.
+   */
+  async _maybeOpenPositionReal() {
+    throw new Error('Option 2 E.5 not implemented: _maybeOpenPositionReal');
+  }
+
+  /**
+   * Option 2 E.6 — not implemented yet. Stub fails loud.
+   */
+  async _monitorOpenPositionReal() {
+    throw new Error('Option 2 E.6 not implemented: _monitorOpenPositionReal');
+  }
+
+  async _maybeOpenPositionPaper() {
     // Module 4 — Selection (08_Bot_Architecture.md Section 9.0/13):
     // evaluates every active strategy against every watchlist
     // instrument and returns at most one candidate. `null` is a
@@ -384,6 +436,8 @@ class BotRuntime {
       entryPrice,
       stopPrice,
       targetPrice,
+      executionMode: 'paper',
+      brokerTicket: null,
       conditions,
       entryResult,
     };
@@ -400,7 +454,7 @@ class BotRuntime {
     return { state: this.state, entryResult, trade: tradeRow };
   }
 
-  async _monitorOpenPosition() {
+  async _monitorOpenPositionPaper() {
     const pos = this.openPosition;
 
     let symbolInfo;

@@ -27,6 +27,9 @@ const DEFAULT_NOTIFICATION_PREFERENCES = Object.freeze({
   // real-money safety event, not routine noise, so it shouldn't require
   // an opt-in the user might never think to flip.
   live_trading_confirmed: true,
+  // Option 2 E.3 — real order place/fail/close. Defaults on; E.5+ also
+  // force-notifies so preference cannot silence a real-money event.
+  real_order: true,
 });
 
 const PREFERENCE_KEYS = Object.keys(DEFAULT_NOTIFICATION_PREFERENCES);

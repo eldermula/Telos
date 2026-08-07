@@ -56,28 +56,46 @@ async function updateReadStatus(userId, notificationId, readStatus) {
  * failures are logged and swallowed so a notifications outage cannot
  * block Start/Stop or strategy switches.
  */
+async function insertNotification(userId, type, message) {
+  const result = await pool.query(
+    `INSERT INTO notifications (user_id, type, message)
+     VALUES ($1, $2, $3)
+     RETURNING id, type, message, read_status, created_at`,
+    [userId, type, message]
+  );
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    type: row.type,
+    message: row.message,
+    read_status: row.read_status,
+    created_at: row.created_at,
+  };
+}
+
 async function maybeNotifyUser(userId, type, message) {
   try {
     const { preferences } = await settingsService.getNotificationPreferences(userId);
     if (preferences[type] !== true) {
       return null;
     }
-    const result = await pool.query(
-      `INSERT INTO notifications (user_id, type, message)
-       VALUES ($1, $2, $3)
-       RETURNING id, type, message, read_status, created_at`,
-      [userId, type, message]
-    );
-    const row = result.rows[0];
-    return {
-      id: row.id,
-      type: row.type,
-      message: row.message,
-      read_status: row.read_status,
-      created_at: row.created_at,
-    };
+    return await insertNotification(userId, type, message);
   } catch (err) {
     console.error('[notifications]', err.message);
+    return null;
+  }
+}
+
+/**
+ * Option 2 E.3 — real-money events must always reach the user.
+ * Skips preference gating; still swallows insert failures so a
+ * notifications outage cannot block the trading hot path.
+ */
+async function forceNotifyUser(userId, type, message) {
+  try {
+    return await insertNotification(userId, type, message);
+  } catch (err) {
+    console.error('[notifications] forceNotify failed:', err.message);
     return null;
   }
 }
@@ -86,4 +104,5 @@ module.exports = {
   listNotifications,
   updateReadStatus,
   maybeNotifyUser,
+  forceNotifyUser,
 };

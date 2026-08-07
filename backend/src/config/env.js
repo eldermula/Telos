@@ -78,6 +78,19 @@ const REAL_TRADING_ENABLED = process.env.REAL_TRADING_ENABLED === 'true';
 const REAL_TRADING_ALLOW_DEMO = process.env.REAL_TRADING_ALLOW_DEMO === 'true';
 
 /**
+ * Option 2 E.3 — hard lot-size ceiling for real orders, independent of
+ * APIRS risk-%. Approved default 0.01 (one micro lot) for first proofs.
+ */
+const REAL_MAX_LOT = Number(process.env.REAL_MAX_LOT) || 0.01;
+
+/**
+ * Option 2 E.3 — max age of broker_connections.last_validated_at before
+ * a real order is refused. Approved default: 24 hours.
+ */
+const REAL_CONNECTION_MAX_AGE_HOURS =
+  Number(process.env.REAL_CONNECTION_MAX_AGE_HOURS) || 24;
+
+/**
  * Pure check so unit tests can cover every combination without
  * reloading this module. `allowDemoEnvPresent` is true when the env
  * var exists in the process environment at all — including empty
@@ -133,6 +146,8 @@ module.exports = {
   ACCESS_GATE_COOKIE_NAME,
   REAL_TRADING_ENABLED,
   REAL_TRADING_ALLOW_DEMO,
+  REAL_MAX_LOT,
+  REAL_CONNECTION_MAX_AGE_HOURS,
   assertRealTradingDemoBypassAllowed,
   assertRealTradingDemoBypassAtStartup,
   isProduction: NODE_ENV === 'production',

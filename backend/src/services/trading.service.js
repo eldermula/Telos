@@ -5,13 +5,10 @@
  * (06_API_Specification.md Section 6).
  */
 
-const { pool } = require('../db/pool');
 const tradingEngine = require('../engine/trading-engine');
 const tradesRepository = require('../engine/trades.repository');
 const decisionLogRepository = require('../engine/decision-log.repository');
-const { decryptCredentials } = require('./credential-crypto.service');
-const { getAccountInfo } = require('./mt5-connector.client');
-const { AppError } = require('../utils/app-error');
+const brokerAccountService = require('../engine/broker-account.service');
 const { toMeta } = require('../utils/pagination');
 
 async function getSession(userId) {
@@ -69,59 +66,21 @@ async function confirmLive(userId, confirmationPhrase) {
 }
 
 /**
- * Option 2 D follow-up — frontend-facing proxy for the connector's
- * GET /account-info. The Confirm Live modal must show real MT5 equity
- * (not bot_instances.active_trading_balance, which is still the paper
- * ledger until Increment E syncs it). Flow:
- *   1. Resolve the user's single broker_connection (with encrypted creds)
- *   2. Decrypt to learn the expected login (never returned to the client)
- *   3. Call the connector's live account-info
- *   4. Reject if the attached terminal's login doesn't match the stored
- *      credentials — same check validate() already does, so we never
- *      show some other account's equity as if it were this user's
- * Returns a public, credentials-free shape. Failures surface as the
- * existing connector AppErrors (503 unreachable / 422 failed) so the
- * modal can refuse to arm without accurate context.
+ * Option 2 D follow-up / E.3 — frontend-facing proxy for live MT5
+ * equity. Delegates to the shared login-matched helper so the modal
+ * and BotRuntime real-mode paths cannot drift.
  */
 async function getLiveAccountInfo(userId) {
-  const result = await pool.query(
-    `SELECT id, broker_name, account_type, encrypted_credentials
-     FROM broker_connections
-     WHERE user_id = $1
-     LIMIT 1`,
-    [userId]
-  );
-  const row = result.rows[0];
-  if (!row) {
-    throw new AppError(
-      404,
-      'NO_BROKER_CONNECTION',
-      'Link a broker connection before reading live account info'
-    );
-  }
-
-  const credentials = decryptCredentials(row.encrypted_credentials);
-  const expectedLogin = String(credentials.login).trim();
-
-  const info = await getAccountInfo();
-  if (String(info.login) !== expectedLogin) {
-    throw new AppError(
-      422,
-      'BROKER_ACCOUNT_MISMATCH',
-      'Attached MT5 account login does not match your linked broker connection'
-    );
-  }
-
+  const info = await brokerAccountService.getMatchedAccountInfoForUser(userId);
+  // Strip last_validated_at from the public API shape (internal to E.5 freshness).
   return {
-    broker_connection_id: row.id,
-    broker_name: row.broker_name,
+    broker_connection_id: info.broker_connection_id,
+    broker_name: info.broker_name,
     login: info.login,
-    // Live from the terminal, not the (possibly stale) DB column —
-    // the modal's context must reflect what's actually attached right now.
     account_type: info.account_type,
     balance: info.balance,
     equity: info.equity,
-    currency: info.currency ?? null,
+    currency: info.currency,
   };
 }
 

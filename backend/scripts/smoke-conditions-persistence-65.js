@@ -115,7 +115,7 @@ async function main() {
   //        on live EURUSD drift to cross a tight band naturally (slow
   //        and flaky on a quiet session, as this script's own dev run
   //        confirmed: 90s+ without a live cross). This still exercises
-  //        the real `_monitorOpenPosition()` -> `resolveExit(..., {
+  //        the real `_monitorOpenPositionPaper()` -> `resolveExit(..., {
   //        conditions: pos.conditions ?? null })` call site end to
   //        end — only the price input is faked, not the logic. ---
   const pos = freshRuntime.openPosition;

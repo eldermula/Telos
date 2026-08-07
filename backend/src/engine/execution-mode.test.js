@@ -3,7 +3,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { resolveExecutionMode } = require('./execution-mode');
+const {
+  resolveExecutionMode,
+  resolveExpectedAccountTypeForLayer0,
+} = require('./execution-mode');
 
 // Fresh relative to the process's `Date.now()` so the 15-minute TTL
 // introduced in Increment D doesn't reject every "correct inputs"
@@ -201,4 +204,128 @@ test('return value is always exactly the string "paper" or "real", nothing else'
     const result = resolveExecutionMode(input);
     assert.ok(result === 'paper' || result === 'real', `unexpected return value: ${JSON.stringify(result)}`);
   }
+});
+
+// --- E1 dispatch bypass (allowDemoRealExecution) ---
+// Controls which methods run. Must never rewrite Layer 0's account type.
+
+test('E1: demo + bypass true + kill switch + confirmation → real (dispatch)', () => {
+  assert.equal(
+    resolveExecutionMode({
+      realTradingEnabled: true,
+      accountType: 'demo',
+      liveTradingConfirmedAt: REAL_TIMESTAMP,
+      allowDemoRealExecution: true,
+    }),
+    'real'
+  );
+});
+
+test('E1: demo + bypass false → paper (bypass off)', () => {
+  assert.equal(
+    resolveExecutionMode({
+      realTradingEnabled: true,
+      accountType: 'demo',
+      liveTradingConfirmedAt: REAL_TIMESTAMP,
+      allowDemoRealExecution: false,
+    }),
+    'paper'
+  );
+});
+
+test('E1: demo + bypass omitted → paper (default off)', () => {
+  assert.equal(
+    resolveExecutionMode({
+      realTradingEnabled: true,
+      accountType: 'demo',
+      liveTradingConfirmedAt: REAL_TIMESTAMP,
+    }),
+    'paper'
+  );
+});
+
+test('E1: contest + bypass true → paper (contest never qualifies)', () => {
+  assert.equal(
+    resolveExecutionMode({
+      realTradingEnabled: true,
+      accountType: 'contest',
+      liveTradingConfirmedAt: REAL_TIMESTAMP,
+      allowDemoRealExecution: true,
+    }),
+    'paper'
+  );
+});
+
+test('E1: real + bypass true → still real', () => {
+  assert.equal(
+    resolveExecutionMode({
+      realTradingEnabled: true,
+      accountType: 'real',
+      liveTradingConfirmedAt: REAL_TIMESTAMP,
+      allowDemoRealExecution: true,
+    }),
+    'real'
+  );
+});
+
+test('E1: demo + bypass true but kill switch off → paper', () => {
+  assert.equal(
+    resolveExecutionMode({
+      realTradingEnabled: false,
+      accountType: 'demo',
+      liveTradingConfirmedAt: REAL_TIMESTAMP,
+      allowDemoRealExecution: true,
+    }),
+    'paper'
+  );
+});
+
+test('E1: demo + bypass true but confirmation missing → paper', () => {
+  assert.equal(
+    resolveExecutionMode({
+      realTradingEnabled: true,
+      accountType: 'demo',
+      liveTradingConfirmedAt: null,
+      allowDemoRealExecution: true,
+    }),
+    'paper'
+  );
+});
+
+for (const badBypass of [undefined, null, 'true', 1, 'yes', 'True']) {
+  test(`E1: allowDemoRealExecution=${JSON.stringify(badBypass)} is not literal true → demo stays paper`, () => {
+    assert.equal(
+      resolveExecutionMode({
+        realTradingEnabled: true,
+        accountType: 'demo',
+        liveTradingConfirmedAt: REAL_TIMESTAMP,
+        allowDemoRealExecution: badBypass,
+      }),
+      'paper'
+    );
+  });
+}
+
+// The load-bearing safety invariant: resolveExecutionMode answering
+// 'real' for a demo account under E1 must not be mistakable for a
+// Layer 0 account type. resolveExpectedAccountTypeForLayer0 always
+// returns the detected type unchanged — callers pass that to placeOrder.
+test('E1 invariant: Layer 0 expectedAccountType stays the true detected type, never "real" from dispatch', () => {
+  const detectedAccountType = 'demo';
+  const mode = resolveExecutionMode({
+    realTradingEnabled: true,
+    accountType: detectedAccountType,
+    liveTradingConfirmedAt: REAL_TIMESTAMP,
+    allowDemoRealExecution: true,
+  });
+  assert.equal(mode, 'real', 'dispatch mode');
+  const forLayer0 = resolveExpectedAccountTypeForLayer0(detectedAccountType);
+  assert.equal(forLayer0, 'demo');
+  assert.notEqual(forLayer0, mode, 'Layer 0 type must not equal the dispatch mode string by coincidence of reuse');
+});
+
+test('resolveExpectedAccountTypeForLayer0 is identity for real/demo/contest', () => {
+  assert.equal(resolveExpectedAccountTypeForLayer0('real'), 'real');
+  assert.equal(resolveExpectedAccountTypeForLayer0('demo'), 'demo');
+  assert.equal(resolveExpectedAccountTypeForLayer0('contest'), 'contest');
 });

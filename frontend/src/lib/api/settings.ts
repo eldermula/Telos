@@ -13,6 +13,7 @@ export type NotificationPreferences = {
   trading_error: boolean;
   strategy_switch: boolean;
   live_trading_confirmed: boolean;
+  real_order: boolean;
 };
 
 export type NotificationPreferencesResponse = {
