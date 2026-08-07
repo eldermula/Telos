@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { LIVE_TRADING_CONFIRMATION_PHRASE } from '../../lib/liveTradingConfirmation';
-import type { TradingSession } from '../../types/trading';
+import { getLiveAccountInfo, type LiveAccountInfo } from '../../lib/api/trading';
+import { ApiError } from '../../types/api';
 
 type Props = {
   open: boolean;
-  session: TradingSession;
   confirming: boolean;
   onClose: () => void;
   onConfirm: (phrase: string) => Promise<void>;
@@ -15,30 +15,73 @@ type Props = {
 /**
  * Option 2 Layer 2 — the deliberate-typing gate before a real-mode
  * Start. Phrase is shown verbatim (not a secret); Confirm stays
- * disabled until the typed text matches exactly. Server re-checks
- * the same phrase; a client-side match alone never authorizes anything.
+ * disabled until (a) live MT5 account-info has loaded successfully,
+ * (b) that live account_type is still `real`, and (c) the typed text
+ * matches exactly. Server re-checks the phrase; a client-side match
+ * alone never authorizes anything. Equity is always from
+ * GET /trading/account-info (live connector), never
+ * session.active_trading_balance (still the paper ledger until E).
  */
 export function ConfirmLiveTradingModal({
   open,
-  session,
   confirming,
   onClose,
   onConfirm,
 }: Props) {
   const [phrase, setPhrase] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [accountInfo, setAccountInfo] = useState<LiveAccountInfo | null>(null);
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
       setPhrase('');
       setLocalError(null);
+      setAccountInfo(null);
+      setAccountError(null);
+      setAccountLoading(false);
+      return;
     }
+
+    let cancelled = false;
+    setAccountLoading(true);
+    setAccountError(null);
+    setAccountInfo(null);
+
+    void (async () => {
+      try {
+        const info = await getLiveAccountInfo();
+        if (cancelled) return;
+        setAccountInfo(info);
+        if (info.account_type !== 'real') {
+          setAccountError(
+            `Attached MT5 account is ${info.account_type}, not real. Live trading cannot be confirmed.`,
+          );
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setAccountError(
+          err instanceof ApiError
+            ? err.message
+            : 'Could not load live MT5 account info. Confirmation is blocked until this succeeds.',
+        );
+      } finally {
+        if (!cancelled) setAccountLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   const matches = phrase === LIVE_TRADING_CONFIRMATION_PHRASE;
+  const liveContextReady =
+    accountInfo !== null && accountInfo.account_type === 'real' && !accountError;
 
   async function handleConfirm() {
-    if (!matches) return;
+    if (!matches || !liveContextReady) return;
     setLocalError(null);
     try {
       await onConfirm(phrase);
@@ -47,6 +90,8 @@ export function ConfirmLiveTradingModal({
     }
   }
 
+  const currency = accountInfo?.currency ? ` ${accountInfo.currency}` : '';
+
   return (
     <Modal
       open={open}
@@ -54,7 +99,7 @@ export function ConfirmLiveTradingModal({
       confirmLabel="Confirm live trading"
       confirmVariant="destructive"
       confirming={confirming}
-      confirmDisabled={!matches}
+      confirmDisabled={!matches || !liveContextReady || accountLoading}
       onClose={onClose}
       onConfirm={() => void handleConfirm()}
     >
@@ -64,20 +109,45 @@ export function ConfirmLiveTradingModal({
           MT5 account. This is not a paper simulation.
         </p>
 
-        <dl className="grid grid-cols-2 gap-3 rounded-[12px] border border-border-subtle bg-bg-surface p-3">
-          <div>
-            <dt className="type-caption">Account type</dt>
-            <dd className="type-data-base mt-0.5 capitalize text-text-primary">
-              {session.account_type}
-            </dd>
-          </div>
-          <div>
-            <dt className="type-caption">Trading balance</dt>
-            <dd className="type-data-base mt-0.5 text-accent-gold">
-              ${session.active_trading_balance.toFixed(2)}
-            </dd>
-          </div>
-        </dl>
+        {accountLoading ? (
+          <p className="type-caption">Loading live MT5 account info…</p>
+        ) : null}
+
+        {accountError ? (
+          <p className="type-caption text-danger">{accountError}</p>
+        ) : null}
+
+        {accountInfo && !accountLoading ? (
+          <dl className="grid grid-cols-2 gap-3 rounded-[12px] border border-border-subtle bg-bg-surface p-3">
+            <div>
+              <dt className="type-caption">Account</dt>
+              <dd className="type-data-base mt-0.5 text-text-primary">
+                {accountInfo.login}{' '}
+                <span className="capitalize">({accountInfo.account_type})</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="type-caption">Broker</dt>
+              <dd className="type-data-base mt-0.5 uppercase text-text-primary">
+                {accountInfo.broker_name}
+              </dd>
+            </div>
+            <div>
+              <dt className="type-caption">Live equity</dt>
+              <dd className="type-data-base mt-0.5 text-accent-gold">
+                {accountInfo.equity.toFixed(2)}
+                {currency}
+              </dd>
+            </div>
+            <div>
+              <dt className="type-caption">Live balance</dt>
+              <dd className="type-data-base mt-0.5 text-text-primary">
+                {accountInfo.balance.toFixed(2)}
+                {currency}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
 
         <p>
           Confirmation expires in 15 minutes if you don&apos;t Start, and is
@@ -96,6 +166,7 @@ export function ConfirmLiveTradingModal({
           spellCheck={false}
           placeholder="Type the phrase exactly"
           error={localError ?? undefined}
+          disabled={!liveContextReady}
         />
       </div>
     </Modal>

@@ -161,6 +161,7 @@ Read-only server-side composition of Broker Connections + Trading + Portfolio + 
 | POST | `/trading/session/start` | Start automated trading for a given connection's bot instance |
 | POST | `/trading/session/stop` | Stop automated trading |
 | POST | `/trading/session/confirm-live` | Layer 2 opt-in for real order placement (Option 2) |
+| GET | `/trading/account-info` | Live MT5 equity/balance for the Confirm Live modal (Option 2) |
 | GET | `/trading/session` | Current bot status + tier + strategy mode |
 | GET | `/trading/positions` | Open positions (`trades` where `status = open`) |
 | GET | `/trading/orders` | Pending orders |
@@ -190,6 +191,19 @@ Read-only server-side composition of Broker Connections + Trading + Portfolio + 
 **`account_type` / `real_trading_available` / `live_trading_confirmed_at` — added during Option 2 Increment D.** `account_type` is joined from `broker_connections` (system-detected, never user-supplied). `real_trading_available = REAL_TRADING_ENABLED && account_type === 'real'` — tells the Frontend whether to offer the Confirm Live action. `live_trading_confirmed_at` is the Layer 2 opt-in timestamp, reported as `null` when never confirmed *or* past the 15-minute TTL (lazy expiry via `isConfirmationActive`); cleared to `NULL` on every Stop, including a no-op Stop while already stopped.
 
 **`POST /trading/session/confirm-live`** — Layer 2 of Option 2's gating design. Body: `{ "confirmationPhrase": "I CONFIRM LIVE TRADING WITH REAL MONEY" }` (exact match, case-sensitive, not a secret — the phrase is shown verbatim in the UI). Preconditions, checked in order: instance must be `stopped` (`409 INSTANCE_MUST_BE_STOPPED`), linked `account_type` must be `real` (`409 NOT_A_REAL_ACCOUNT`), phrase must match (`400 CONFIRMATION_PHRASE_MISMATCH`). Success sets `live_trading_confirmed_at = now()` (idempotent — reconfirming refreshes the timestamp) and returns the same session shape as `GET /trading/session`. Confirmation expires after 15 minutes if Start hasn't happened, and is cleared on every Stop.
+
+**`GET /trading/account-info`** — Frontend proxy for the connector's live `GET /account-info`. Used by the Confirm Live modal so the user sees real MT5 equity before arming, never `bot_instances.active_trading_balance` (still the paper ledger until Option 2 Increment E syncs it). Resolves the user's single broker connection, decrypts credentials server-side to learn the expected login (never returned), calls the connector, and rejects with `422 BROKER_ACCOUNT_MISMATCH` if the attached terminal's login doesn't match. Response:
+```json
+{
+  "broker_connection_id": "...",
+  "broker_name": "mt5",
+  "login": 12345678,
+  "account_type": "demo | contest | real",
+  "balance": 0.0,
+  "equity": 0.0,
+  "currency": "USD"
+}
+```
 
 `GET /trading/positions` / `/orders` / `/history` response items — matches `trades` columns directly:
 ```json

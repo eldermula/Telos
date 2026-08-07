@@ -10,6 +10,10 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/session', rateLimit.read(), controller.getSession);
+// Option 2 D follow-up — live MT5 equity/balance for the Confirm Live
+// modal. Read-class limiter; hits the local connector once per call
+// (no cache — the whole point is a fresh number before arming).
+router.get('/account-info', rateLimit.read(), controller.getAccountInfo);
 // Tightened well below the general 10/min state-changing default —
 // legitimate use is a human pressing Start/Stop a handful of times a
 // day, never more than once every few seconds. Each call does real

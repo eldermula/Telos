@@ -55,6 +55,15 @@ async function confirmLive(req, res, next) {
   }
 }
 
+async function getAccountInfo(req, res, next) {
+  try {
+    const data = await tradingService.getLiveAccountInfo(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function getPositions(req, res, next) {
   try {
     const data = await tradingService.getPositions(req.user.id);
@@ -98,6 +107,7 @@ module.exports = {
   startSession,
   stopSession,
   confirmLive,
+  getAccountInfo,
   getPositions,
   getOrders,
   getHistory,

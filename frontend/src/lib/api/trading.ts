@@ -30,6 +30,21 @@ export function confirmLiveSession(confirmationPhrase: string) {
   });
 }
 
+export type LiveAccountInfo = {
+  broker_connection_id: string;
+  broker_name: string;
+  login: number;
+  account_type: 'demo' | 'contest' | 'real';
+  balance: number;
+  equity: number;
+  currency: string | null;
+};
+
+/** Fresh MT5 equity/balance for the Confirm Live modal — never the paper ledger. */
+export function getLiveAccountInfo() {
+  return apiRequest<LiveAccountInfo>('/trading/account-info');
+}
+
 export function getPositions() {
   return apiRequest<Trade[]>('/trading/positions');
 }

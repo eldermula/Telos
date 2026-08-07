@@ -246,15 +246,12 @@ export function TradingPage() {
         )}
       </Modal>
 
-      {session ? (
-        <ConfirmLiveTradingModal
-          open={confirmLiveOpen}
-          session={session}
-          confirming={actionPending === 'confirm-live'}
-          onClose={() => setConfirmLiveOpen(false)}
-          onConfirm={onConfirmLive}
-        />
-      ) : null}
+      <ConfirmLiveTradingModal
+        open={confirmLiveOpen}
+        confirming={actionPending === 'confirm-live'}
+        onClose={() => setConfirmLiveOpen(false)}
+        onConfirm={onConfirmLive}
+      />
     </div>
   );
 }
