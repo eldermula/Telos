@@ -6,6 +6,8 @@ import {
   Settings,
   Link2,
   LogOut,
+  BarChart3,
+  FileText,
   type LucideIcon,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
@@ -27,6 +29,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/trading', label: 'Trading', icon: CandlestickChart, mobilePrimary: true },
   { to: '/onboarding/broker', label: 'Broker', icon: Link2 },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase, mobilePrimary: true },
+  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/reports', label: 'Reports', icon: FileText },
   { to: '/notifications', label: 'Notifications', icon: Bell, mobilePrimary: true },
   { to: '/settings', label: 'Settings', icon: Settings, mobilePrimary: true },
 ];
