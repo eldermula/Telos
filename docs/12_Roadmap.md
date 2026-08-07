@@ -92,11 +92,13 @@ Only start this once Phase 3's deterministic core is proven — this is where th
 
 **Exit criteria:** every module in the PRD has a working screen and API path, still against paper trading.
 
-## Phase 8 — Security & Operations Hardening
+## Phase 8 — Security & Operations Hardening (in progress, see `CHANGELOG.md`)
 
-- Resolve remaining `09_Security.md` open items: backup destination + verified encrypted backups, per-endpoint rate limits.
-- `npm audit`/Dependabot wired into the repo (Section 9 of `09_Security.md`) — free, should be on before real users, not after an incident.
-- Basic uptime monitoring for the self-hosted machine (Section 10) — doesn't need to be elaborate, just needs to exist.
+- ~~Per-endpoint rate limits~~ → **8.1, done.** General default (60/min GET, 10/min state-changing) implemented, plus four deliberately-tightened-below-default endpoint groups decided and approved before implementing: `/auth/signup` + `/auth/password-reset/*` (5/15min/IP), `/trading/session/start|stop` (5/min/user), `/admin/*` GET (20/min/admin) and its two live-risk-affecting PATCH routes (5/min/admin).
+- Verified encrypted backups (scheduled `pg_dump` → private GitHub repo, per `09_Security.md` §5/§11) — destination is decided, nothing implemented yet.
+- `npm audit`/Dependabot wired into the repo (Section 9 of `09_Security.md`) — free, should be on before real users, not after an incident. No `.github/` folder exists yet; the repo does have a real GitHub remote (`eldermula/Telos`), so this is viable as-is.
+- Basic uptime monitoring for the self-hosted machine (Section 10) — doesn't need to be elaborate, just needs to exist. `GET /health` and `admin/system-health` already exist as the thing to point a monitor at; nothing external watches them yet.
+- Minor: a few read-only query-param endpoints (`trading`/`portfolio`/`analytics` controllers) don't have Zod schema validation the way every state-changing endpoint does — low severity (reads only), cheap to close for consistency with `09_Security.md` §8's stated principle.
 
 **Exit criteria:** the checklist in `09_Security.md` has no unresolved item that blocks handling real user data/credentials.
 

@@ -3,17 +3,26 @@
 const express = require('express');
 const controller = require('../controllers/trading.controller');
 const { authenticate } = require('../middleware/authenticate');
+const { rateLimit } = require('../middleware/rate-limit');
 
 const router = express.Router();
 
 router.use(authenticate);
 
-router.get('/session', controller.getSession);
-router.post('/session/start', controller.startSession);
-router.post('/session/stop', controller.stopSession);
-router.get('/positions', controller.getPositions);
-router.get('/orders', controller.getOrders);
-router.get('/history', controller.getHistory);
-router.get('/decision-log', controller.getDecisionLog);
+router.get('/session', rateLimit.read(), controller.getSession);
+// Tightened well below the general 10/min state-changing default —
+// legitimate use is a human pressing Start/Stop a handful of times a
+// day, never more than once every few seconds. Each call does real
+// work (MT5 terminal connect/disconnect, bot_instances transition,
+// WebSocket broadcast) on the resource-constrained self-hosted machine
+// (04_System_Architecture.md §8) — a rapid cycle, malicious or just a
+// buggy frontend retry loop, has real operational cost here that most
+// other state-changing endpoints don't share.
+router.post('/session/start', rateLimit.write({ max: 5 }), controller.startSession);
+router.post('/session/stop', rateLimit.write({ max: 5 }), controller.stopSession);
+router.get('/positions', rateLimit.read(), controller.getPositions);
+router.get('/orders', rateLimit.read(), controller.getOrders);
+router.get('/history', rateLimit.read(), controller.getHistory);
+router.get('/decision-log', rateLimit.read(), controller.getDecisionLog);
 
 module.exports = router;
