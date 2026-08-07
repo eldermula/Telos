@@ -1,0 +1,37 @@
+# Phase 8.3 — npm audit on every push/PR (09_Security.md §9).
+# Free, built into npm — catches known-vulnerable dependencies before they
+# ship. --audit-level=high fails the job on high/critical only, so low/moderate
+# noise doesn't block every PR; Dependabot still surfaces those as weekly PRs.
+# bot/* packages are dependency-free — not audited here.
+name: npm audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  audit:
+    name: audit (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - backend
+          - frontend
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ${{ matrix.dir }}/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high

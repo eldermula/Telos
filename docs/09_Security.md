@@ -66,9 +66,7 @@ Already built into the schema, restated here as a security control rather than j
 
 Consistent with the project's standing cost priority:
 
-- **`npm audit`** (free, built into npm) run as part of the build process to catch known-vulnerable dependencies before they ship.
-- **Dependabot** (free on GitHub, since the repo is already there) for automated dependency update alerts — no paid scanning service needed.
-- Docker images (Blueprint Section 6) kept minimal — smaller images mean a smaller attack surface and less resource pressure on the constrained 8GB RAM machine, which is a security and a performance win from the same change.
+- ~~`npm audit` / Dependabot~~ → **implemented, Phase 8.3.** `.github/dependabot.yml` (weekly npm + GitHub Actions updates for `backend/` and `frontend/`) and `.github/workflows/npm-audit.yml` (`npm audit --audit-level=high` on push/PR). `bot/*` packages are dependency-free Node modules and are deliberately not listed. Docker images (Blueprint Section 6) kept minimal — smaller images mean a smaller attack surface and less resource pressure on the constrained 8GB RAM machine, which is a security and a performance win from the same change.
 
 ## 10. Incident Response (Lightweight, Matched to Current Scale)
 

@@ -253,6 +253,8 @@
 
 - **8.2 (code complete, VERIFIED)** Encrypted Postgres backups per the already-settled destination (`05` §4 / `09` §5): `database/scripts/backup.js` runs `pg_dump` via `docker compose exec`, AES-256-GCM-encrypts the dump with a dedicated `BACKUP_ENCRYPTION_KEY` (must stay distinct from `BROKER_CREDENTIALS_KEY`), commits into a local clone of a **private GitHub repo separate from this code repo**, and pushes. Retention defaults to 14 dumps. Decrypt helper: `database/scripts/restore-backup.js`. Ops runbook (one-time setup + Windows Task Scheduler): `docs/OPS.md` §1. Field-level ciphertext for `encrypted_credentials` is preserved inside the dump by construction; dump-file encryption is an additional layer. Smoke: dump → encrypt → decrypt round-trip on the live Docker Postgres → `BACKUP_PASS` (byte-identical restored SQL size, encrypted file is opaque binary). Push to a real private repo and Task Scheduler enrollment are manual one-time steps for you (need your GitHub backup-repo credentials).
 
+- **8.3 (code complete)** Dependabot + `npm audit` CI (`09_Security.md` §9). `.github/dependabot.yml` — weekly npm update PRs for `backend/` and `frontend/` plus GitHub Actions itself. `.github/workflows/npm-audit.yml` — `npm audit --audit-level=high` on every push/PR to `main` for the same two packages. `bot/*` packages are dependency-free and deliberately omitted. Takes effect on the next push to GitHub.
+
 ## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
 
 **2026-08-06**

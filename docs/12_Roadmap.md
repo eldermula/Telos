@@ -96,7 +96,7 @@ Only start this once Phase 3's deterministic core is proven — this is where th
 
 - ~~Per-endpoint rate limits~~ → **8.1, done.** General default (60/min GET, 10/min state-changing) implemented, plus four deliberately-tightened-below-default endpoint groups decided and approved before implementing: `/auth/signup` + `/auth/password-reset/*` (5/15min/IP), `/trading/session/start|stop` (5/min/user), `/admin/*` GET (20/min/admin) and its two live-risk-affecting PATCH routes (5/min/admin).
 - ~~Verified encrypted backups~~ → **8.2, done.** `database/scripts/backup.js` + `restore-backup.js`; AES-256-GCM dump encryption; pushes to a private GitHub repo separate from this code repo. Ops runbook: `docs/OPS.md` §1. One-time: create the private backup repo, set `BACKUP_*` env vars, enroll Windows Task Scheduler.
-- `npm audit`/Dependabot wired into the repo (Section 9 of `09_Security.md`) — free, should be on before real users. No `.github/` folder yet; the remote (`eldermula/Telos`) makes this viable.
+- ~~`npm audit`/Dependabot~~ → **8.3, done.** `.github/dependabot.yml` + `.github/workflows/npm-audit.yml` covering `backend/` and `frontend/` (bot packages are dependency-free). Takes effect on the next push to GitHub.
 - Basic uptime monitoring for the self-hosted machine (Section 10) — `GET /health` exists; nothing external watches it yet. Free-tool setup to be documented in `docs/OPS.md`.
 - Minor Zod consistency gap on a few query/path inputs — pending an explicit inventory review before fixing.
 

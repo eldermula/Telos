@@ -1,0 +1,27 @@
+# Phase 8.3 — Dependabot (09_Security.md §9). Free on GitHub.
+# Weekly npm update PRs for packages that actually have dependencies.
+# bot/* packages are dependency-free Node modules — not listed here.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
