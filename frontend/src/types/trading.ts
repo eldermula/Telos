@@ -1,3 +1,5 @@
+import type { BrokerAccountType } from './api';
+
 export type BotStatus = 'running' | 'stopped' | 'error';
 export type StrategyMode = 'STRATEGY_A' | 'STRATEGY_B' | 'HALTED';
 
@@ -10,6 +12,15 @@ export type TradingSession = {
   peak_equity: number;
   bootstrap_phase: boolean;
   bootstrap_risk_ceiling_pct: number | null;
+  // Option 2 Increment D — Layer 2 surface. `real_trading_available`
+  // tells the UI whether to offer the Confirm Live action at all
+  // (REAL_TRADING_ENABLED && account_type === 'real'); the other two
+  // are the raw inputs that feed that decision + the current
+  // confirmation state (null when never confirmed OR past the
+  // 15-minute TTL).
+  account_type: BrokerAccountType;
+  real_trading_available: boolean;
+  live_trading_confirmed_at: string | null;
   updated_at: string;
 };
 

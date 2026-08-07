@@ -20,6 +20,7 @@ const PREFERENCE_LABELS: Record<keyof NotificationPreferences, string> = {
   connection_error: 'Broker connection errors',
   trading_error: 'Trading errors',
   strategy_switch: 'Strategy switches',
+  live_trading_confirmed: 'Live trading confirmed',
 };
 
 export function SettingsPage() {

@@ -1,0 +1,13 @@
+-- 009_add_live_trading_confirmed_notification_type.sql
+-- Option 2 (real order placement) — Increment D. Adds a new
+-- notification_type enum value so confirm-live can notify the user
+-- through the existing notifications system (same mechanism bot_start/
+-- bot_stop already use), rather than inventing a parallel audit log.
+--
+-- ADD VALUE only, no other statements in this file: Postgres forbids
+-- using a freshly-added enum value inside the same transaction that
+-- added it. The migration runner (database/migrate.js) wraps each file
+-- in its own BEGIN/COMMIT, so keeping this file to just the ADD VALUE
+-- means the actual first INSERT using 'live_trading_confirmed' (in a
+-- later, separate request/transaction) is always safe.
+ALTER TYPE notification_type ADD VALUE 'live_trading_confirmed';

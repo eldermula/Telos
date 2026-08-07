@@ -5,7 +5,11 @@ const assert = require('node:assert/strict');
 
 const { resolveExecutionMode } = require('./execution-mode');
 
-const REAL_TIMESTAMP = new Date('2026-08-07T12:00:00Z');
+// Fresh relative to the process's `Date.now()` so the 15-minute TTL
+// introduced in Increment D doesn't reject every "correct inputs"
+// case as stale. Built once at module load; each individual test that
+// needs a specific age constructs its own.
+const REAL_TIMESTAMP = new Date();
 
 test('resolves real only when all three inputs are exactly correct', () => {
   assert.equal(
@@ -18,14 +22,29 @@ test('resolves real only when all three inputs are exactly correct', () => {
   );
 });
 
-test('a non-null, non-empty ISO string timestamp also counts as confirmed', () => {
+test('a non-null, non-empty ISO string timestamp also counts as confirmed (when fresh)', () => {
+  // Pass a Date close to now so isConfirmationActive's 15-minute TTL
+  // doesn't reject a hard-coded historical ISO string as stale.
+  const freshIso = new Date().toISOString();
   assert.equal(
     resolveExecutionMode({
       realTradingEnabled: true,
       accountType: 'real',
-      liveTradingConfirmedAt: '2026-08-07T12:00:00.000Z',
+      liveTradingConfirmedAt: freshIso,
     }),
     'real'
+  );
+});
+
+test('a past-TTL confirmation timestamp resolves to paper (D\'s 15-minute expiry)', () => {
+  const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
+  assert.equal(
+    resolveExecutionMode({
+      realTradingEnabled: true,
+      accountType: 'real',
+      liveTradingConfirmedAt: twentyMinutesAgo,
+    }),
+    'paper'
   );
 });
 

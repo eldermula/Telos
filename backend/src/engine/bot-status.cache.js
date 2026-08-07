@@ -2,6 +2,8 @@
 
 const path = require('path');
 const { redis } = require('../db/redis');
+const { REAL_TRADING_ENABLED } = require('../config/env');
+const { isConfirmationActive } = require('./live-trading-confirmation');
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
 const { bootstrapRiskPct, STANDARD_MATRIX_FLOOR_BALANCE } = require(
@@ -25,6 +27,15 @@ function toCachePayload(instance, updatedAt = new Date()) {
   const activeTradingBalance = Number(instance.active_trading_balance);
   const bootstrapPhase = activeTradingBalance < STANDARD_MATRIX_FLOOR_BALANCE;
 
+  // Option 2 (Increment D) — `real_trading_available` tells the Frontend
+  // whether to even offer the confirm-live action at all, independent of
+  // whether it's *currently* confirmed. `live_trading_confirmed_at` is
+  // reported through the same 15-minute TTL every other reader of this
+  // column must apply (live-trading-confirmation.js) — an expired-but-
+  // not-yet-Stop-cleared confirmation must never be reported as active
+  // here, since the Frontend would otherwise show a stale "Live" state.
+  const confirmationActive = isConfirmationActive(instance.live_trading_confirmed_at);
+
   return {
     bot_instance_id: instance.id,
     status: instance.status,
@@ -38,6 +49,11 @@ function toCachePayload(instance, updatedAt = new Date()) {
     bootstrap_phase: bootstrapPhase,
     bootstrap_risk_ceiling_pct: bootstrapPhase
       ? bootstrapRiskPct(activeTradingBalance)
+      : null,
+    account_type: instance.account_type,
+    real_trading_available: REAL_TRADING_ENABLED && instance.account_type === 'real',
+    live_trading_confirmed_at: confirmationActive
+      ? instance.live_trading_confirmed_at
       : null,
     updated_at:
       updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt),

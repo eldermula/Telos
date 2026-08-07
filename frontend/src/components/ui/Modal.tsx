@@ -12,6 +12,8 @@ type ModalProps = {
   confirmVariant?: 'primary' | 'destructive';
   onConfirm?: () => void;
   confirming?: boolean;
+  /** Extra disable condition beyond `confirming` (e.g. typed phrase mismatch). */
+  confirmDisabled?: boolean;
   className?: string;
 };
 
@@ -25,6 +27,7 @@ export function Modal({
   confirmVariant = 'primary',
   onConfirm,
   confirming = false,
+  confirmDisabled = false,
   className,
 }: ModalProps) {
   const titleId = useId();
@@ -81,7 +84,7 @@ export function Modal({
             <Button
               variant={confirmVariant}
               onClick={onConfirm}
-              disabled={confirming}
+              disabled={confirming || confirmDisabled}
             >
               {confirming ? 'Working…' : confirmLabel}
             </Button>

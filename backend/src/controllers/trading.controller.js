@@ -2,6 +2,21 @@
 
 const tradingService = require('../services/trading.service');
 const { parsePagination } = require('../utils/pagination');
+const { AppError } = require('../utils/app-error');
+const { confirmLiveTradingSchema } = require('../validators/trading.schemas');
+
+function parseBody(schema, body) {
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    throw new AppError(422, 'VALIDATION_ERROR', 'Invalid request body', {
+      issues: parsed.error.issues.map((i) => ({
+        path: i.path.join('.'),
+        message: i.message,
+      })),
+    });
+  }
+  return parsed.data;
+}
 
 async function getSession(req, res, next) {
   try {
@@ -24,6 +39,16 @@ async function startSession(req, res, next) {
 async function stopSession(req, res, next) {
   try {
     const data = await tradingService.stopSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function confirmLive(req, res, next) {
+  try {
+    const body = parseBody(confirmLiveTradingSchema, req.body);
+    const data = await tradingService.confirmLive(req.user.id, body.confirmationPhrase);
     res.status(200).json(data);
   } catch (err) {
     next(err);
@@ -72,6 +97,7 @@ module.exports = {
   getSession,
   startSession,
   stopSession,
+  confirmLive,
   getPositions,
   getOrders,
   getHistory,

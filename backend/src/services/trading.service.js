@@ -60,10 +60,15 @@ async function stopSession(userId) {
   return tradingEngine.stopSession(userId);
 }
 
+async function confirmLive(userId, confirmationPhrase) {
+  return tradingEngine.confirmLiveTrading(userId, confirmationPhrase);
+}
+
 module.exports = {
   getSession,
   startSession,
   stopSession,
+  confirmLive,
   getPositions,
   getOrders,
   getHistory,

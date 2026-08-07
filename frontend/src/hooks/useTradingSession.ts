@@ -11,7 +11,9 @@ export function useTradingSession() {
   const [brokerGate, setBrokerGate] = useState<BrokerGate>('checking');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionPending, setActionPending] = useState<'start' | 'stop' | null>(null);
+  const [actionPending, setActionPending] = useState<'start' | 'stop' | 'confirm-live' | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -82,6 +84,25 @@ export function useTradingSession() {
     }
   }, []);
 
+  const confirmLive = useCallback(async (confirmationPhrase: string) => {
+    setActionPending('confirm-live');
+    setError(null);
+    try {
+      const updated = await tradingApi.confirmLiveSession(confirmationPhrase);
+      setSession(updated);
+      return updated;
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not confirm live trading. Try again.',
+      );
+      throw err;
+    } finally {
+      setActionPending(null);
+    }
+  }, []);
+
   const applySessionPatch = useCallback((patch: Partial<TradingSession>) => {
     setSession((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
@@ -98,6 +119,7 @@ export function useTradingSession() {
     actionPending,
     start,
     stop,
+    confirmLive,
     reload: load,
     applySessionPatch,
   };

@@ -20,6 +20,10 @@ router.get('/session', rateLimit.read(), controller.getSession);
 // other state-changing endpoints don't share.
 router.post('/session/start', rateLimit.write({ max: 5 }), controller.startSession);
 router.post('/session/stop', rateLimit.write({ max: 5 }), controller.stopSession);
+// Option 2 Increment D — same tightened class as start/stop, same
+// reasoning: legitimate use is a human confirming once before a Start,
+// never a rapid-fire loop.
+router.post('/session/confirm-live', rateLimit.write({ max: 5 }), controller.confirmLive);
 router.get('/positions', rateLimit.read(), controller.getPositions);
 router.get('/orders', rateLimit.read(), controller.getOrders);
 router.get('/history', rateLimit.read(), controller.getHistory);

@@ -12,6 +12,7 @@ import {
   strategyModeTone,
 } from '../../components/ui/StatusPill';
 import { TradingTables } from './TradingTables';
+import { ConfirmLiveTradingModal } from './ConfirmLiveTradingModal';
 
 export function TradingPage() {
   const {
@@ -22,10 +23,12 @@ export function TradingPage() {
     actionPending,
     start,
     stop,
+    confirmLive,
     reload,
     applySessionPatch,
   } = useTradingSession();
   const [confirmAction, setConfirmAction] = useState<'start' | 'stop' | null>(null);
+  const [confirmLiveOpen, setConfirmLiveOpen] = useState(false);
   const [tradeRefreshKey, setTradeRefreshKey] = useState(0);
   const { connectionState } = useBotEventsContext();
   const hasConnectedBeforeRef = useRef(false);
@@ -113,6 +116,31 @@ export function TradingPage() {
     );
   }
 
+  function onStartClick() {
+    // Option 2 Layer 2: if real trading is available and not yet
+    // confirmed (or the prior confirmation has expired), the
+    // Confirm Live modal must come first — the whole point of Layer 2
+    // is a real person physically typing the phrase before any Start
+    // that could resolve to real mode.
+    if (
+      session?.real_trading_available &&
+      !session.live_trading_confirmed_at
+    ) {
+      setConfirmLiveOpen(true);
+      return;
+    }
+    setConfirmAction('start');
+  }
+
+  async function onConfirmLive(phrase: string) {
+    await confirmLive(phrase);
+    setConfirmLiveOpen(false);
+    // After a successful Layer 2 confirm, still show the normal Start
+    // confirmation — confirming live intent is not the same act as
+    // starting the bot.
+    setConfirmAction('start');
+  }
+
   async function onConfirm() {
     if (confirmAction === 'start') await start();
     if (confirmAction === 'stop') await stop();
@@ -120,6 +148,7 @@ export function TradingPage() {
   }
 
   const isRunning = session?.status === 'running';
+  const liveConfirmed = Boolean(session?.live_trading_confirmed_at);
 
   return (
     <div className="flex flex-col gap-6">
@@ -130,7 +159,7 @@ export function TradingPage() {
             Stop Trading
           </Button>
         ) : (
-          <Button onClick={() => setConfirmAction('start')}>Start Trading</Button>
+          <Button onClick={onStartClick}>Start Trading</Button>
         )}
       </header>
 
@@ -148,6 +177,12 @@ export function TradingPage() {
               label={session.active_strategy_mode}
               tone={strategyModeTone(session.active_strategy_mode)}
             />
+            {session.real_trading_available ? (
+              <StatusPill
+                label={liveConfirmed ? 'Live confirmed' : 'Live available'}
+                tone={liveConfirmed ? 'danger' : 'warning'}
+              />
+            ) : null}
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4 border-t border-border-subtle pt-6 md:grid-cols-4">
@@ -191,19 +226,35 @@ export function TradingPage() {
         title={confirmAction === 'start' ? 'Start Trading' : 'Stop Trading'}
         confirmLabel={confirmAction === 'start' ? 'Start Trading' : 'Stop Trading'}
         confirmVariant={confirmAction === 'start' ? 'primary' : 'destructive'}
-        confirming={actionPending !== null}
+        confirming={actionPending === 'start' || actionPending === 'stop'}
         onClose={() => setConfirmAction(null)}
         onConfirm={() => void onConfirm()}
       >
         {confirmAction === 'start' ? (
           <p>
-            This starts the automated trading bot on your linked broker account.
-            New trades may be placed according to the active strategy.
+            {liveConfirmed
+              ? 'Live trading is confirmed for this session. Starting the bot may place real orders against your MT5 account.'
+              : 'This starts the automated trading bot on your linked broker account. New trades may be placed according to the active strategy.'}
           </p>
         ) : (
-          <p>This stops the bot from placing new trades. Open positions stay open.</p>
+          <p>
+            This stops the bot from placing new trades. Open positions stay open.
+            {liveConfirmed
+              ? ' Live-trading confirmation will be cleared and must be retyped before the next real-mode Start.'
+              : ''}
+          </p>
         )}
       </Modal>
+
+      {session ? (
+        <ConfirmLiveTradingModal
+          open={confirmLiveOpen}
+          session={session}
+          confirming={actionPending === 'confirm-live'}
+          onClose={() => setConfirmLiveOpen(false)}
+          onConfirm={onConfirmLive}
+        />
+      ) : null}
     </div>
   );
 }

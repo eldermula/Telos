@@ -160,6 +160,7 @@ Read-only server-side composition of Broker Connections + Trading + Portfolio + 
 |---|---|---|
 | POST | `/trading/session/start` | Start automated trading for a given connection's bot instance |
 | POST | `/trading/session/stop` | Stop automated trading |
+| POST | `/trading/session/confirm-live` | Layer 2 opt-in for real order placement (Option 2) |
 | GET | `/trading/session` | Current bot status + tier + strategy mode |
 | GET | `/trading/positions` | Open positions (`trades` where `status = open`) |
 | GET | `/trading/orders` | Pending orders |
@@ -177,11 +178,18 @@ Read-only server-side composition of Broker Connections + Trading + Portfolio + 
   "active_trading_balance": 0.00,
   "peak_equity": 0.00,
   "bootstrap_phase": true,
-  "bootstrap_risk_ceiling_pct": 0.70
+  "bootstrap_risk_ceiling_pct": 0.70,
+  "account_type": "demo | contest | real",
+  "real_trading_available": false,
+  "live_trading_confirmed_at": null
 }
 ```
 
 **`bootstrap_phase` / `bootstrap_risk_ceiling_pct` — added during Frontend Increment 5.6.** `current_tier` stays `0`/undefined-in-effect for the entire sub-$50 bootstrap phase (`08_Bot_Architecture.md` Section 3a) — displaying "Tier 0" during bootstrap would misreport it as the real Tier 0 of the standard matrix. `bootstrap_phase = active_trading_balance < 50`; `bootstrap_risk_ceiling_pct = bootstrapRiskPct(active_trading_balance)` (the same tested pure function `bot/apirs/src/tierMatrix.js` uses for real position sizing) when in bootstrap phase, else `null`. Computed server-side in `bot-status.cache.js` — the Frontend does not re-implement the Section 3a formula.
+
+**`account_type` / `real_trading_available` / `live_trading_confirmed_at` — added during Option 2 Increment D.** `account_type` is joined from `broker_connections` (system-detected, never user-supplied). `real_trading_available = REAL_TRADING_ENABLED && account_type === 'real'` — tells the Frontend whether to offer the Confirm Live action. `live_trading_confirmed_at` is the Layer 2 opt-in timestamp, reported as `null` when never confirmed *or* past the 15-minute TTL (lazy expiry via `isConfirmationActive`); cleared to `NULL` on every Stop, including a no-op Stop while already stopped.
+
+**`POST /trading/session/confirm-live`** — Layer 2 of Option 2's gating design. Body: `{ "confirmationPhrase": "I CONFIRM LIVE TRADING WITH REAL MONEY" }` (exact match, case-sensitive, not a secret — the phrase is shown verbatim in the UI). Preconditions, checked in order: instance must be `stopped` (`409 INSTANCE_MUST_BE_STOPPED`), linked `account_type` must be `real` (`409 NOT_A_REAL_ACCOUNT`), phrase must match (`400 CONFIRMATION_PHRASE_MISMATCH`). Success sets `live_trading_confirmed_at = now()` (idempotent — reconfirming refreshes the timestamp) and returns the same session shape as `GET /trading/session`. Confirmation expires after 15 minutes if Start hasn't happened, and is cleared on every Stop.
 
 `GET /trading/positions` / `/orders` / `/history` response items — matches `trades` columns directly:
 ```json

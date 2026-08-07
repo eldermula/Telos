@@ -31,10 +31,28 @@ function mapBotInstance(row) {
     active_trading_balance: toNumber(row.active_trading_balance),
     peak_equity: toNumber(row.peak_equity),
     current_tier: row.current_tier,
+    // Option 2 — read live off broker_connections via a join/subquery in
+    // every query below, never cached on bot_instances itself: this is
+    // the same trusted, revalidate-on-credential-update column Increment
+    // C's resolver and D's confirm-live precondition both key off.
+    account_type: row.account_type,
+    // Layer 2 opt-in (Option 2). Raw column value — callers that care
+    // about the 15-minute TTL (bot-status.cache.js, trading-engine.js)
+    // apply live-trading-confirmation.js's isConfirmationActive() on top
+    // of this; this repository stays a plain data-access layer and
+    // doesn't itself decide what's "still valid".
+    live_trading_confirmed_at: row.live_trading_confirmed_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
 }
+
+const SELECT_COLUMNS = `
+  bi.id, bi.user_id, bi.broker_connection_id, bi.status, bi.active_strategy_mode,
+  bi.initial_balance, bi.active_trading_balance, bi.peak_equity, bi.current_tier,
+  bc.account_type, bi.live_trading_confirmed_at,
+  bi.created_at, bi.updated_at
+`;
 
 async function findBrokerConnectionForUser(userId) {
   const result = await pool.query(
@@ -46,11 +64,10 @@ async function findBrokerConnectionForUser(userId) {
 
 async function findByBrokerConnectionId(brokerConnectionId) {
   const result = await pool.query(
-    `SELECT id, user_id, broker_connection_id, status, active_strategy_mode,
-            initial_balance, active_trading_balance, peak_equity, current_tier,
-            created_at, updated_at
-     FROM bot_instances
-     WHERE broker_connection_id = $1`,
+    `SELECT ${SELECT_COLUMNS}
+     FROM bot_instances bi
+     JOIN broker_connections bc ON bc.id = bi.broker_connection_id
+     WHERE bi.broker_connection_id = $1`,
     [brokerConnectionId]
   );
   return result.rows[0] ? mapBotInstance(result.rows[0]) : null;
@@ -58,11 +75,10 @@ async function findByBrokerConnectionId(brokerConnectionId) {
 
 async function findByUserId(userId) {
   const result = await pool.query(
-    `SELECT id, user_id, broker_connection_id, status, active_strategy_mode,
-            initial_balance, active_trading_balance, peak_equity, current_tier,
-            created_at, updated_at
-     FROM bot_instances
-     WHERE user_id = $1
+    `SELECT ${SELECT_COLUMNS}
+     FROM bot_instances bi
+     JOIN broker_connections bc ON bc.id = bi.broker_connection_id
+     WHERE bi.user_id = $1
      LIMIT 1`,
     [userId]
   );
@@ -71,11 +87,10 @@ async function findByUserId(userId) {
 
 async function findById(botInstanceId) {
   const result = await pool.query(
-    `SELECT id, user_id, broker_connection_id, status, active_strategy_mode,
-            initial_balance, active_trading_balance, peak_equity, current_tier,
-            created_at, updated_at
-     FROM bot_instances
-     WHERE id = $1`,
+    `SELECT ${SELECT_COLUMNS}
+     FROM bot_instances bi
+     JOIN broker_connections bc ON bc.id = bi.broker_connection_id
+     WHERE bi.id = $1`,
     [botInstanceId]
   );
   return result.rows[0] ? mapBotInstance(result.rows[0]) : null;
@@ -107,6 +122,8 @@ async function ensureForUser(userId) {
      VALUES ($1, $2, 'stopped', 'STRATEGY_A', $3, $3, $3, 0)
      RETURNING id, user_id, broker_connection_id, status, active_strategy_mode,
                initial_balance, active_trading_balance, peak_equity, current_tier,
+               (SELECT account_type FROM broker_connections WHERE id = bot_instances.broker_connection_id) AS account_type,
+               live_trading_confirmed_at,
                created_at, updated_at`,
     [userId, connection.id, INITIAL_BALANCE]
   );
@@ -121,6 +138,12 @@ async function updateStatusFields(botInstanceId, fields) {
     'active_trading_balance',
     'peak_equity',
     'current_tier',
+    // Option 2 Layer 2 — set only by the dedicated confirm-live endpoint
+    // (never by Start), cleared to null on every Stop. Listed here, not
+    // given its own update function, for the same reason status/tier
+    // share this one: every write to bot_instances goes through a single
+    // allowlisted path.
+    'live_trading_confirmed_at',
   ];
   const sets = [];
   const values = [];
@@ -147,6 +170,8 @@ async function updateStatusFields(botInstanceId, fields) {
      WHERE id = $${i}
      RETURNING id, user_id, broker_connection_id, status, active_strategy_mode,
                initial_balance, active_trading_balance, peak_equity, current_tier,
+               (SELECT account_type FROM broker_connections WHERE id = bot_instances.broker_connection_id) AS account_type,
+               live_trading_confirmed_at,
                created_at, updated_at`,
     values
   );

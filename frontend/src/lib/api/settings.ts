@@ -12,6 +12,7 @@ export type NotificationPreferences = {
   connection_error: boolean;
   trading_error: boolean;
   strategy_switch: boolean;
+  live_trading_confirmed: boolean;
 };
 
 export type NotificationPreferencesResponse = {

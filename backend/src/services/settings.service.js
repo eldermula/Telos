@@ -23,6 +23,10 @@ const DEFAULT_NOTIFICATION_PREFERENCES = Object.freeze({
   connection_error: true,
   trading_error: true,
   strategy_switch: true,
+  // Option 2 Increment D — Layer 2 confirm-live. Defaults on: this is a
+  // real-money safety event, not routine noise, so it shouldn't require
+  // an opt-in the user might never think to flip.
+  live_trading_confirmed: true,
 });
 
 const PREFERENCE_KEYS = Object.keys(DEFAULT_NOTIFICATION_PREFERENCES);

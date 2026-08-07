@@ -1,5 +1,7 @@
 'use strict';
 
+const { isConfirmationActive } = require('./live-trading-confirmation');
+
 /**
  * Option 2 (real order placement) — Layer 3 of the gating design
  * (CHANGELOG.md): resolves whether a bot instance's *next* trade
@@ -12,11 +14,13 @@
  *   - realTradingEnabled === true   (Layer 1 — the deploy-level kill switch)
  *   - accountType === 'real'        (live-read from broker_connections;
  *                                     'demo'/'contest'/anything else is not real)
- *   - liveTradingConfirmedAt is set (Layer 2 — Increment D's dedicated
- *                                     opt-in; presence-only check here,
- *                                     since D itself clears this on every
- *                                     Stop, so staleness is handled at
- *                                     the source, not re-derived here)
+ *   - liveTradingConfirmedAt is an  (Layer 2 — Increment D's dedicated
+ *     *active* confirmation           opt-in; checked through
+ *                                     isConfirmationActive so both the
+ *                                     Stop-side clear AND the 15-minute
+ *                                     TTL are honored — a stale-but-
+ *                                     uncleared timestamp must never
+ *                                     resolve to 'real')
  *
  * Any missing, null, or wrongly-typed input resolves to 'paper' —
  * deliberately fails closed rather than throwing, since malformed
@@ -31,14 +35,11 @@ function resolveExecutionMode({ realTradingEnabled, accountType, liveTradingConf
   if (accountType !== 'real') {
     return 'paper';
   }
-  // General falsy check, not just null/undefined: a real confirmation
-  // timestamp (Date object or non-empty ISO string, as Postgres/pg
-  // would actually hand back) is always truthy, so this costs nothing
-  // against the real shape while also failing closed on any other
-  // malformed value (0, '', false, NaN), not just the two specific
-  // "absent" values — consistent with the rest of this function's
-  // "ambiguous input never becomes an opportunity to resolve real" rule.
-  if (!liveTradingConfirmedAt) {
+  // isConfirmationActive already fails closed on falsy / unparseable /
+  // future / past-TTL values — using it here rather than a bare
+  // truthiness check is what makes D's 15-minute TTL actually gate
+  // real-mode resolution, not just the session-shape display.
+  if (!isConfirmationActive(liveTradingConfirmedAt)) {
     return 'paper';
   }
   return 'real';
