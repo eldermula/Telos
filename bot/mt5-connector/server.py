@@ -279,6 +279,7 @@ def place_order(payload: dict) -> tuple[int, dict]:
     symbol = str(payload.get("symbol") or "").strip()
     direction = str(payload.get("direction") or "").strip().upper()
     volume_raw = payload.get("volume")
+    expected_account_type = str(payload.get("expected_account_type") or "").strip().lower()
 
     if not symbol:
         return 400, {"ok": False, "message": "symbol is required"}
@@ -290,12 +291,45 @@ def place_order(payload: dict) -> tuple[int, dict]:
         return 400, {"ok": False, "message": "volume must be a number"}
     if volume <= 0:
         return 400, {"ok": False, "message": "volume must be positive"}
+    # Layer 0 of Option 2's gating design (CHANGELOG.md) — required, not
+    # optional: an omittable check isn't a real safety layer. Every
+    # caller, including the pre-existing 4.6a manual path, must state
+    # which account type it believes it's trading against, verified below
+    # against what's actually attached, before order_send is ever called.
+    if expected_account_type not in ("demo", "contest", "real"):
+        return 400, {
+            "ok": False,
+            "message": "expected_account_type is required and must be one of demo/contest/real",
+        }
 
     if not mt5.initialize():
         err = mt5.last_error()
         return 422, {"ok": False, "message": f"MT5 initialize failed: {err}"}
 
     try:
+        account = mt5.account_info()
+        if account is None:
+            err = mt5.last_error()
+            return 422, {"ok": False, "message": f"MT5 account_info unavailable: {err}"}
+        actual_account_type = ACCOUNT_TRADE_MODES.get(account.trade_mode)
+        if actual_account_type is None:
+            # Same fail-closed treatment as validate()'s equivalent branch
+            # — an unrecognized trade_mode is not something to guess past.
+            return 422, {
+                "ok": False,
+                "message": f"Unrecognized MT5 account trade_mode: {account.trade_mode}",
+            }
+        if actual_account_type != expected_account_type:
+            return 422, {
+                "ok": False,
+                "message": (
+                    f"Account type mismatch: caller expected '{expected_account_type}' but the "
+                    f"attached terminal is '{actual_account_type}' — refusing to place order"
+                ),
+                "expected_account_type": expected_account_type,
+                "actual_account_type": actual_account_type,
+            }
+
         if not mt5.symbol_select(symbol, True):
             return 422, {"ok": False, "message": f"Unable to select symbol {symbol}"}
 
@@ -369,11 +403,43 @@ def close_order(payload: dict) -> tuple[int, dict]:
     except (TypeError, ValueError):
         return 400, {"ok": False, "message": "ticket must be an integer position id"}
 
+    # Layer 0 — same required check as place_order, and for the same
+    # reason: closing a real position is just as sensitive as opening
+    # one, arguably more so (a bug here closes the wrong account's
+    # position), so this gets no exemption either.
+    expected_account_type = str(payload.get("expected_account_type") or "").strip().lower()
+    if expected_account_type not in ("demo", "contest", "real"):
+        return 400, {
+            "ok": False,
+            "message": "expected_account_type is required and must be one of demo/contest/real",
+        }
+
     if not mt5.initialize():
         err = mt5.last_error()
         return 422, {"ok": False, "message": f"MT5 initialize failed: {err}"}
 
     try:
+        account = mt5.account_info()
+        if account is None:
+            err = mt5.last_error()
+            return 422, {"ok": False, "message": f"MT5 account_info unavailable: {err}"}
+        actual_account_type = ACCOUNT_TRADE_MODES.get(account.trade_mode)
+        if actual_account_type is None:
+            return 422, {
+                "ok": False,
+                "message": f"Unrecognized MT5 account trade_mode: {account.trade_mode}",
+            }
+        if actual_account_type != expected_account_type:
+            return 422, {
+                "ok": False,
+                "message": (
+                    f"Account type mismatch: caller expected '{expected_account_type}' but the "
+                    f"attached terminal is '{actual_account_type}' — refusing to close order"
+                ),
+                "expected_account_type": expected_account_type,
+                "actual_account_type": actual_account_type,
+            }
+
         positions = mt5.positions_get(ticket=ticket)
         if not positions:
             return 404, {"ok": False, "message": f"No open position with ticket {ticket}"}
@@ -424,6 +490,96 @@ def close_order(payload: dict) -> tuple[int, dict]:
         mt5.shutdown()
 
 
+# Option 2 Increment B — real balance/equity read, needed both by
+# real-mode position sizing (percentage risk only stays coherent
+# against the real account balance, not the internal paper ledger) and
+# by syncing bot_instances.active_trading_balance/peak_equity for
+# real-mode instances (broker as source of truth, per CHANGELOG.md).
+# Read-only, no expected_account_type gating needed here — nothing is
+# risked by reading it, unlike place_order/close_order.
+
+
+def get_account_info() -> tuple[int, dict]:
+    if mt5 is None:
+        return 500, {"ok": False, "message": "MetaTrader5 package is not installed."}
+
+    if not mt5.initialize():
+        err = mt5.last_error()
+        return 422, {"ok": False, "message": f"MT5 initialize failed: {err}"}
+
+    try:
+        info = mt5.account_info()
+        if info is None:
+            err = mt5.last_error()
+            return 422, {"ok": False, "message": f"MT5 account_info unavailable: {err}"}
+
+        account_type = ACCOUNT_TRADE_MODES.get(info.trade_mode)
+        if account_type is None:
+            return 422, {
+                "ok": False,
+                "message": f"Unrecognized MT5 account trade_mode: {info.trade_mode}",
+            }
+
+        return 200, {
+            "ok": True,
+            "login": int(info.login),
+            "account_type": account_type,
+            "balance": float(info.balance),
+            "equity": float(info.equity),
+            "currency": getattr(info, "currency", None),
+        }
+    finally:
+        mt5.shutdown()
+
+
+# Option 2 Increment B — close-time reconciliation. Once a ticket
+# disappears from positions_get (Increment E's real-mode monitor sees
+# this as "the broker closed it"), positions_get alone can no longer
+# tell us the final price/pnl — that lives in history_deals_get instead.
+# Filters to the DEAL_ENTRY_OUT (closing) deal specifically; a position
+# can have multiple deals (partial closes, the opening deal itself), and
+# only the closing deal's price/profit is the answer this endpoint
+# exists to give. If more than one closing deal exists (partial closes),
+# the chronologically last one is treated as the final resolution.
+
+
+def get_order_history(ticket_raw: str | None) -> tuple[int, dict]:
+    if mt5 is None:
+        return 500, {"ok": False, "message": "MetaTrader5 package is not installed."}
+    try:
+        ticket = int(ticket_raw)
+    except (TypeError, ValueError):
+        return 400, {"ok": False, "message": "ticket query param must be an integer"}
+
+    if not mt5.initialize():
+        err = mt5.last_error()
+        return 422, {"ok": False, "message": f"MT5 initialize failed: {err}"}
+
+    try:
+        deals = mt5.history_deals_get(position=ticket)
+        if deals is None or len(deals) == 0:
+            return 404, {"ok": False, "message": f"No historical deals found for ticket {ticket}"}
+
+        closing_deals = [d for d in deals if d.entry == mt5.DEAL_ENTRY_OUT]
+        if not closing_deals:
+            return 404, {
+                "ok": False,
+                "message": f"No closing deal found for ticket {ticket} (position may still be open)",
+            }
+        deal = sorted(closing_deals, key=lambda d: d.time)[-1]
+
+        return 200, {
+            "ok": True,
+            "ticket": ticket,
+            "close_price": deal.price,
+            "profit": deal.profit,
+            "close_time": int(deal.time),
+            "volume": deal.volume,
+        }
+    finally:
+        mt5.shutdown()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         # Avoid logging request bodies (may contain broker passwords).
@@ -460,6 +616,16 @@ class Handler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             symbol = (qs.get("symbol") or [None])[0]
             status, body = list_positions(symbol)
+            self._send(status, body)
+            return
+        if parsed.path == "/account-info":
+            status, body = get_account_info()
+            self._send(status, body)
+            return
+        if parsed.path == "/order/history":
+            qs = parse_qs(parsed.query)
+            ticket = (qs.get("ticket") or [None])[0]
+            status, body = get_order_history(ticket)
             self._send(status, body)
             return
         self._send(404, {"ok": False, "message": "Not found"})

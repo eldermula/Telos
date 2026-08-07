@@ -108,7 +108,7 @@ Only start this once Phase 3's deterministic core is proven — this is where th
 Not "Phase 9" — deliberately a separate section, since live rollout isn't reachable until this is fully built and verified. Full design (automatic-loop wiring, position-monitoring rework for broker-side SL/TP, layered real-vs-demo gating) reviewed and approved before any code, same standard as every Phase 6 increment.
 
 - ~~Schema for execution mode / broker ticket / live-trading opt-in~~ → **A, done.** `trades.execution_mode`, `trades.broker_ticket` (+ per-instance-scoped partial unique index), `bot_instances.live_trading_confirmed_at`. Purely additive — verified zero behavior change.
-- Connector hardening (Layer 0 account/type verification) + new capabilities (real equity read, close-time deal history lookup) — **B, next.**
+- Connector hardening (Layer 0 account/type verification) + new capabilities (real equity read, close-time deal history lookup) — **B, code complete, rejection path verified; live success-path round-trip pending market reopen (weekend closure) before proceeding to C.**
 - `executionMode` resolver (env kill switch + live account-type read + confirmation timestamp, fails closed) — **C.**
 - Live-trading confirmation endpoint (Layer 2 opt-in, re-required after every Stop) — **D.**
 - `BotRuntime` real-mode lifecycle (open + monitor + close reconciliation, the actual fork) — **E**, highest scrutiny of all five, verified end-to-end against the demo account before any real-money exercise.

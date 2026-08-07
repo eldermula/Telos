@@ -118,27 +118,82 @@ async function getPositions(symbol) {
   return body.positions;
 }
 
-async function placeOrder({ symbol, direction, volume, sl, tp }) {
+/**
+ * Layer 0 of Option 2's gating design (CHANGELOG.md) — required, not
+ * optional. Enforced client-side too, not just left to the connector's
+ * own 422: a caller that forgot to pass this should never even reach
+ * the network, let alone the terminal. `expectedAccountType` is
+ * verified by the connector against the currently-attached terminal's
+ * real trade_mode before any order_send — this client only guards
+ * against the "forgot to pass it at all" case.
+ */
+function assertExpectedAccountType(expectedAccountType) {
+  if (!['demo', 'contest', 'real'].includes(expectedAccountType)) {
+    throw new AppError(
+      400,
+      'MT5_EXPECTED_ACCOUNT_TYPE_REQUIRED',
+      "expectedAccountType is required and must be one of 'demo'/'contest'/'real'"
+    );
+  }
+}
+
+async function placeOrder({ symbol, direction, volume, sl, tp, expectedAccountType }) {
+  assertExpectedAccountType(expectedAccountType);
   const { ok, body } = await connectorRequest('/order/place', {
     method: 'POST',
-    body: { symbol, direction, volume, sl, tp },
+    body: { symbol, direction, volume, sl, tp, expected_account_type: expectedAccountType },
   });
   if (!ok || !body.ok) {
     throw new AppError(422, 'MT5_ORDER_PLACE_FAILED', body.message || 'Failed to place order', {
       retcode: body.retcode,
+      expected_account_type: body.expected_account_type,
+      actual_account_type: body.actual_account_type,
     });
   }
   return body;
 }
 
-async function closeOrder(ticket) {
+async function closeOrder(ticket, { expectedAccountType } = {}) {
+  assertExpectedAccountType(expectedAccountType);
   const { ok, body } = await connectorRequest('/order/close', {
     method: 'POST',
-    body: { ticket },
+    body: { ticket, expected_account_type: expectedAccountType },
   });
   if (!ok || !body.ok) {
     throw new AppError(422, 'MT5_ORDER_CLOSE_FAILED', body.message || 'Failed to close order', {
       retcode: body.retcode,
+      expected_account_type: body.expected_account_type,
+      actual_account_type: body.actual_account_type,
+    });
+  }
+  return body;
+}
+
+/**
+ * Option 2 Increment B — real balance/equity read. Needed by real-mode
+ * sizing (percentage risk only stays coherent against the real account
+ * balance) and by syncing bot_instances.active_trading_balance/
+ * peak_equity for real-mode instances, broker as source of truth.
+ */
+async function getAccountInfo() {
+  const { ok, body } = await connectorRequest('/account-info');
+  if (!ok || !body.ok) {
+    throw new AppError(422, 'MT5_ACCOUNT_INFO_FAILED', body.message || 'Failed to fetch account info');
+  }
+  return body;
+}
+
+/**
+ * Option 2 Increment B — close-time reconciliation. Once a ticket is
+ * no longer in getPositions(), this is how the real-mode monitor learns
+ * the actual close price/pnl the broker recorded (positions_get alone
+ * can't answer that once the position is gone).
+ */
+async function getOrderHistory(ticket) {
+  const { ok, body } = await connectorRequest(`/order/history?ticket=${encodeURIComponent(ticket)}`);
+  if (!ok || !body.ok) {
+    throw new AppError(422, 'MT5_ORDER_HISTORY_FAILED', body.message || 'Failed to fetch order history', {
+      status: !ok ? undefined : 404,
     });
   }
   return body;
@@ -151,4 +206,6 @@ module.exports = {
   getPositions,
   placeOrder,
   closeOrder,
+  getAccountInfo,
+  getOrderHistory,
 };
