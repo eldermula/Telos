@@ -72,7 +72,7 @@ Consistent with the project's standing cost priority:
 
 Given the current scale (5 initial users, self-hosted), a lightweight plan beats an elaborate one that won't actually get maintained:
 
-- **Bot going offline or erroring** — already surfaces via `connection.error` WebSocket events and the Notifications module (`FR-NOTIF-2`); this doubles as the first layer of incident detection.
+- **Bot going offline or erroring** — already surfaces via `connection.error` WebSocket events and the Notifications module (`FR-NOTIF-2`); this doubles as the first layer of incident detection. **External uptime monitoring (Phase 8.4):** point a free HTTP monitor (UptimeRobot recommended — no credit card) at `GET /health` through the Cloudflare Tunnel hostname. Setup steps in `docs/OPS.md` §2. Deeper Postgres/Redis checks stay on `GET /api/v1/admin/system-health` (admin-gated) and are not what the external monitor hits.
 - **Suspected credential compromise** — the response is straightforward given the non-custodial model: disconnect the affected `broker_connection` (`DELETE /broker-connections/:id`), which removes Telos's stored access, and the user separately rotates credentials directly with their broker. Telos never having custody of funds significantly limits the blast radius of this scenario compared to a custodial platform.
 - **Formal incident response runbook** — not built out yet; proposed as something to revisit once past the initial 5-user phase (`04_System_Architecture.md` Section 8), rather than over-building process for the current scale.
 

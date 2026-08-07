@@ -255,6 +255,8 @@
 
 - **8.3 (code complete)** Dependabot + `npm audit` CI (`09_Security.md` §9). `.github/dependabot.yml` — weekly npm update PRs for `backend/` and `frontend/` plus GitHub Actions itself. `.github/workflows/npm-audit.yml` — `npm audit --audit-level=high` on every push/PR to `main` for the same two packages. `bot/*` packages are dependency-free and deliberately omitted. Takes effect on the next push to GitHub.
 
+- **8.4 (code complete)** Uptime monitoring for the self-hosted Backend (`09_Security.md` §10). External free-tool setup (UptimeRobot recommended) documented in `docs/OPS.md` §2 — points at existing `GET /health`, not the admin-gated deep check. Smoke: `node backend/scripts/smoke-health-84.js` → `HEALTH_84_PASS`. Enrolling the monitor against the live Cloudflare Tunnel hostname is a one-time manual step (needs the hostname).
+
 ## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
 
 **2026-08-06**
