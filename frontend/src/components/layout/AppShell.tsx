@@ -8,6 +8,7 @@ import {
   LogOut,
   BarChart3,
   FileText,
+  Shield,
   type LucideIcon,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
@@ -22,6 +23,7 @@ type NavItem = {
   icon: LucideIcon;
   end?: boolean;
   mobilePrimary?: boolean;
+  adminOnly?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -33,11 +35,13 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/reports', label: 'Reports', icon: FileText },
   { to: '/notifications', label: 'Notifications', icon: Bell, mobilePrimary: true },
   { to: '/settings', label: 'Settings', icon: Settings, mobilePrimary: true },
+  { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ];
 
 export function AppShell() {
   const { user, logout } = useAuth();
-  const mobileItems = NAV_ITEMS.filter((item) => item.mobilePrimary);
+  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === 'admin');
+  const mobileItems = visibleItems.filter((item) => item.mobilePrimary);
 
   return (
     <div className="min-h-screen bg-bg-canvas text-text-primary md:flex">
@@ -49,7 +53,7 @@ export function AppShell() {
           </span>
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Primary">
-          {NAV_ITEMS.map((item) => (
+          {visibleItems.map((item) => (
             <ShellNavLink key={item.to} item={item} />
           ))}
         </nav>
@@ -96,6 +100,7 @@ export function AppShell() {
 
 function ShellNavLink({ item }: { item: NavItem }) {
   const Icon = item.icon;
+  const adminAccent = Boolean(item.adminOnly);
   return (
     <NavLink
       to={item.to}
@@ -104,9 +109,14 @@ function ShellNavLink({ item }: { item: NavItem }) {
         cn(
           'flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[0.9375rem] transition-colors duration-150',
           isActive
-            ? 'border-l-2 border-accent-gold bg-glass-fill text-text-primary'
+            ? adminAccent
+              ? 'border-l-2 bg-glass-fill text-text-primary'
+              : 'border-l-2 border-accent-gold bg-glass-fill text-text-primary'
             : 'border-l-2 border-transparent text-text-secondary hover:text-text-primary',
         )
+      }
+      style={({ isActive }) =>
+        isActive && adminAccent ? { borderLeftColor: '#5B7A9C' } : undefined
       }
     >
       <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.5} />

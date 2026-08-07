@@ -205,6 +205,9 @@
   - **FLAGGED FOR USER REVIEW:** PDF format — `POST /reports` with `format=pdf` returns `422 PDF_NOT_IMPLEMENTED`. Shipping PDF needs a new dependency (e.g. PDF kit) which is a product/security call; CSV path is fully working.
   - Smoke: `node backend/scripts/smoke-reports-75.js` → `REPORTS_75_PASS`.
 
+- **7.6 (code complete, VERIFIED)** Admin — `06` §13 / `FR-ADMIN-1`/`FR-ADMIN-2`. JWT `role: admin` gate (`403`, never filtered). Routes: users list/detail (no credentials), system-health (Postgres+Redis), risk-tiers GET/PATCH, candidate-strategies GET/PATCH. Every admin write → `admin_audit_log`. Frontend `/admin` with slate-blue accent (`#5B7A9C` per `07`), nav visible only to admins.
+  - Smoke: `node backend/scripts/smoke-admin-76.js` → `ADMIN_76_PASS`.
+
 ## Phase 4 — Trading Engine Integration & Real-Time Updates (complete through 4.6a)
 
 **2026-08-06**
