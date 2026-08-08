@@ -190,11 +190,18 @@ async function getAccountInfo() {
  * can't answer that once the position is gone).
  */
 async function getOrderHistory(ticket) {
-  const { ok, body } = await connectorRequest(`/order/history?ticket=${encodeURIComponent(ticket)}`);
+  const { status, ok, body } = await connectorRequest(
+    `/order/history?ticket=${encodeURIComponent(ticket)}`
+  );
   if (!ok || !body.ok) {
-    throw new AppError(422, 'MT5_ORDER_HISTORY_FAILED', body.message || 'Failed to fetch order history', {
-      status: !ok ? undefined : 404,
-    });
+    // Preserve connector HTTP status (404 = deal not in history yet —
+    // E.6 treats that as a lag retry, not an immediate hard failure).
+    throw new AppError(
+      status || 422,
+      'MT5_ORDER_HISTORY_FAILED',
+      body.message || 'Failed to fetch order history',
+      { status }
+    );
   }
   return body;
 }

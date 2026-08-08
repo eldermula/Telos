@@ -10,9 +10,31 @@ const mt5Connector = require('../services/mt5-connector.client');
 const strategySelectionService = require('./strategy-selection.service');
 const notificationsService = require('../services/notifications.service');
 const riskTierConfigService = require('./risk-tier-config.service');
-const { REAL_TRADING_ENABLED, REAL_TRADING_ALLOW_DEMO } = require('../config/env');
-const { resolveExecutionMode } = require('./execution-mode');
+const {
+  REAL_TRADING_ENABLED,
+  REAL_TRADING_ALLOW_DEMO,
+  REAL_MAX_LOT,
+  REAL_CONNECTION_MAX_AGE_HOURS,
+} = require('../config/env');
+const {
+  resolveExecutionMode,
+  resolveExpectedAccountTypeForLayer0,
+} = require('./execution-mode');
 const { resolveTickDispatch } = require('./tick-dispatch');
+const {
+  getMatchedAccountInfoForBotInstance,
+} = require('./broker-account.service');
+const { isConnectionFresh } = require('./connection-freshness');
+const { computeRealLotSize } = require('./real-lot-sizing');
+
+/** Module 7 — flag broker place latency above this threshold (ms). */
+const REAL_ORDER_LATENCY_WARN_MS = 200;
+
+/**
+ * Option 2 E.6 — ticks to wait for deal history after a ticket vanishes
+ * from positions_get before escalating to status='error'. Approved: 3.
+ */
+const REAL_HISTORY_RETRY_TICKS = 3;
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
 const { evaluateEntry, resolveExit } = require(path.join(apirsPath, 'paperTradingHarness.js'));
@@ -51,7 +73,13 @@ function instanceToApirsState(instance, tradeHistory) {
  * Log UI can show *which* instrument/strategy Selection had picked
  * before APIRS said no, not just that something was rejected.
  */
-async function logEntryDecision(botInstanceId, tradeInput, entryResult, selection) {
+async function logEntryDecision(
+  botInstanceId,
+  tradeInput,
+  entryResult,
+  selection,
+  insertDecision = (args) => decisionLogRepository.insertDecision(args)
+) {
   const selectionSummary = {
     chosen_instrument: selection.chosen_instrument,
     strategy_name: selection.strategy_name,
@@ -59,7 +87,7 @@ async function logEntryDecision(botInstanceId, tradeInput, entryResult, selectio
   };
 
   if (!entryResult.tradeApproved) {
-    await decisionLogRepository.insertDecision({
+    await insertDecision({
       botInstanceId,
       decisionType: 'trade_rejected',
       triggeringCondition: entryResult.reason || 'trade_not_approved',
@@ -68,7 +96,7 @@ async function logEntryDecision(botInstanceId, tradeInput, entryResult, selectio
     return;
   }
 
-  await decisionLogRepository.insertDecision({
+  await insertDecision({
     botInstanceId,
     decisionType: 'trade_approved',
     triggeringCondition: `${tradeInput.direction} ${selection.chosen_instrument} opened via ${selection.strategy_name}, applied_risk=${entryResult.riskResult.appliedRisk}`,
@@ -89,8 +117,22 @@ async function logEntryDecision(botInstanceId, tradeInput, entryResult, selectio
  * opened and closed in the same tick — now split because opening and
  * resolving are separate events in time.
  */
-async function logExitDecisions(botInstanceId, userId, previousMode, trace) {
-  await decisionLogRepository.insertDecision({
+async function logExitDecisions(
+  botInstanceId,
+  userId,
+  previousMode,
+  trace,
+  hooks = {}
+) {
+  const insertDecision =
+    hooks.insertDecision || ((args) => decisionLogRepository.insertDecision(args));
+  const publish =
+    hooks.publishBotEvent || ((id, type, payload) => publishBotEvent(id, type, payload));
+  const maybeNotify =
+    hooks.maybeNotifyUser ||
+    ((uid, type, message) => notificationsService.maybeNotifyUser(uid, type, message));
+
+  await insertDecision({
     botInstanceId,
     decisionType: 'trade_closed',
     triggeringCondition: `resolved pnl=${trace.pnlAmount}`,
@@ -103,7 +145,7 @@ async function logExitDecisions(botInstanceId, userId, previousMode, trace) {
   });
 
   if (trace.riskResult?.microResult?.forcedToEmergencyFloor) {
-    await decisionLogRepository.insertDecision({
+    await insertDecision({
       botInstanceId,
       decisionType: 'micro_circuit_breaker',
       triggeringCondition: 'micro circuit breaker forced emergency floor',
@@ -113,7 +155,7 @@ async function logExitDecisions(botInstanceId, userId, previousMode, trace) {
 
   const newMode = trace.modeResult?.activeStrategyMode;
   if (newMode && newMode !== previousMode) {
-    await decisionLogRepository.insertDecision({
+    await insertDecision({
       botInstanceId,
       decisionType: 'strategy_switch',
       triggeringCondition: `${previousMode} → ${newMode}`,
@@ -124,14 +166,14 @@ async function logExitDecisions(botInstanceId, userId, previousMode, trace) {
         mode: trace.modeResult || null,
       },
     });
-    await publishBotEvent(botInstanceId, 'strategy.switched', {
+    await publish(botInstanceId, 'strategy.switched', {
       from: previousMode,
       to: newMode,
       reason: `${previousMode} → ${newMode}`,
       timestamp: new Date().toISOString(),
     });
     // FR-NOTIF-3 — preference-gated persistence; paper-mode side effect only.
-    await notificationsService.maybeNotifyUser(
+    await maybeNotify(
       userId,
       'strategy_switch',
       `Strategy switched ${previousMode} → ${newMode}.`
@@ -139,7 +181,7 @@ async function logExitDecisions(botInstanceId, userId, previousMode, trace) {
   }
 
   if (trace.macroResult && newMode && newMode !== previousMode) {
-    await decisionLogRepository.insertDecision({
+    await insertDecision({
       botInstanceId,
       decisionType: 'macro_circuit_breaker',
       triggeringCondition: `macro mode change ${previousMode} → ${newMode}`,
@@ -148,7 +190,7 @@ async function logExitDecisions(botInstanceId, userId, previousMode, trace) {
   }
 
   if (trace.profitLockResult?.profitLockTriggered) {
-    await decisionLogRepository.insertDecision({
+    await insertDecision({
       botInstanceId,
       decisionType: 'profit_lock',
       triggeringCondition: 'profit lock triggered',
@@ -175,63 +217,213 @@ class BotRuntime {
     this.tickMs = options.tickMs ?? DEFAULT_TICK_MS;
     this.autoTick = options.autoTick !== false;
     this.strategySelection = options.strategySelection || strategySelectionService;
+    // Option 2 E.5/E.6 — optional seams for mocked unit tests. Production
+    // leaves these unset and uses the real modules below.
+    this._realOpen = {
+      getMatchedAccountInfo:
+        options.getMatchedAccountInfoForBotInstance || getMatchedAccountInfoForBotInstance,
+      getSymbolInfo: options.getSymbolInfo || ((symbol) => mt5Connector.getSymbolInfo(symbol)),
+      getPositions:
+        options.getPositions || ((symbol) => mt5Connector.getPositions(symbol)),
+      getOrderHistory:
+        options.getOrderHistory || ((ticket) => mt5Connector.getOrderHistory(ticket)),
+      placeOrder: options.placeOrder || ((args) => mt5Connector.placeOrder(args)),
+      insertOpenRealTrade:
+        options.insertOpenRealTrade || ((args) => tradesRepository.insertOpenRealTrade(args)),
+      closeRealTrade:
+        options.closeRealTrade ||
+        ((tradeId, args) => tradesRepository.closeRealTrade(tradeId, args)),
+      insertDecision:
+        options.insertDecision || ((args) => decisionLogRepository.insertDecision(args)),
+      forceNotifyUser:
+        options.forceNotifyUser ||
+        ((userId, type, message) => notificationsService.forceNotifyUser(userId, type, message)),
+      maybeNotifyUser:
+        options.maybeNotifyUser ||
+        ((userId, type, message) => notificationsService.maybeNotifyUser(userId, type, message)),
+      updateStatusFields:
+        options.updateStatusFields ||
+        ((id, fields) => botInstanceRepository.updateStatusFields(id, fields)),
+      setStatus: options.setStatus || ((row) => botStatusCache.setStatus(row)),
+      publishBotEvent: options.publishBotEvent || publishBotEvent,
+      getTierRows: options.getTierRows || (() => riskTierConfigService.getTierRows()),
+      now: options.now || (() => new Date()),
+      maxLot: options.maxLot ?? REAL_MAX_LOT,
+      maxAgeHours: options.maxAgeHours ?? REAL_CONNECTION_MAX_AGE_HOURS,
+      historyRetryTicks: options.historyRetryTicks ?? REAL_HISTORY_RETRY_TICKS,
+      listOpenTradesForResume:
+        options.listOpenTradesForResume ||
+        ((botInstanceId) => tradesRepository.listOpenTradesForResume(botInstanceId)),
+      loadTradeHistoryForLearning:
+        options.loadTradeHistoryForLearning ||
+        ((botInstanceId) => tradesRepository.loadTradeHistoryForLearning(botInstanceId)),
+      findInstanceById:
+        options.findInstanceById || ((id) => botInstanceRepository.findById(id)),
+    };
     this.timer = null;
     this.running = false;
     this.state = null;
     this.openPosition = null;
     this._tickInFlight = false;
+    // Set by _haltRealOpenFailure — start() must not re-arm after a halt.
+    this._halted = false;
   }
 
   async initialize() {
-    const instance = await botInstanceRepository.findById(this.botInstanceId);
+    const deps = this._realOpen;
+    const instance = await deps.findInstanceById(this.botInstanceId);
     if (!instance) {
       throw new Error(`Bot instance ${this.botInstanceId} not found`);
     }
-    const tradeHistory = await tradesRepository.loadTradeHistoryForLearning(this.botInstanceId);
+    const tradeHistory = await deps.loadTradeHistoryForLearning(this.botInstanceId);
     this.state = instanceToApirsState(instance, tradeHistory);
 
-    // Resume a position left open across a process restart (paper mode
-    // only — no real capital at stake). The exact entryResult from the
-    // original tick isn't persisted, so this rebuilds an approximation
-    // from the trade row + current state rather than the original
-    // learning/risk snapshot. This doesn't depend on Module 4's real
-    // signals either way (it reads back already-persisted direction/
-    // prices/risk, not tradeInput) — flagged as a known simplification,
-    // accepted as permanent unless real capital is ever introduced.
-    const openTrades = await tradesRepository.listOpenTradesForResume(this.botInstanceId);
+    // Resume a position left open across a process restart. Paper:
+    // rebuild from the DB row (no broker). Real (E.7): reconcile
+    // against the broker before the first tick — ticket present →
+    // resume; absent → close-reconcile immediately.
+    const openTrades = await deps.listOpenTradesForResume(this.botInstanceId);
     if (openTrades.length > 0) {
-      const row = openTrades[0];
-      const appliedRisk = Number(row.final_applied_position_risk);
-      // Option 2 E.4 — freeze the row's execution_mode onto the
-      // in-memory position so monitoring dispatches correctly after
-      // resume. Real-mode reconcile against the broker is E.7.
-      this.openPosition = {
-        tradeRowId: row.id,
-        symbol: row.symbol,
-        direction: row.direction,
-        entryPrice: Number(row.entry_price),
-        stopPrice: Number(row.stop_price),
-        targetPrice: Number(row.target_price),
-        executionMode: row.execution_mode === 'real' ? 'real' : 'paper',
-        brokerTicket: row.broker_ticket == null ? null : Number(row.broker_ticket),
-        // Read back verbatim (006) — already fully known at open time,
-        // no reconstruction needed, same as symbol/direction above.
-        conditions: row.conditions ?? null,
-        entryResult: {
-          tradeApproved: true,
-          learningInputs: {
-            liveWinProbability: computeLiveWinProbability(tradeHistory),
-            consecutiveLosses: computeConsecutiveLosses(tradeHistory),
-          },
-          riskResult: { appliedRisk, riskSource: 'resumed_after_restart' },
-          balanceBeforeTrade: this.state.balance,
-          riskedAmount: appliedRisk * this.state.balance,
-        },
-      };
+      await this._resumeOpenTrade(openTrades[0], tradeHistory);
     }
   }
 
+  /**
+   * Rebuild in-memory openPosition from a persisted open trade row.
+   * Shared shape for paper resume and real-ticket-present resume.
+   */
+  _buildResumedOpenPosition(row, tradeHistory, { executionMode, brokerTicket, historyRetryCount }) {
+    const appliedRisk = Number(row.final_applied_position_risk);
+    return {
+      tradeRowId: row.id,
+      symbol: row.symbol,
+      direction: row.direction,
+      entryPrice: Number(row.entry_price),
+      stopPrice: Number(row.stop_price),
+      targetPrice: Number(row.target_price),
+      executionMode,
+      brokerTicket,
+      conditions: row.conditions ?? null,
+      historyRetryCount,
+      entryResult: {
+        tradeApproved: true,
+        learningInputs: {
+          liveWinProbability: computeLiveWinProbability(tradeHistory),
+          consecutiveLosses: computeConsecutiveLosses(tradeHistory),
+        },
+        riskResult: { appliedRisk, riskSource: 'resumed_after_restart' },
+        balanceBeforeTrade: this.state.balance,
+        riskedAmount: appliedRisk * this.state.balance,
+      },
+    };
+  }
+
+  async _resumeOpenTrade(row, tradeHistory) {
+    if (row.execution_mode === 'real') {
+      await this._resumeRealOpenTrade(row, tradeHistory);
+      return;
+    }
+    this.openPosition = this._buildResumedOpenPosition(row, tradeHistory, {
+      executionMode: 'paper',
+      brokerTicket: null,
+      historyRetryCount: 0,
+    });
+  }
+
+  /**
+   * Option 2 E.7 — reconcile a DB-open real trade against the broker
+   * before the first tick. Ticket still open → resume. Gone → sync
+   * history retries then close-reconcile (or halt).
+   */
+  async _resumeRealOpenTrade(row, tradeHistory) {
+    const deps = this._realOpen;
+    const brokerTicket = row.broker_ticket == null ? null : Number(row.broker_ticket);
+    if (brokerTicket == null) {
+      await this._haltRealOpenFailure('real_resume_missing_ticket', {
+        trade_id: row.id,
+        symbol: row.symbol,
+      });
+      return;
+    }
+
+    const pos = this._buildResumedOpenPosition(row, tradeHistory, {
+      executionMode: 'real',
+      brokerTicket,
+      historyRetryCount: 0,
+    });
+
+    let positions;
+    try {
+      positions = await deps.getPositions(pos.symbol);
+    } catch (err) {
+      await this._haltRealOpenFailure('real_resume_positions_unavailable', {
+        broker_ticket: brokerTicket,
+        trade_id: row.id,
+        message: err.message,
+      });
+      return;
+    }
+
+    const stillOpen = (positions || []).some(
+      (p) => Number(p.ticket) === Number(brokerTicket)
+    );
+    if (stillOpen) {
+      this.openPosition = pos;
+      return;
+    }
+
+    // Closed while we were down — reconcile before first tick.
+    const history = await this._fetchOrderHistoryWithRetries(brokerTicket, {
+      context: 'real_resume',
+      tradeId: row.id,
+    });
+    if (!history) {
+      return; // halted inside retry helper
+    }
+
+    this.openPosition = pos;
+    await this._applyRealCloseFromHistory(pos, history);
+  }
+
+  /**
+   * Sync history fetch with up to historyRetryTicks attempts.
+   * On exhaustion: halt and return null (no invented PnL).
+   */
+  async _fetchOrderHistoryWithRetries(brokerTicket, { context, tradeId }) {
+    const deps = this._realOpen;
+    const maxRetries = deps.historyRetryTicks;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+      try {
+        return await deps.getOrderHistory(brokerTicket);
+      } catch (err) {
+        lastErr = err;
+        if (attempt < maxRetries) {
+          console.warn(
+            `[bot-runtime] ${context} history lag for ticket ${brokerTicket} ` +
+              `(${attempt}/${maxRetries}): ${err.message}`
+          );
+        }
+      }
+    }
+    await this._haltRealOpenFailure('order_history_unavailable', {
+      broker_ticket: brokerTicket,
+      trade_id: tradeId,
+      retries: maxRetries,
+      max_retries: maxRetries,
+      message: lastErr ? lastErr.message : 'unknown',
+      status: lastErr
+        ? lastErr.statusCode || lastErr.status || lastErr.details?.status || null
+        : null,
+      context,
+    });
+    return null;
+  }
+
   start() {
+    // E.7 — initialize() may have halted on resume reconcile failure;
+    // do not flip running back on and start the tick loop.
+    if (this._halted) return;
     if (this.running) return;
     this.running = true;
     // Fire-and-forget — start() is sync; publish is async
@@ -317,18 +509,479 @@ class BotRuntime {
   }
 
   /**
-   * Option 2 E.5 — not implemented yet. Stub fails loud so an accidental
-   * real-mode dispatch cannot silently fall through to paper.
+   * Option 2 E.5 — real open path. Syncs live equity, sizes against it,
+   * places via the connector with Layer 0's *detected* account type
+   * (never the dispatch-mode string), persists broker_ticket, and
+   * fails loud to status='error' on place/precondition failure.
    */
   async _maybeOpenPositionReal() {
-    throw new Error('Option 2 E.5 not implemented: _maybeOpenPositionReal');
+    const deps = this._realOpen;
+    let accountInfo;
+    try {
+      accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
+    } catch (err) {
+      await this._haltRealOpenFailure('account_info_unavailable', {
+        message: err.message,
+        code: err.code || null,
+      });
+      return { state: this.state, entryResult: null, trade: null, error: true };
+    }
+
+    // Freshness before equity persist — a stale connection must not
+    // rewrite the ledger or reach placeOrder.
+    if (!isConnectionFresh(accountInfo.last_validated_at, deps.maxAgeHours, deps.now())) {
+      await this._haltRealOpenFailure('stale_broker_connection', {
+        last_validated_at: accountInfo.last_validated_at,
+        max_age_hours: deps.maxAgeHours,
+      });
+      return { state: this.state, entryResult: null, trade: null, error: true };
+    }
+
+    const equity = Number(accountInfo.equity);
+    if (!(equity > 0)) {
+      await this._haltRealOpenFailure('invalid_live_equity', {
+        equity: accountInfo.equity,
+      });
+      return { state: this.state, entryResult: null, trade: null, error: true };
+    }
+
+    this.state.balance = equity;
+    this.state.peakEquity = Math.max(Number(this.state.peakEquity) || 0, equity);
+    const synced = await deps.updateStatusFields(this.botInstanceId, {
+      active_trading_balance: this.state.balance,
+      peak_equity: this.state.peakEquity,
+    });
+    await deps.setStatus(synced);
+    await deps.publishBotEvent(this.botInstanceId, 'equity.updated', {
+      active_trading_balance: this.state.balance,
+      peak_equity: this.state.peakEquity,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Layer 0 — true detected type from the live connector read.
+    // Must NEVER be derived from resolveExecutionMode()'s 'real' dispatch.
+    const expectedAccountType = resolveExpectedAccountTypeForLayer0(
+      accountInfo.account_type
+    );
+
+    const selection = await this.strategySelection.selectTradeAcrossWatchlist();
+    if (!selection) {
+      return null;
+    }
+
+    const tradeInput = {
+      strategyConfidence: selection.strategy_confidence,
+      marketQuality: selection.newsIntelligence?.market_quality ?? 0.5,
+      trendQuality: selection.marketIntelligence.trend_quality,
+      marketVolatility: selection.marketIntelligence.market_volatility,
+      currentATR: selection.marketIntelligence.diagnostics.currentATR,
+      rollingAvgATR: selection.marketIntelligence.diagnostics.rollingAvgATR,
+      dailyDrawdownPct: STUB_DAILY_DRAWDOWN_PCT,
+      direction: selection.direction,
+    };
+
+    const tierRows = await deps.getTierRows();
+    const entryResult = evaluateEntry(this.state, tradeInput, { tierRows });
+    await logEntryDecision(
+      this.botInstanceId,
+      tradeInput,
+      entryResult,
+      selection,
+      deps.insertDecision
+    );
+
+    if (!entryResult.tradeApproved) {
+      return { state: this.state, entryResult, trade: null };
+    }
+
+    const symbol = selection.chosen_instrument;
+    let symbolInfo;
+    try {
+      symbolInfo = await deps.getSymbolInfo(symbol);
+    } catch (err) {
+      console.error('[bot-runtime] real open price fetch failed, will retry next tick:', err.message);
+      return null;
+    }
+    if (symbolInfo.bid == null || symbolInfo.ask == null) {
+      console.error(
+        '[bot-runtime] MT5 returned no live tick for',
+        symbol,
+        '- will retry next tick'
+      );
+      return null;
+    }
+
+    const direction = selection.direction;
+    const quoteEntry = direction === 'BUY' ? symbolInfo.ask : symbolInfo.bid;
+    const { stopPrice, targetPrice } = strategySelectionService.computeSelectionStopTarget(
+      selection,
+      quoteEntry
+    );
+
+    let lotSizing;
+    try {
+      lotSizing = computeRealLotSize({
+        equity,
+        appliedRisk: entryResult.riskResult.appliedRisk,
+        entryPrice: quoteEntry,
+        stopPrice,
+        symbolInfo,
+        maxLot: deps.maxLot,
+      });
+    } catch (err) {
+      await this._haltRealOpenFailure('lot_sizing_failed', {
+        message: err.message,
+        symbol,
+        equity,
+        applied_risk: entryResult.riskResult.appliedRisk,
+      });
+      return { state: this.state, entryResult, trade: null, error: true };
+    }
+
+    const conditions = {
+      ...tradeInput,
+      strategy_id: selection.strategy_id,
+      strategy_name: selection.strategy_name,
+    };
+
+    const placeStarted = Date.now();
+    let placeResult;
+    try {
+      placeResult = await deps.placeOrder({
+        symbol,
+        direction,
+        volume: lotSizing.lotSize,
+        sl: stopPrice,
+        tp: targetPrice,
+        expectedAccountType,
+      });
+    } catch (err) {
+      const latencyMs = Date.now() - placeStarted;
+      await this._haltRealOpenFailure('place_order_failed', {
+        message: err.message,
+        code: err.code || null,
+        details: err.details || null,
+        symbol,
+        direction,
+        volume: lotSizing.lotSize,
+        expected_account_type: expectedAccountType,
+        detected_account_type: accountInfo.account_type,
+        latency_ms: latencyMs,
+      });
+      return { state: this.state, entryResult, trade: null, error: true };
+    }
+
+    const latencyMs = Date.now() - placeStarted;
+    const brokerTicket = placeResult.ticket;
+    const entryPrice =
+      placeResult.price != null && Number(placeResult.price) > 0
+        ? Number(placeResult.price)
+        : quoteEntry;
+    const lotSize =
+      placeResult.volume != null && Number(placeResult.volume) > 0
+        ? Number(placeResult.volume)
+        : lotSizing.lotSize;
+
+    const tradeRow = await deps.insertOpenRealTrade({
+      botInstanceId: this.botInstanceId,
+      symbol,
+      direction,
+      entryPrice,
+      stopPrice,
+      targetPrice,
+      lotSize,
+      finalAppliedPositionRisk: entryResult.riskResult.appliedRisk,
+      brokerTicket,
+      conditions,
+    });
+
+    this.openPosition = {
+      tradeRowId: tradeRow.id,
+      symbol,
+      direction,
+      entryPrice,
+      stopPrice,
+      targetPrice,
+      executionMode: 'real',
+      brokerTicket: Number(brokerTicket),
+      conditions,
+      entryResult,
+      historyRetryCount: 0,
+    };
+
+    await deps.insertDecision({
+      botInstanceId: this.botInstanceId,
+      decisionType: 'real_order_placed',
+      triggeringCondition: `${direction} ${symbol} ticket=${brokerTicket} lots=${lotSize}`,
+      details: {
+        trade_id: tradeRow.id,
+        broker_ticket: brokerTicket,
+        symbol,
+        direction,
+        lot_size: lotSize,
+        entry_price: entryPrice,
+        stop_price: stopPrice,
+        target_price: targetPrice,
+        expected_account_type: expectedAccountType,
+        detected_account_type: accountInfo.account_type,
+        lot_sizing: lotSizing,
+        latency_ms: latencyMs,
+        latency_flagged: latencyMs > REAL_ORDER_LATENCY_WARN_MS,
+      },
+    });
+
+    if (latencyMs > REAL_ORDER_LATENCY_WARN_MS) {
+      console.warn(
+        `[bot-runtime] real placeOrder latency ${latencyMs}ms exceeds ${REAL_ORDER_LATENCY_WARN_MS}ms`,
+        { botInstanceId: this.botInstanceId, brokerTicket }
+      );
+    }
+
+    await deps.forceNotifyUser(
+      this.userId,
+      'real_order',
+      `Real order placed: ${direction} ${symbol} ticket ${brokerTicket} (${lotSize} lots).`
+    );
+
+    await deps.publishBotEvent(this.botInstanceId, 'trade.opened', tradeRow);
+
+    return { state: this.state, entryResult, trade: tradeRow };
   }
 
   /**
-   * Option 2 E.6 — not implemented yet. Stub fails loud.
+   * Halt the runtime after a real-mode open/monitor/resume hard failure.
+   * Does not go through stop()'s 'stopped' publish — status stays 'error'.
+   */
+  async _haltRealOpenFailure(reason, details) {
+    this._halted = true;
+    this.running = false;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+
+    try {
+      await this._realOpen.insertDecision({
+        botInstanceId: this.botInstanceId,
+        decisionType: 'real_order_failed',
+        triggeringCondition: reason,
+        details: details || {},
+      });
+    } catch (err) {
+      console.error('[bot-runtime] real_order_failed log failed:', err.message);
+    }
+
+    try {
+      await this._realOpen.forceNotifyUser(
+        this.userId,
+        'real_order',
+        `Real order failed (${reason}). Bot stopped in error — investigate before Start.`
+      );
+    } catch (err) {
+      console.error('[bot-runtime] real_order_failed notify failed:', err.message);
+    }
+
+    try {
+      const updated = await this._realOpen.updateStatusFields(this.botInstanceId, {
+        status: 'error',
+      });
+      await this._realOpen.setStatus(updated);
+      await this._realOpen.publishBotEvent(this.botInstanceId, 'bot.status_changed', {
+        status: 'error',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('[bot-runtime] failed to persist error status:', err.message);
+    }
+
+    runtimes.delete(this.botInstanceId);
+  }
+
+  /**
+   * Option 2 E.6 — real monitor path. Broker already holds SL/TP; this
+   * tick only *detects* close (ticket gone from positions) and
+   * reconciles via order history. No local stop/target comparison.
    */
   async _monitorOpenPositionReal() {
-    throw new Error('Option 2 E.6 not implemented: _monitorOpenPositionReal');
+    const deps = this._realOpen;
+    const pos = this.openPosition;
+    if (!pos || pos.executionMode !== 'real' || pos.brokerTicket == null) {
+      await this._haltRealOpenFailure('real_monitor_missing_position', {
+        openPosition: pos
+          ? {
+              executionMode: pos.executionMode,
+              brokerTicket: pos.brokerTicket ?? null,
+              tradeRowId: pos.tradeRowId ?? null,
+            }
+          : null,
+      });
+      return { state: this.state, trade: null, error: true };
+    }
+
+    let positions;
+    try {
+      positions = await deps.getPositions(pos.symbol);
+    } catch (err) {
+      // Transient connector blip — retry next tick, do not invent a close.
+      console.error(
+        '[bot-runtime] real monitor getPositions failed, will retry next tick:',
+        err.message
+      );
+      return null;
+    }
+
+    const stillOpen = (positions || []).some(
+      (p) => Number(p.ticket) === Number(pos.brokerTicket)
+    );
+    if (stillOpen) {
+      pos.historyRetryCount = 0;
+      return null;
+    }
+
+    // Ticket gone — broker closed (SL/TP, manual, stop-out). Reconcile.
+    let history;
+    try {
+      history = await deps.getOrderHistory(pos.brokerTicket);
+    } catch (err) {
+      const retries = (pos.historyRetryCount || 0) + 1;
+      pos.historyRetryCount = retries;
+      const maxRetries = deps.historyRetryTicks;
+      if (retries < maxRetries) {
+        console.warn(
+          `[bot-runtime] real monitor history lag for ticket ${pos.brokerTicket} ` +
+            `(${retries}/${maxRetries}): ${err.message}`
+        );
+        return null;
+      }
+      await this._haltRealOpenFailure('order_history_unavailable', {
+        broker_ticket: pos.brokerTicket,
+        trade_id: pos.tradeRowId,
+        retries,
+        max_retries: maxRetries,
+        message: err.message,
+        status: err.statusCode || err.status || err.details?.status || null,
+      });
+      return { state: this.state, trade: null, error: true };
+    }
+
+    return this._applyRealCloseFromHistory(pos, history);
+  }
+
+  /**
+   * Shared real close-reconcile (E.6 monitor + E.7 resume-absent).
+   * Broker PnL only — never invent exit/pnl.
+   */
+  async _applyRealCloseFromHistory(pos, history) {
+    const deps = this._realOpen;
+    const exitPrice = Number(history.close_price);
+    const pnlAmount = Number(history.profit);
+    if (!(exitPrice > 0) || !Number.isFinite(pnlAmount)) {
+      await this._haltRealOpenFailure('order_history_incomplete', {
+        broker_ticket: pos.brokerTicket,
+        history,
+      });
+      return { state: this.state, trade: null, error: true };
+    }
+
+    const wasWin = pnlAmount > 0;
+    const closedAt =
+      history.close_time != null && Number(history.close_time) > 0
+        ? new Date(Number(history.close_time) * 1000)
+        : new Date();
+
+    const tierRows = await deps.getTierRows();
+    const previousMode = this.state.activeStrategyMode;
+    const { state: nextState, trace } = resolveExit(
+      this.state,
+      pos.entryResult,
+      {
+        wasWin,
+        pnlAmount,
+        conditions: pos.conditions ?? null,
+      },
+      { tierRows }
+    );
+    this.state = nextState;
+
+    const closedTrade = await deps.closeRealTrade(pos.tradeRowId, {
+      exitPrice,
+      pnl: pnlAmount,
+      closedAt,
+    });
+
+    await logExitDecisions(this.botInstanceId, this.userId, previousMode, trace, {
+      insertDecision: deps.insertDecision,
+      publishBotEvent: deps.publishBotEvent,
+      maybeNotifyUser: deps.maybeNotifyUser,
+    });
+
+    await deps.insertDecision({
+      botInstanceId: this.botInstanceId,
+      decisionType: 'real_order_closed',
+      triggeringCondition: `ticket=${pos.brokerTicket} pnl=${pnlAmount}`,
+      details: {
+        trade_id: pos.tradeRowId,
+        broker_ticket: pos.brokerTicket,
+        symbol: pos.symbol,
+        direction: pos.direction,
+        exit_price: exitPrice,
+        pnl: pnlAmount,
+        was_win: wasWin,
+        history,
+      },
+    });
+
+    await deps.forceNotifyUser(
+      this.userId,
+      'real_order',
+      `Real order closed: ${pos.direction} ${pos.symbol} ticket ${pos.brokerTicket} pnl ${pnlAmount}.`
+    );
+
+    if (closedTrade) {
+      await deps.publishBotEvent(this.botInstanceId, 'trade.closed', closedTrade);
+    }
+
+    // Broker equity is source of truth after a real close.
+    try {
+      const accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
+      const equity = Number(accountInfo.equity);
+      if (equity > 0) {
+        this.state.balance = equity;
+        this.state.peakEquity = Math.max(Number(this.state.peakEquity) || 0, equity);
+      }
+    } catch (err) {
+      console.error(
+        '[bot-runtime] post-close equity sync failed, keeping APIRS state:',
+        err.message
+      );
+    }
+
+    // After resume-close, instance may still be 'stopped' until Start
+    // finishes — keep status running only when we were already running
+    // (monitor path). On initialize reconcile, leave status alone if
+    // still stopped; Start's caller sets running afterward.
+    const statusFields = {
+      active_strategy_mode: nextState.activeStrategyMode,
+      active_trading_balance: this.state.balance,
+      peak_equity: this.state.peakEquity,
+      current_tier: nextState.currentTier,
+    };
+    if (this.running) {
+      statusFields.status = 'running';
+    }
+
+    const updated = await deps.updateStatusFields(this.botInstanceId, statusFields);
+    const cached = await deps.setStatus(updated);
+
+    await deps.publishBotEvent(this.botInstanceId, 'equity.updated', {
+      active_trading_balance: cached.active_trading_balance,
+      peak_equity: cached.peak_equity,
+      timestamp: cached.updated_at,
+    });
+
+    this.openPosition = null;
+
+    return { state: this.state, trace, trade: closedTrade, session: cached };
   }
 
   async _maybeOpenPositionPaper() {
@@ -551,7 +1204,7 @@ const runtimes = new Map();
 async function startRuntime(instance, options = {}) {
   const existing = runtimes.get(instance.id);
   if (existing) {
-    if (!existing.running) {
+    if (!existing.running && !existing._halted) {
       await existing.initialize();
       existing.start();
     }
@@ -559,8 +1212,11 @@ async function startRuntime(instance, options = {}) {
   }
   const runtime = new BotRuntime(instance, options);
   await runtime.initialize();
-  runtime.start();
+  // E.7 — resume reconcile may have halted (status=error). Still
+  // register the runtime so Stop/status paths can see it, but do not
+  // start the tick loop (start() also no-ops when _halted).
   runtimes.set(instance.id, runtime);
+  runtime.start();
   return runtime;
 }
 
