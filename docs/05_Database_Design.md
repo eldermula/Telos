@@ -59,6 +59,9 @@ users ──1:1──> settings
 | initial_balance | numeric | Bot Architecture §2 |
 | active_trading_balance | numeric | Bot Architecture §2 (renamed from `current_balance`) |
 | peak_equity | numeric | Bot Architecture §6 |
+| daily_drawdown_day | date, nullable | **Added for real `dailyDrawdownPct` (micro breaker §7).** UTC calendar day key for the active peak-of-day window |
+| daily_start_equity | numeric, nullable | Equity at day open (audit / future start-of-day mode); null until first tick initializes markers |
+| daily_peak_equity | numeric, nullable | High-water mark since `daily_drawdown_day`. Profit-lock Peak Reset Vector shrinks this with lifetime `peak_equity` |
 | current_tier | int (0–7) | Bot Architecture §3 |
 | created_at | timestamptz | |
 | updated_at | timestamptz | |

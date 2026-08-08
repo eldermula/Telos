@@ -20,6 +20,24 @@ function toNumber(value) {
   return typeof value === 'number' ? value : Number(value);
 }
 
+/** DATE columns arrive as JS Date at local midnight; serialize as YYYY-MM-DD. */
+function toDateOnly(value) {
+  if (value == null) return null;
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(value);
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
+}
+
+function toNullableNumber(value) {
+  if (value == null) return null;
+  return toNumber(value);
+}
+
 function mapBotInstance(row) {
   return {
     id: row.id,
@@ -42,6 +60,10 @@ function mapBotInstance(row) {
     // of this; this repository stays a plain data-access layer and
     // doesn't itself decide what's "still valid".
     live_trading_confirmed_at: row.live_trading_confirmed_at,
+    // Daily drawdown markers (micro breaker §7) — nullable until first tick.
+    daily_drawdown_day: toDateOnly(row.daily_drawdown_day),
+    daily_start_equity: toNullableNumber(row.daily_start_equity),
+    daily_peak_equity: toNullableNumber(row.daily_peak_equity),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -51,7 +73,17 @@ const SELECT_COLUMNS = `
   bi.id, bi.user_id, bi.broker_connection_id, bi.status, bi.active_strategy_mode,
   bi.initial_balance, bi.active_trading_balance, bi.peak_equity, bi.current_tier,
   bc.account_type, bi.live_trading_confirmed_at,
+  bi.daily_drawdown_day, bi.daily_start_equity, bi.daily_peak_equity,
   bi.created_at, bi.updated_at
+`;
+
+const RETURNING_COLUMNS = `
+  id, user_id, broker_connection_id, status, active_strategy_mode,
+  initial_balance, active_trading_balance, peak_equity, current_tier,
+  (SELECT account_type FROM broker_connections WHERE id = bot_instances.broker_connection_id) AS account_type,
+  live_trading_confirmed_at,
+  daily_drawdown_day, daily_start_equity, daily_peak_equity,
+  created_at, updated_at
 `;
 
 async function findBrokerConnectionForUser(userId) {
@@ -120,11 +152,7 @@ async function ensureForUser(userId) {
        (user_id, broker_connection_id, status, active_strategy_mode,
         initial_balance, active_trading_balance, peak_equity, current_tier)
      VALUES ($1, $2, 'stopped', 'STRATEGY_A', $3, $3, $3, 0)
-     RETURNING id, user_id, broker_connection_id, status, active_strategy_mode,
-               initial_balance, active_trading_balance, peak_equity, current_tier,
-               (SELECT account_type FROM broker_connections WHERE id = bot_instances.broker_connection_id) AS account_type,
-               live_trading_confirmed_at,
-               created_at, updated_at`,
+     RETURNING ${RETURNING_COLUMNS}`,
     [userId, connection.id, INITIAL_BALANCE]
   );
 
@@ -144,6 +172,10 @@ async function updateStatusFields(botInstanceId, fields) {
     // share this one: every write to bot_instances goes through a single
     // allowlisted path.
     'live_trading_confirmed_at',
+    // Daily drawdown markers — bot-runtime only; null-safe until first tick.
+    'daily_drawdown_day',
+    'daily_start_equity',
+    'daily_peak_equity',
   ];
   const sets = [];
   const values = [];
@@ -168,11 +200,7 @@ async function updateStatusFields(botInstanceId, fields) {
     `UPDATE bot_instances
      SET ${sets.join(', ')}
      WHERE id = $${i}
-     RETURNING id, user_id, broker_connection_id, status, active_strategy_mode,
-               initial_balance, active_trading_balance, peak_equity, current_tier,
-               (SELECT account_type FROM broker_connections WHERE id = bot_instances.broker_connection_id) AS account_type,
-               live_trading_confirmed_at,
-               created_at, updated_at`,
+     RETURNING ${RETURNING_COLUMNS}`,
     values
   );
 

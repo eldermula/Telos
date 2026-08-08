@@ -26,6 +26,10 @@ const {
 } = require('./broker-account.service');
 const { isConnectionFresh } = require('./connection-freshness');
 const { computeRealLotSize } = require('./real-lot-sizing');
+const {
+  nextDailyDrawdownMarkers,
+  shrinkDailyDrawdownMarkersForProfitLock,
+} = require('./daily-drawdown');
 
 /** Module 7 — flag broker place latency above this threshold (ms). */
 const REAL_ORDER_LATENCY_WARN_MS = 200;
@@ -45,15 +49,39 @@ const { computeLiveWinProbability, computeConsecutiveLosses } = require(
 /** Default paper tick interval (ms). Overridable via PAPER_TICK_MS. */
 const DEFAULT_TICK_MS = Number(process.env.PAPER_TICK_MS) || 2000;
 
-/**
- * 08_Bot_Architecture.md Section 2's stub — `daily_drawdown_pct` isn't
- * one of Modules 2-4's outputs (it's an account-level "how far down
- * are we today" metric), and giving it a real computation needs its
- * own design (day-boundary definition, timezone, peak-of-day vs.
- * start-of-day baseline) unrelated to Selection's signals. Explicitly
- * deferred past 6.4 — flagged, not silently left stubbed.
- */
-const STUB_DAILY_DRAWDOWN_PCT = 0.02;
+function markersFromInstance(instance) {
+  return {
+    day: instance.daily_drawdown_day ?? null,
+    startEquity:
+      instance.daily_start_equity == null ? null : Number(instance.daily_start_equity),
+    peakEquity:
+      instance.daily_peak_equity == null ? null : Number(instance.daily_peak_equity),
+  };
+}
+
+function dailyFieldsFromMarkers(markers) {
+  if (!markers) {
+    return {
+      daily_drawdown_day: null,
+      daily_start_equity: null,
+      daily_peak_equity: null,
+    };
+  }
+  return {
+    daily_drawdown_day: markers.day,
+    daily_start_equity: markers.startEquity,
+    daily_peak_equity: markers.peakEquity,
+  };
+}
+
+function markersChanged(prev, next) {
+  if (!prev) return true;
+  return (
+    prev.day !== next.day ||
+    Number(prev.startEquity) !== Number(next.startEquity) ||
+    Number(prev.peakEquity) !== Number(next.peakEquity)
+  );
+}
 
 function instanceToApirsState(instance, tradeHistory) {
   return {
@@ -264,9 +292,50 @@ class BotRuntime {
     this.running = false;
     this.state = null;
     this.openPosition = null;
+    this.dailyDrawdownMarkers = null;
     this._tickInFlight = false;
     // Set by _haltRealOpenFailure — start() must not re-arm after a halt.
     this._halted = false;
+  }
+
+  /**
+   * Refresh UTC-day peak markers from a known equity reading.
+   * Persists only when markers change (rollover / new peak).
+   * @returns {{ markers: object, dailyDrawdownPct: number, rolledOver: boolean }}
+   */
+  async _refreshDailyDrawdown(currentEquity, { now, persist = true } = {}) {
+    const deps = this._realOpen;
+    const prev = this.dailyDrawdownMarkers;
+    const result = nextDailyDrawdownMarkers({
+      now: now || deps.now(),
+      currentEquity,
+      markers: prev,
+    });
+    this.dailyDrawdownMarkers = result.markers;
+    if (persist && markersChanged(prev, result.markers)) {
+      await deps.updateStatusFields(
+        this.botInstanceId,
+        dailyFieldsFromMarkers(result.markers)
+      );
+    }
+    return result;
+  }
+
+  /**
+   * Mirror profit-lock Peak Reset Vector onto daily markers so a lock
+   * cannot look like a same-day crash to the micro breaker.
+   */
+  _shrinkDailyDrawdownForProfitLock(trace, currentEquity) {
+    if (!trace?.profitLockResult?.profitLockTriggered) {
+      return false;
+    }
+    const next = shrinkDailyDrawdownMarkersForProfitLock({
+      markers: this.dailyDrawdownMarkers,
+      lockedProfitAmount: trace.profitLockResult.lockedProfitAmount,
+      currentEquity,
+    });
+    this.dailyDrawdownMarkers = next;
+    return true;
   }
 
   async initialize() {
@@ -277,6 +346,7 @@ class BotRuntime {
     }
     const tradeHistory = await deps.loadTradeHistoryForLearning(this.botInstanceId);
     this.state = instanceToApirsState(instance, tradeHistory);
+    this.dailyDrawdownMarkers = markersFromInstance(instance);
 
     // Resume a position left open across a process restart. Paper:
     // rebuild from the DB row (no broker). Real (E.7): reconcile
@@ -547,9 +617,11 @@ class BotRuntime {
 
     this.state.balance = equity;
     this.state.peakEquity = Math.max(Number(this.state.peakEquity) || 0, equity);
+    const dd = await this._refreshDailyDrawdown(equity, { persist: false });
     const synced = await deps.updateStatusFields(this.botInstanceId, {
       active_trading_balance: this.state.balance,
       peak_equity: this.state.peakEquity,
+      ...dailyFieldsFromMarkers(dd.markers),
     });
     await deps.setStatus(synced);
     await deps.publishBotEvent(this.botInstanceId, 'equity.updated', {
@@ -576,7 +648,7 @@ class BotRuntime {
       marketVolatility: selection.marketIntelligence.market_volatility,
       currentATR: selection.marketIntelligence.diagnostics.currentATR,
       rollingAvgATR: selection.marketIntelligence.diagnostics.rollingAvgATR,
-      dailyDrawdownPct: STUB_DAILY_DRAWDOWN_PCT,
+      dailyDrawdownPct: dd.dailyDrawdownPct,
       direction: selection.direction,
     };
 
@@ -902,6 +974,7 @@ class BotRuntime {
       { tierRows }
     );
     this.state = nextState;
+    this._shrinkDailyDrawdownForProfitLock(trace, nextState.balance);
 
     const closedTrade = await deps.closeRealTrade(pos.tradeRowId, {
       exitPrice,
@@ -960,11 +1033,14 @@ class BotRuntime {
     // finishes — keep status running only when we were already running
     // (monitor path). On initialize reconcile, leave status alone if
     // still stopped; Start's caller sets running afterward.
+    // Refresh daily markers from final equity (broker sync may have moved it).
+    const ddClose = await this._refreshDailyDrawdown(this.state.balance, { persist: false });
     const statusFields = {
       active_strategy_mode: nextState.activeStrategyMode,
       active_trading_balance: this.state.balance,
       peak_equity: this.state.peakEquity,
       current_tier: nextState.currentTier,
+      ...dailyFieldsFromMarkers(ddClose.markers),
     };
     if (this.running) {
       statusFields.status = 'running';
@@ -985,6 +1061,11 @@ class BotRuntime {
   }
 
   async _maybeOpenPositionPaper() {
+    // Daily drawdown for micro breaker — update peak-of-day whenever we
+    // have a known paper equity, before Selection (so a no-signal tick
+    // still advances the high-water mark).
+    const dd = await this._refreshDailyDrawdown(this.state.balance);
+
     // Module 4 — Selection (08_Bot_Architecture.md Section 9.0/13):
     // evaluates every active strategy against every watchlist
     // instrument and returns at most one candidate. `null` is a
@@ -1006,7 +1087,7 @@ class BotRuntime {
       marketVolatility: selection.marketIntelligence.market_volatility,
       currentATR: selection.marketIntelligence.diagnostics.currentATR,
       rollingAvgATR: selection.marketIntelligence.diagnostics.rollingAvgATR,
-      dailyDrawdownPct: STUB_DAILY_DRAWDOWN_PCT,
+      dailyDrawdownPct: dd.dailyDrawdownPct,
       direction: selection.direction,
     };
 
@@ -1165,6 +1246,10 @@ class BotRuntime {
       { tierRows }
     );
     this.state = nextState;
+    this._shrinkDailyDrawdownForProfitLock(trace, nextState.balance);
+    const ddPaperClose = await this._refreshDailyDrawdown(nextState.balance, {
+      persist: false,
+    });
 
     const closedTrade = await tradesRepository.closePaperTrade(pos.tradeRowId, {
       exitPrice,
@@ -1183,6 +1268,7 @@ class BotRuntime {
       active_trading_balance: nextState.balance,
       peak_equity: nextState.peakEquity,
       current_tier: nextState.currentTier,
+      ...dailyFieldsFromMarkers(ddPaperClose.markers),
     });
     const cached = await botStatusCache.setStatus(updated);
 
@@ -1237,5 +1323,4 @@ module.exports = {
   stopRuntime,
   getRuntime,
   DEFAULT_TICK_MS,
-  STUB_DAILY_DRAWDOWN_PCT,
 };
