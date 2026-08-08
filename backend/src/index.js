@@ -6,6 +6,7 @@ const { attachWebSocketServer } = require('./ws/websocket-server');
 const { assertGateConfigAtStartup } = require('./services/access-gate.service');
 const tradingEngine = require('./engine/trading-engine');
 const cryptoTradingEngine = require('./engine/crypto-trading-engine');
+const syntheticTradingEngine = require('./engine/synthetic-trading-engine');
 
 async function start() {
   assertGateConfigAtStartup();
@@ -33,6 +34,18 @@ async function start() {
     console.log(`[boot] rehydrated ${ok}/${cryptoRehydrated.length} crypto paper runtime(s)`);
   } catch (err) {
     console.error('[boot] rehydrateCryptoRunningRuntimes failed:', err.message);
+  }
+
+  // Synthetics paper runtime (separate synthetic_status).
+  try {
+    const syntheticRehydrated =
+      await syntheticTradingEngine.rehydrateSyntheticRunningRuntimes();
+    const ok = syntheticRehydrated.filter((r) => r.ok).length;
+    console.log(
+      `[boot] rehydrated ${ok}/${syntheticRehydrated.length} synthetic paper runtime(s)`
+    );
+  } catch (err) {
+    console.error('[boot] rehydrateSyntheticRunningRuntimes failed:', err.message);
   }
 
   const server = http.createServer(app);

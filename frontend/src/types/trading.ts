@@ -6,6 +6,10 @@ export type StrategyMode = 'STRATEGY_A' | 'STRATEGY_B' | 'HALTED';
 export type TradingSession = {
   bot_instance_id: string;
   status: BotStatus;
+  /** Crypto paper runtime — independent of forex `status`. */
+  crypto_status?: BotStatus;
+  /** Synthetics paper runtime — independent of forex/crypto status. */
+  synthetic_status?: BotStatus;
   active_strategy_mode: StrategyMode;
   current_tier: number;
   active_trading_balance: number;

@@ -1,0 +1,6 @@
+{
+  "name": "@telos/synthetic-market-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/volatilityThresholds.js"
+}

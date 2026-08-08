@@ -13,6 +13,7 @@ import {
 } from '../../components/ui/StatusPill';
 import { TradingTables } from './TradingTables';
 import { ConfirmLiveTradingModal } from './ConfirmLiveTradingModal';
+import { SyntheticsPaperPanel } from './SyntheticsPaperPanel';
 
 export function TradingPage() {
   const {
@@ -40,6 +41,14 @@ export function TradingPage() {
         case 'bot.status_changed':
           if (typeof payload.status === 'string') {
             applySessionPatch({ status: payload.status as 'running' | 'stopped' | 'error' });
+          }
+          if (typeof payload.synthetic_status === 'string') {
+            applySessionPatch({
+              synthetic_status: payload.synthetic_status as
+                | 'running'
+                | 'stopped'
+                | 'error',
+            });
           }
           break;
         case 'strategy.switched':
@@ -218,6 +227,8 @@ export function TradingPage() {
           </div>
         </GlassCard>
       ) : null}
+
+      <SyntheticsPaperPanel refreshKey={tradeRefreshKey} />
 
       <TradingTables refreshKey={tradeRefreshKey} />
 

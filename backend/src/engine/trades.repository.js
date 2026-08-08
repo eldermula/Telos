@@ -230,6 +230,17 @@ async function listOpenCryptoTradesForResume(botInstanceId) {
   return result.rows.map((row) => ({ ...mapTrade(row), conditions: row.conditions ?? null }));
 }
 
+async function listOpenSyntheticTradesForResume(botInstanceId) {
+  const result = await pool.query(
+    `SELECT ${TRADE_RETURNING}, conditions
+     FROM trades
+     WHERE bot_instance_id = $1 AND status = 'open' AND asset_class = 'synthetic'
+     ORDER BY opened_at DESC`,
+    [botInstanceId]
+  );
+  return result.rows.map((row) => ({ ...mapTrade(row), conditions: row.conditions ?? null }));
+}
+
 /**
  * Same rows as `listOpenTrades`, plus `conditions` for resume.
  * Includes execution_mode / broker_ticket so E.7 can reconcile real
@@ -292,6 +303,7 @@ module.exports = {
   listOpenTradesForUser,
   listOpenTradesForResume,
   listOpenCryptoTradesForResume,
+  listOpenSyntheticTradesForResume,
   listClosedTradesPaginated,
   loadTradeHistoryForLearning,
 };
