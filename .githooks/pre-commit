@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Project pre-commit hook. Enable once per clone:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+node "$ROOT/scripts/check-changelog-size.js"

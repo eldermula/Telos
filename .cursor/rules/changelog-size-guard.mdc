@@ -1,0 +1,17 @@
+---
+description: Prevent silent CHANGELOG.md truncation during agent edits
+globs: docs/CHANGELOG.md
+alwaysApply: false
+---
+
+# CHANGELOG.md size guard
+
+`docs/CHANGELOG.md` was once silently wiped to 0 bytes mid-session (not via an intentional Write). Treat it as fragile.
+
+When editing this file:
+
+1. **Before** the first edit in a turn: check file size (must be well above empty — typically >50KB once Phase 7+ history exists).
+2. Prefer `StrReplace` over full-file `Write`. Never rewrite the whole changelog unless intentionally regenerating it from a known-good source.
+3. **After** editing: re-check size. If it dropped by roughly half or more, or is empty, **stop** and restore from `git show HEAD:docs/CHANGELOG.md` (or the last known-good commit) before continuing.
+
+A commit-time gate also exists: `node scripts/check-changelog-size.js` (wired via `.githooks/pre-commit` when `core.hooksPath=.githooks`).
