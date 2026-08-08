@@ -1,6 +1,7 @@
 'use strict';
 
 const portfolioService = require('../services/portfolio.service');
+const { parseRangeQuery } = require('../utils/query-enums');
 
 async function getHoldings(req, res, next) {
   try {
@@ -13,7 +14,8 @@ async function getHoldings(req, res, next) {
 
 async function getPerformance(req, res, next) {
   try {
-    const data = await portfolioService.getPerformance(req.user.id, req.query.range);
+    const range = parseRangeQuery(req.query);
+    const data = await portfolioService.getPerformance(req.user.id, range);
     res.status(200).json(data);
   } catch (err) {
     next(err);

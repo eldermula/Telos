@@ -4,6 +4,10 @@ const { z } = require('zod');
 const adminService = require('../services/admin.service');
 const { parsePagination } = require('../utils/pagination');
 const { parseUuid } = require('../utils/parse-uuid');
+const {
+  parseStrategyStatusQuery,
+  parseRiskTierParam,
+} = require('../utils/query-enums');
 const { AppError } = require('../utils/app-error');
 
 function parseBody(schema, body) {
@@ -75,7 +79,8 @@ async function listRiskTiers(req, res, next) {
 async function patchRiskTier(req, res, next) {
   try {
     const body = parseBody(riskTierPatchSchema, req.body);
-    const data = await adminService.patchRiskTier(req.user.id, req.params.tier, body);
+    const tier = parseRiskTierParam(req.params.tier);
+    const data = await adminService.patchRiskTier(req.user.id, tier, body);
     res.status(200).json(data);
   } catch (err) {
     next(err);
@@ -84,7 +89,7 @@ async function patchRiskTier(req, res, next) {
 
 async function listCandidateStrategies(req, res, next) {
   try {
-    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const status = parseStrategyStatusQuery(req.query);
     const data = await adminService.listCandidateStrategies({ status });
     res.status(200).json(data);
   } catch (err) {

@@ -99,7 +99,8 @@ Only start this once Phase 3's deterministic core is proven — this is where th
 - ~~`npm audit`/Dependabot~~ → **8.3, done.** `.github/dependabot.yml` + `.github/workflows/npm-audit.yml` covering `backend/` and `frontend/` (bot packages are dependency-free). Takes effect on the next push to GitHub.
 - ~~Basic uptime monitoring~~ → **8.4, done (config + probe).** `GET /health` is the external target; free-tool setup (UptimeRobot) documented in `docs/OPS.md` §2. Enrolling the monitor against your live Tunnel hostname is a one-time manual step (needs the hostname).
 - ~~Site-wide access gate~~ → **8.5, done.** See `09_Security.md` §2a. Set `ACCESS_GATE_PHRASE` + `ACCESS_GATE_SECRET` in production `.env`.
-- ~~Zod UUID path-param crashes (group A)~~ → **8.6, done.** Groups B (pagination schemas) and C (service-level enums moved to controller Zod) remain flagged cleanup.
+- ~~Zod UUID path-param crashes (group A)~~ → **8.6, done.**
+- ~~Zod groups B/C (pagination + query/path enums)~~ → **done** (hygiene follow-up): invalid `page`/`limit`/`range`/`status`/`tier` → `422` at the controller edge; see CHANGELOG.
 
 **Exit criteria:** the checklist in `09_Security.md` has no unresolved item that blocks handling real user data/credentials. Remaining after 8.1–8.6: (a) one-time account setup you run (backup repo + Task Scheduler + UptimeRobot + Cloudflare WAF + access-gate env vars), (b) Zod B/C hygiene, (c) deliberately deferred (`09` itself: MFA, formal incident runbook, regulatory).
 

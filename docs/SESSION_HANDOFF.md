@@ -18,6 +18,8 @@
 
 **Crypto (BTC/ETH only): scoped and decided in `docs/11_Crypto_Synthetics_Scoping.md`. Increments A–D (isolated track) are built and verified** — A schema (`013`); B parallel crypto news (`bot/crypto-news-intelligence` + `crypto:news:*` Redis, `CRYPTO_NEWS_LLM_ENABLED` default off); C provisional vol thresholds (`0.65`/`1.55`); D contract-spec normalizer + connector `trade_contract_size` exposure (MetaQuotes-Demo lacks BTC/ETH symbols — probe skipped). **Still gated / not started:** `crypto-bot-runtime.js`, Selection wiring, any tick-loop integration — waits on E.8 + Module 3 soft-launch close + one-week stabilization (`11` §6 Q5).
 
+**FLAGGED blocker (human, not agent):** finishing C (empirical OHLC calibration) and D (live symbol-info probe) both need a **crypto-capable broker/demo account** that lists BTC/ETH. Do not source or open one autonomously; WelTrade SyntX stays synthetics-deferred. See CHANGELOG.
+
 **Synthetic indices: explicitly deferred**, specifically because they'd force the live-broker decision toward Deriv. Not part of active scope. **A WelTrade `SyntX` demo account was provided this session — that account is for synthetic indices specifically (confirmed via Weltrade's own documentation), not crypto. Do not let its existence pull work toward synthetics without a deliberate, separate decision to revisit that deferral.**
 
 **Live broker decision (`02_Product_Requirements.md` §7): still genuinely open.** Nothing forces this yet — crypto was deliberately chosen as the scope that keeps this open.
