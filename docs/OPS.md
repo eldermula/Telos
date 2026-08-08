@@ -133,3 +133,18 @@ Handled in-repo:
 
 Dependabot PRs still need a human review before merging, especially anything
 that touches `express`, `jsonwebtoken`, `bcrypt`, or `pg`.
+
+---
+
+## 5. Git hooks (CHANGELOG truncate guard)
+
+`docs/CHANGELOG.md` once landed empty mid-session. Commits are gated by:
+
+```bash
+# once per clone (from repo root)
+git config core.hooksPath .githooks
+```
+
+`.githooks/pre-commit` runs `node scripts/check-changelog-size.js`, which
+refuses the commit if CHANGELOG is empty or shrank by more than 50% vs HEAD.
+Manual check: `node scripts/check-changelog-size.js`.
