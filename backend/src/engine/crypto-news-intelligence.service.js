@@ -2,9 +2,8 @@
 
 /**
  * Crypto Increment B — orchestration for the parallel crypto news
- * pipeline. Own Redis namespace (`crypto:news:*`). Not wired into
- * strategy-selection or bot-runtime — callable for smokes/tests only
- * until the dispatcher gate opens (docs/11 §6 Q5).
+ * pipeline. Own Redis namespace (`crypto:news:*`). Wired into
+ * crypto-strategy-selection / crypto-bot-runtime (Increment E paper).
  */
 
 const path = require('path');

@@ -2,7 +2,7 @@
 
 > Scoping and decision record. This document exists to answer five specific questions before any code gets written, per this project's standing design-first discipline — the same treatment Option 2 got across increments A–E before a single line touched `bot-runtime.js`. All five questions are now answered; nothing below remains open.
 
-**Status: scoped and decided; isolated Increments A–D landed.** Instrument scope: **crypto, BTC/ETH only**, confirmed. Synthetics: explicitly deferred. Architecture (§0.2) and instrument scope (§6) settled. A–D verified without dispatcher wiring — still no `crypto-bot-runtime.js`. Next: human E.8 + Module 3 cost week + §6 stabilization buffer, then dispatcher-level work.
+**Status: scoped and decided; isolated Increments A–E (paper) landed.** Instrument scope: **crypto, BTC/ETH only**, confirmed. Synthetics: explicitly deferred. Architecture (§0.2) and instrument scope (§6) settled. Owner authorized paper-mode `crypto-bot-runtime.js` ahead of the §6 E.8+buffer gate; **crypto real-order layer remains a later increment**. Forex Option 2 E.8 still outstanding on its own track.
 
 ---
 

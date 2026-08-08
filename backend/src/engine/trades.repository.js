@@ -27,13 +27,15 @@ function mapTrade(row) {
     // backfilled). broker_ticket is null for paper trades.
     execution_mode: row.execution_mode,
     broker_ticket: row.broker_ticket == null ? null : Number(row.broker_ticket),
+    // Crypto Increment A/E — forex callers omit; DB default forex_gold.
+    asset_class: row.asset_class || 'forex_gold',
   };
 }
 
 const TRADE_RETURNING = `
   id, bot_instance_id, origin, symbol, direction, entry_price, stop_price, target_price,
   exit_price, lot_size, final_applied_position_risk, status, opened_at, closed_at, pnl,
-  execution_mode, broker_ticket
+  execution_mode, broker_ticket, asset_class
 `;
 
 /**
@@ -97,12 +99,14 @@ async function insertOpenPaperTrade({
   finalAppliedPositionRisk,
   conditions = null,
   openedAt = new Date(),
+  assetClass = 'forex_gold',
 }) {
   const result = await pool.query(
     `INSERT INTO trades
        (bot_instance_id, origin, symbol, direction, entry_price, stop_price, target_price,
-        lot_size, final_applied_position_risk, status, opened_at, conditions, execution_mode)
-     VALUES ($1, 'bot', $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10::jsonb, 'paper')
+        lot_size, final_applied_position_risk, status, opened_at, conditions, execution_mode,
+        asset_class)
+     VALUES ($1, 'bot', $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10::jsonb, 'paper', $11)
      RETURNING ${TRADE_RETURNING}`,
     [
       botInstanceId,
@@ -115,6 +119,7 @@ async function insertOpenPaperTrade({
       finalAppliedPositionRisk,
       openedAt,
       conditions === null ? null : JSON.stringify(conditions),
+      assetClass,
     ]
   );
   return mapTrade(result.rows[0]);
@@ -202,6 +207,29 @@ async function listOpenTrades(botInstanceId) {
   return result.rows.map(mapTrade);
 }
 
+/** System-wide open check (docs/11 §0.2) — any asset_class for this user. */
+async function listOpenTradesForUser(userId) {
+  const result = await pool.query(
+    `SELECT ${TRADE_RETURNING}
+     FROM trades
+     WHERE user_id = $1 AND status = 'open'
+     ORDER BY opened_at DESC`,
+    [userId]
+  );
+  return result.rows.map(mapTrade);
+}
+
+async function listOpenCryptoTradesForResume(botInstanceId) {
+  const result = await pool.query(
+    `SELECT ${TRADE_RETURNING}, conditions
+     FROM trades
+     WHERE bot_instance_id = $1 AND status = 'open' AND asset_class = 'crypto'
+     ORDER BY opened_at DESC`,
+    [botInstanceId]
+  );
+  return result.rows.map((row) => ({ ...mapTrade(row), conditions: row.conditions ?? null }));
+}
+
 /**
  * Same rows as `listOpenTrades`, plus `conditions` for resume.
  * Includes execution_mode / broker_ticket so E.7 can reconcile real
@@ -261,7 +289,9 @@ module.exports = {
   closePaperTrade,
   closeRealTrade,
   listOpenTrades,
+  listOpenTradesForUser,
   listOpenTradesForResume,
+  listOpenCryptoTradesForResume,
   listClosedTradesPaginated,
   loadTradeHistoryForLearning,
 };

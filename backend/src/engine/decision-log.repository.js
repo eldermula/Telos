@@ -8,18 +8,20 @@ async function insertDecision({
   triggeringCondition,
   details = {},
   timestamp = new Date(),
+  assetClass = 'forex_gold',
 }) {
   const result = await pool.query(
     `INSERT INTO bot_decision_log
-       (bot_instance_id, timestamp, decision_type, triggering_condition, details)
-     VALUES ($1, $2, $3, $4, $5::jsonb)
-     RETURNING id, bot_instance_id, timestamp, decision_type, triggering_condition, details`,
+       (bot_instance_id, timestamp, decision_type, triggering_condition, details, asset_class)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+     RETURNING id, bot_instance_id, timestamp, decision_type, triggering_condition, details, asset_class`,
     [
       botInstanceId,
       timestamp,
       decisionType,
       triggeringCondition,
       JSON.stringify(details),
+      assetClass,
     ]
   );
   return result.rows[0];

@@ -39,6 +39,7 @@ function toCachePayload(instance, updatedAt = new Date()) {
   return {
     bot_instance_id: instance.id,
     status: instance.status,
+    crypto_status: instance.crypto_status || 'stopped',
     active_strategy_mode: instance.active_strategy_mode,
     current_tier: instance.current_tier,
     active_trading_balance: activeTradingBalance,

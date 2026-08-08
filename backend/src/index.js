@@ -5,6 +5,7 @@ const { connectRedis } = require('./db/redis');
 const { attachWebSocketServer } = require('./ws/websocket-server');
 const { assertGateConfigAtStartup } = require('./services/access-gate.service');
 const tradingEngine = require('./engine/trading-engine');
+const cryptoTradingEngine = require('./engine/crypto-trading-engine');
 
 async function start() {
   assertGateConfigAtStartup();
@@ -23,6 +24,15 @@ async function start() {
     console.log(`[boot] rehydrated ${ok}/${rehydrated.length} running bot runtime(s)`);
   } catch (err) {
     console.error('[boot] rehydrateRunningRuntimes failed:', err.message);
+  }
+
+  // Crypto Increment E — paper crypto runtime only (separate crypto_status).
+  try {
+    const cryptoRehydrated = await cryptoTradingEngine.rehydrateCryptoRunningRuntimes();
+    const ok = cryptoRehydrated.filter((r) => r.ok).length;
+    console.log(`[boot] rehydrated ${ok}/${cryptoRehydrated.length} crypto paper runtime(s)`);
+  } catch (err) {
+    console.error('[boot] rehydrateCryptoRunningRuntimes failed:', err.message);
   }
 
   const server = http.createServer(app);

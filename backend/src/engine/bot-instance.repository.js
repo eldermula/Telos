@@ -44,6 +44,7 @@ function mapBotInstance(row) {
     user_id: row.user_id,
     broker_connection_id: row.broker_connection_id,
     status: row.status,
+    crypto_status: row.crypto_status || 'stopped',
     active_strategy_mode: row.active_strategy_mode,
     initial_balance: toNumber(row.initial_balance),
     active_trading_balance: toNumber(row.active_trading_balance),
@@ -70,7 +71,7 @@ function mapBotInstance(row) {
 }
 
 const SELECT_COLUMNS = `
-  bi.id, bi.user_id, bi.broker_connection_id, bi.status, bi.active_strategy_mode,
+  bi.id, bi.user_id, bi.broker_connection_id, bi.status, bi.crypto_status, bi.active_strategy_mode,
   bi.initial_balance, bi.active_trading_balance, bi.peak_equity, bi.current_tier,
   bc.account_type, bi.live_trading_confirmed_at,
   bi.daily_drawdown_day, bi.daily_start_equity, bi.daily_peak_equity,
@@ -78,7 +79,7 @@ const SELECT_COLUMNS = `
 `;
 
 const RETURNING_COLUMNS = `
-  id, user_id, broker_connection_id, status, active_strategy_mode,
+  id, user_id, broker_connection_id, status, crypto_status, active_strategy_mode,
   initial_balance, active_trading_balance, peak_equity, current_tier,
   (SELECT account_type FROM broker_connections WHERE id = bot_instances.broker_connection_id) AS account_type,
   live_trading_confirmed_at,
@@ -144,6 +145,17 @@ async function listRunning() {
   return result.rows.map(mapBotInstance);
 }
 
+async function listCryptoRunning() {
+  const result = await pool.query(
+    `SELECT ${SELECT_COLUMNS}
+     FROM bot_instances bi
+     JOIN broker_connections bc ON bc.id = bi.broker_connection_id
+     WHERE bi.crypto_status = 'running'
+     ORDER BY bi.updated_at ASC`
+  );
+  return result.rows.map(mapBotInstance);
+}
+
 /**
  * Load existing bot_instances row for the user's linked broker connection,
  * or insert one with APIRS Section 2 defaults (stopped / STRATEGY_A / $10).
@@ -178,6 +190,7 @@ async function ensureForUser(userId) {
 async function updateStatusFields(botInstanceId, fields) {
   const allowed = [
     'status',
+    'crypto_status',
     'active_strategy_mode',
     'active_trading_balance',
     'peak_equity',
@@ -235,6 +248,7 @@ module.exports = {
   findByUserId,
   findById,
   listRunning,
+  listCryptoRunning,
   ensureForUser,
   updateStatusFields,
 };
