@@ -212,6 +212,52 @@ async function confirmLiveTrading(userId, confirmationPhrase) {
   return cached;
 }
 
+/**
+ * Boot rehydration — restart in-memory runtimes for every instance still
+ * marked status='running' after a process crash/restart. Uses the same
+ * startRuntime → initialize() path as Start (including E.7 real resume
+ * reconcile). Failures are isolated per instance so one bad bot cannot
+ * block the others or prevent the HTTP server from coming up.
+ *
+ * @param {{
+ *   listRunning?: () => Promise<object[]>,
+ *   startRuntime?: (instance: object) => Promise<object>,
+ *   findById?: (id: string) => Promise<object|null>,
+ *   setStatus?: (row: object) => Promise<object>,
+ * }} [deps] optional seams for unit tests
+ */
+async function rehydrateRunningRuntimes(deps = {}) {
+  const listRunning = deps.listRunning || (() => botInstanceRepository.listRunning());
+  const start = deps.startRuntime || startRuntime;
+  const findById = deps.findById || ((id) => botInstanceRepository.findById(id));
+  const setStatus = deps.setStatus || ((row) => botStatusCache.setStatus(row));
+
+  const instances = await listRunning();
+  const results = [];
+  for (const instance of instances) {
+    try {
+      const runtime = await start(instance);
+      const after = await findById(instance.id);
+      if (after) {
+        await setStatus(after);
+      }
+      results.push({
+        id: instance.id,
+        ok: true,
+        status: after?.status || instance.status,
+        halted: Boolean(runtime && runtime._halted),
+      });
+    } catch (err) {
+      console.error(
+        `[rehydrate] failed for bot_instance ${instance.id}:`,
+        err.message
+      );
+      results.push({ id: instance.id, ok: false, error: err.message });
+    }
+  }
+  return results;
+}
+
 module.exports = {
   ensureBotInstance,
   getSessionForUser,
@@ -220,4 +266,5 @@ module.exports = {
   startSession,
   stopSession,
   confirmLiveTrading,
+  rehydrateRunningRuntimes,
 };

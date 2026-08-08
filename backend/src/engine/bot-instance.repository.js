@@ -129,6 +129,22 @@ async function findById(botInstanceId) {
 }
 
 /**
+ * All instances currently marked running — used at process boot to
+ * rehydrate in-memory BotRuntimes after a crash/restart (otherwise
+ * DB says running but nothing monitors open paper/real positions).
+ */
+async function listRunning() {
+  const result = await pool.query(
+    `SELECT ${SELECT_COLUMNS}
+     FROM bot_instances bi
+     JOIN broker_connections bc ON bc.id = bi.broker_connection_id
+     WHERE bi.status = 'running'
+     ORDER BY bi.updated_at ASC`
+  );
+  return result.rows.map(mapBotInstance);
+}
+
+/**
  * Load existing bot_instances row for the user's linked broker connection,
  * or insert one with APIRS Section 2 defaults (stopped / STRATEGY_A / $10).
  */
@@ -218,6 +234,7 @@ module.exports = {
   findByBrokerConnectionId,
   findByUserId,
   findById,
+  listRunning,
   ensureForUser,
   updateStatusFields,
 };

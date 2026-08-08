@@ -4,6 +4,7 @@ const { PORT, assertRealTradingDemoBypassAtStartup } = require('./config/env');
 const { connectRedis } = require('./db/redis');
 const { attachWebSocketServer } = require('./ws/websocket-server');
 const { assertGateConfigAtStartup } = require('./services/access-gate.service');
+const tradingEngine = require('./engine/trading-engine');
 
 async function start() {
   assertGateConfigAtStartup();
@@ -11,6 +12,19 @@ async function start() {
   // demo-dispatch bypass env var is present at all (any value).
   assertRealTradingDemoBypassAtStartup();
   await connectRedis();
+
+  // Rehydrate any bots still marked running from before this process
+  // started (crash/restart). Same initialize()/resume path as Start —
+  // including E.7 real-ticket reconcile. Isolated per instance; does
+  // not block listen if one bot fails.
+  try {
+    const rehydrated = await tradingEngine.rehydrateRunningRuntimes();
+    const ok = rehydrated.filter((r) => r.ok).length;
+    console.log(`[boot] rehydrated ${ok}/${rehydrated.length} running bot runtime(s)`);
+  } catch (err) {
+    console.error('[boot] rehydrateRunningRuntimes failed:', err.message);
+  }
+
   const server = http.createServer(app);
   attachWebSocketServer(server);
   server.listen(PORT, () => {
