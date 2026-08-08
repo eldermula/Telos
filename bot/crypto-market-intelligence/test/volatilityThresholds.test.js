@@ -19,21 +19,19 @@ describe('crypto vs forex volatility thresholds', () => {
     assert.equal(classifyForexVolatility(1.31), 'HIGH');
   });
 
-  it('uses a wider NORMAL band for crypto', () => {
-    assert.ok(CRYPTO_VOLATILITY_THRESHOLDS.lowMax < FOREX_VOLATILITY_THRESHOLDS.lowMax);
-    assert.ok(CRYPTO_VOLATILITY_THRESHOLDS.highMin > FOREX_VOLATILITY_THRESHOLDS.highMin);
+  it('settles crypto cutoffs at the same 0.8 / 1.3 after empirical M15 calibration', () => {
+    assert.equal(CRYPTO_VOLATILITY_THRESHOLDS.lowMax, 0.8);
+    assert.equal(CRYPTO_VOLATILITY_THRESHOLDS.highMin, 1.3);
+    assert.equal(CRYPTO_VOLATILITY_THRESHOLDS.assetClass, 'crypto');
   });
 
-  it('classifies the ratio that is HIGH on forex but NORMAL on crypto', () => {
-    const midHigh = 1.4; // > 1.3 forex HIGH, < 1.55 crypto NORMAL
-    assert.equal(classifyForexVolatility(midHigh), 'HIGH');
-    assert.equal(classifyCryptoVolatility(midHigh), 'NORMAL');
-  });
-
-  it('classifies the ratio that is LOW on forex but NORMAL on crypto', () => {
-    const midLow = 0.7; // < 0.8 forex LOW, > 0.65 crypto NORMAL
-    assert.equal(classifyForexVolatility(midLow), 'LOW');
-    assert.equal(classifyCryptoVolatility(midLow), 'NORMAL');
+  it('classifies crypto identically to forex at the settled cutoffs', () => {
+    assert.equal(classifyCryptoVolatility(0.79), 'LOW');
+    assert.equal(classifyCryptoVolatility(0.8), 'NORMAL');
+    assert.equal(classifyCryptoVolatility(1.3), 'NORMAL');
+    assert.equal(classifyCryptoVolatility(1.31), 'HIGH');
+    assert.equal(classifyCryptoVolatility(1.4), classifyForexVolatility(1.4));
+    assert.equal(classifyCryptoVolatility(0.7), classifyForexVolatility(0.7));
   });
 
   it('still flags extreme crypto ratios as HIGH/LOW', () => {

@@ -16,13 +16,13 @@
 
 **Module 3 real LLM wiring: live, in soft-launch.** Kill switch (`NEWS_LLM_ENABLED`) is on in production, but this is being deliberately watched, not yet fully trusted — check `node backend/scripts/news-llm-usage.js` for real observed daily cost before treating the $0.05–0.15/day estimate as settled.
 
-**Crypto (BTC/ETH only): scoped and decided in `docs/11_Crypto_Synthetics_Scoping.md`. Increments A–D (isolated track) are built and verified** — A schema (`013`); B parallel crypto news (`bot/crypto-news-intelligence` + `crypto:news:*` Redis, `CRYPTO_NEWS_LLM_ENABLED` default off); C provisional vol thresholds (`0.65`/`1.55`); D contract-spec normalizer + connector `trade_contract_size` exposure (MetaQuotes-Demo lacks BTC/ETH symbols — probe skipped). **Still gated / not started:** `crypto-bot-runtime.js`, Selection wiring, any tick-loop integration — waits on E.8 + Module 3 soft-launch close + one-week stabilization (`11` §6 Q5).
+**Crypto (BTC/ETH only): isolated track A–D complete** per `docs/11_Crypto_Synthetics_Scoping.md`. A schema, B news pipeline, C empirical vol thresholds (`0.8`/`1.3` after live M15 `/rates` calibration — provisional `0.65`/`1.55` rejected), D contract specs (`trade_contract_size=1`, `sizingReady=true`). **No** `crypto-bot-runtime.js` / no dispatcher wiring yet (gated on E.8 + §6 buffer).
 
-**FLAGGED blocker (human, not agent):** finishing C (empirical OHLC calibration) and D (live symbol-info probe) both need a **crypto-capable broker/demo account** that lists BTC/ETH. Do not source or open one autonomously; WelTrade SyntX stays synthetics-deferred. See CHANGELOG.
+**Synthetic indices: explicitly deferred**, specifically because they'd force the live-broker decision toward Deriv. Not part of active scope. **The MT5 connector's demo server was switched to a Deriv Demo account** (replacing the earlier WelTrade SyntX account) specifically to unblock crypto Increments C/D — Deriv offers BTC/ETH CFDs, which MetaQuotes-Demo never did. This is a testing-infrastructure decision only. It does not decide the live-broker question, and it does not authorize touching synthetic indices — Deriv's own Volatility/Boom/Crash instruments will very likely be visible in the same symbol list, and that visibility is not permission. The rule is broker-agnostic: never query, test, or trade any synthetic index instrument, on this account or any other, without a deliberate, separate decision to revisit that deferral.**
 
-**Synthetic indices: explicitly deferred**, specifically because they'd force the live-broker decision toward Deriv. Not part of active scope. **A WelTrade `SyntX` demo account was provided this session — that account is for synthetic indices specifically (confirmed via Weltrade's own documentation), not crypto. Do not let its existence pull work toward synthetics without a deliberate, separate decision to revisit that deferral.**
+**Live broker decision (`02_Product_Requirements.md` §7): still genuinely open.** Nothing forces this yet — crypto was deliberately chosen as the scope that keeps this open. The current Deriv Demo connection is testing infrastructure, not a signal that this decision has been made.
 
-**Live broker decision (`02_Product_Requirements.md` §7): still genuinely open.** Nothing forces this yet — crypto was deliberately chosen as the scope that keeps this open.
+**Crypto Increments C + D: complete on Deriv Demo testing infra** (`login=41203298`). D: BTCUSD/ETHUSD `trade_contract_size=1`, `sizingReady=true`. C: empirical M15 ATR-ratio calibration → keep `0.8`/`1.3` (provisional widen rejected). Not a §7 broker decision. Synthetics still deferred.
 
 ---
 
@@ -57,9 +57,14 @@ circumstances, until a human is back and says otherwise:
   stabilization buffer (docs/11_..., Section 6, question 5). Neither
   condition is met yet.
 - Any code that calls placeOrder/closeOrder against ANY account,
-  including the new WelTrade SyntX demo account. That account is for
-  synthetic indices specifically, which are explicitly deferred scope
-  — do not use it for anything without a human's direct instruction.
+  including the current Deriv Demo connection (used for crypto spec/
+  threshold work only). This applies to every account connected to
+  this project, present or future, no exceptions.
+- Any query, test, or reference to synthetic index instruments
+  (Volatility Indices, Boom/Crash, Jump indices) on any connected
+  account. Their visibility on a Deriv connection is not permission —
+  synthetics remain explicitly deferred scope until revisited
+  deliberately.
 - E.8's live smoke test — this requires a human present to watch it
   run, per explicit standing instruction. Do not run it autonomously
   even if markets are open.
@@ -87,7 +92,7 @@ production, per the standing deploy rule.
 
 ## 3. Credential handling — standing rule, restated
 
-Never type real credentials — passwords, API keys, trading account details — into chat with Claude, regardless of whether the account is real-money or demo. Once typed, treat it as exposed. Type real values directly into `.env` files or the app's own linking flow, never through a conversational interface. This has applied consistently to the MetaQuotes-Demo account, the OpenAI/Anthropic API keys, and now the WelTrade account — same rule, no exceptions for "it's just a demo."
+Never type real credentials — passwords, API keys, trading account details — into chat with Claude, regardless of whether the account is real-money or demo. Once typed, treat it as exposed. Type real values directly into `.env` files or the app's own linking flow, never through a conversational interface. This has applied consistently to the MetaQuotes-Demo account, the OpenAI/Anthropic API keys, and every broker account added since — same rule, no exceptions for "it's just a demo."
 
 ---
 

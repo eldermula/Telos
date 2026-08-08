@@ -1,15 +1,24 @@
 'use strict';
 
 /**
- * Crypto Increment C — provisional ATR-ratio thresholds for BTC/ETH.
+ * Crypto Increment C — ATR-ratio thresholds for BTC/ETH.
  *
- * Forex Module 2 uses LOW < 0.8 / HIGH > 1.3 (calibrated on FX/gold).
- * docs/11 §1: crypto's sharper regime-switching crosses those breakpoints
- * more often after ratio normalization, over-firing the micro breaker's
- * HIGH arm. Widen the NORMAL band until live OHLC calibration revises it.
+ * Same Module 2 definition as forex: ratio = Wilder ATR(14) /
+ * SMA(last 20 ATR values). Categories: LOW < lowMax, HIGH > highMin,
+ * else NORMAL (cutoffs inclusive of NORMAL).
  *
- * FLAG for human review after a week of logged crypto ratios exists:
- * these numbers are reasoned starting points, not empirically settled.
+ * Empirical settle (2026-08-08), read-only /rates M15 × 1000 bars each
+ * for BTCUSD + ETHUSD on Deriv Demo testing infra (n=1936 ratios):
+ *   pooled p10≈0.805, p50≈0.958, p90≈1.252, p95≈1.360
+ * Under forex 0.8/1.3 → LOW≈8.9% / HIGH≈7.7% (usable tails).
+ * Under provisional 0.65/1.55 → LOW≈0.1% / HIGH≈0.9% (nearly silent).
+ *
+ * Conclusion: the docs/11 “widen NORMAL” starting point over-corrected
+ * for this sample. Absolute crypto ATR is higher, but the ratio is
+ * self-normalizing and the observed ratio distribution matches the
+ * forex band intent — keep 0.80 / 1.30. Re-run
+ * `backend/scripts/calibrate-crypto-vol-c.js` after a major stress
+ * window if tails look materially fatter.
  */
 const FOREX_VOLATILITY_THRESHOLDS = Object.freeze({
   lowMax: 0.8,
@@ -18,8 +27,8 @@ const FOREX_VOLATILITY_THRESHOLDS = Object.freeze({
 });
 
 const CRYPTO_VOLATILITY_THRESHOLDS = Object.freeze({
-  lowMax: 0.65,
-  highMin: 1.55,
+  lowMax: 0.8,
+  highMin: 1.3,
   assetClass: 'crypto',
 });
 
