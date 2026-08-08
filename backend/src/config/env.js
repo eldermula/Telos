@@ -91,6 +91,13 @@ const REAL_CONNECTION_MAX_AGE_HOURS =
   Number(process.env.REAL_CONNECTION_MAX_AGE_HOURS) || 24;
 
 /**
+ * Module 3 — real Claude headline classification kill switch.
+ * Exact-string 'true' only (same foot-gun direction as REAL_TRADING_ENABLED).
+ * Default off everywhere, including production.
+ */
+const NEWS_LLM_ENABLED = process.env.NEWS_LLM_ENABLED === 'true';
+
+/**
  * Pure check so unit tests can cover every combination without
  * reloading this module. `allowDemoEnvPresent` is true when the env
  * var exists in the process environment at all — including empty
@@ -148,6 +155,7 @@ module.exports = {
   REAL_TRADING_ALLOW_DEMO,
   REAL_MAX_LOT,
   REAL_CONNECTION_MAX_AGE_HOURS,
+  NEWS_LLM_ENABLED,
   assertRealTradingDemoBypassAllowed,
   assertRealTradingDemoBypassAtStartup,
   isProduction: NODE_ENV === 'production',

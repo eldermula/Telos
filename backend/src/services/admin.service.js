@@ -5,6 +5,8 @@ const { redis } = require('../db/redis');
 const { AppError } = require('../utils/app-error');
 const { toMeta } = require('../utils/pagination');
 const riskTierConfigService = require('../engine/risk-tier-config.service');
+const { getNewsLlmUsage } = require('./news-llm-usage');
+const { NEWS_LLM_ENABLED } = require('../config/env');
 
 const STRATEGY_STATUSES = new Set(['proposed', 'paper_testing', 'active', 'rejected']);
 
@@ -138,6 +140,17 @@ async function getSystemHealth() {
     pool.query(`SELECT count(*)::int AS n FROM reports`).then((r) => r.rows[0].n).catch(() => null),
   ]);
 
+  let newsLlm = {
+    enabled: NEWS_LLM_ENABLED,
+    usage: null,
+    usage_error: null,
+  };
+  try {
+    newsLlm.usage = await getNewsLlmUsage(redis);
+  } catch (err) {
+    newsLlm.usage_error = err && err.message ? err.message : String(err);
+  }
+
   return {
     status: postgres.ok && redisHealth.ok ? 'ok' : 'degraded',
     checked_at: new Date().toISOString(),
@@ -149,6 +162,7 @@ async function getSystemHealth() {
       bots_running: botsRunning,
       reports,
     },
+    news_llm: newsLlm,
   };
 }
 

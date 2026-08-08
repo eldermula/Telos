@@ -5,15 +5,17 @@
  *   REAL_TRADING_ENABLED=true
  *   REAL_TRADING_ALLOW_DEMO=true
  *   local MT5 connector + MetaQuotes-Demo terminal attached
- *   forex market open (trade_mode_full)
+ *   forex market open (trade_mode_full + fresh tick — see preflight)
  *
  * Flow:
  *   confirm-live (demo allowed under E1) → Start → tick open real
  *   demo order → connector close → tick monitor reconcile → assert
  *   trade row / decision log / Layer 0 expected_account_type=demo.
  *
- * Aborts cleanly (exit 0, not FAIL) when the connector is down or the
+ * Skips cleanly (exit 0, not FAIL) when the connector/DB is down or the
  * market is closed — same discipline as smoke-mt5-order-46.js.
+ * trade_mode_full alone is not enough: MetaQuotes demo often leaves it
+ * true over the weekend with a stale last tick.
  *
  * Negative kill-switch / bypass / production-boot cases remain covered
  * by E.0/E.1 unit tests; this smoke proves the success path live.
@@ -36,6 +38,10 @@ const mt5Connector = require('../src/services/mt5-connector.client');
 const { LIVE_TRADING_CONFIRMATION_PHRASE } = require('../src/engine/live-trading-confirmation');
 const { makeFakeStrategySelection } = require('./test-helpers/fake-strategy-selection');
 const {
+  assessMarketClosed,
+  DEFAULT_MAX_TICK_AGE_SEC,
+} = require('./test-helpers/market-closed-preflight');
+const {
   REAL_TRADING_ENABLED,
   REAL_TRADING_ALLOW_DEMO,
   DATABASE_URL,
@@ -43,6 +49,10 @@ const {
 } = require('../src/config/env');
 
 const SYMBOL = process.env.MT5_SMOKE_SYMBOL || 'EURUSD';
+// FX ticks refresh continuously when the session is open; weekend/holiday
+// quotes keep Friday's bid/ask with an old tick_time while trade_mode_full
+// can still read true. Override via MT5_SMOKE_MAX_TICK_AGE_SEC if needed.
+const MAX_TICK_AGE_SEC = Number(process.env.MT5_SMOKE_MAX_TICK_AGE_SEC) || DEFAULT_MAX_TICK_AGE_SEC;
 
 function assert(cond, msg) {
   if (!cond) throw new Error(`FAIL: ${msg}`);
@@ -50,6 +60,14 @@ function assert(cond, msg) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function skipMarketClosed(detail) {
+  console.log(
+    `OPTION2_E8_SKIP_MARKET_CLOSED: ${SYMBOL} — ${detail}. ` +
+      `Re-run during London/NY overlap (forex open). Not a code failure.`
+  );
+  process.exitCode = 0;
 }
 
 function tcpOpen(host, port, timeoutMs = 1500) {
@@ -114,19 +132,18 @@ async function main() {
   assert(liveInfo.account_type === 'demo', `E.8 expects a demo terminal, got ${liveInfo.account_type}`);
 
   const symbolInfo = await mt5Connector.getSymbolInfo(SYMBOL);
+  const market = assessMarketClosed(symbolInfo, { maxTickAgeSec: MAX_TICK_AGE_SEC });
   console.log('symbol_info', {
     trade_mode: symbolInfo.trade_mode,
     trade_mode_full: symbolInfo.trade_mode_full,
     bid: symbolInfo.bid,
     ask: symbolInfo.ask,
+    tick_time: symbolInfo.tick_time,
     volume_min: symbolInfo.volume_min,
+    market_preflight: market,
   });
-  if (!symbolInfo.trade_mode_full || symbolInfo.bid == null || symbolInfo.ask == null) {
-    console.log(
-      `OPTION2_E8_ABORT_MARKET_CLOSED: ${SYMBOL} trade_mode_full=${symbolInfo.trade_mode_full} — ` +
-        `re-run during forex market hours. Not a code failure.`
-    );
-    process.exitCode = 0;
+  if (market.closed) {
+    skipMarketClosed(market.reason);
     return;
   }
 
@@ -196,6 +213,16 @@ async function main() {
       await client.end();
       await redis.quit().catch(() => {});
       process.exitCode = 0;
+      return;
+    }
+    // trade_mode_full + fresh-looking quotes can still lose the race at
+    // session close; broker retcode 10018 is authoritative (same as 4.6).
+    if (retcode === 10018 || /Market closed/i.test(msg)) {
+      await tradingEngine.stopSession(userId).catch(() => {});
+      await stopRuntime(session.bot_instance_id).catch(() => {});
+      await client.end();
+      await redis.quit().catch(() => {});
+      skipMarketClosed(`placeOrder retcode=10018 (${msg || 'Market closed'})`);
       return;
     }
   }

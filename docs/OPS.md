@@ -148,3 +148,37 @@ git config core.hooksPath .githooks
 `.githooks/pre-commit` runs `node scripts/check-changelog-size.js`, which
 refuses the commit if CHANGELOG is empty or shrank by more than 50% vs HEAD.
 Manual check: `node scripts/check-changelog-size.js`.
+
+---
+
+## 6. Module 3 LLM cost watch (first week after enable)
+
+There is **no separate staging stack** — this self-hosted Backend is the
+production API (`TelosBackend` → Tunnel → `api.telostrust.com`). Soft-launch
+is: flip `NEWS_LLM_ENABLED=true` + set `ANTHROPIC_API_KEY` in `backend/.env`,
+restart the Backend, and observe spend for a week before treating the path
+as "safe to leave indefinitely."
+
+### Daily check (first 7 days)
+
+From the repo root (Backend machine, Redis up):
+
+```bash
+node backend/scripts/news-llm-usage.js
+```
+
+Record `current_month.estimated_cost_usd` (and `calls` / tokens). Also on
+admin `GET /api/v1/admin/system-health` → `news_llm.usage`.
+
+### What "real days" requires
+
+Module 3 only bills when a **running bot** drives Selection →
+`getNewsIntelligence()` on a cache miss **and** there are new (unseen)
+headlines. If every bot is stopped, the usage script will correctly show
+~$0 — that is not a cost proof, it is an idle system. Keep at least one
+paper bot running during the watch week.
+
+### Kill switch
+
+Set `NEWS_LLM_ENABLED=false` (or remove it) in `backend/.env` and restart
+`TelosBackend`. Stub classification resumes immediately; no code deploy.
