@@ -1,0 +1,10 @@
+{
+  "name": "@telos/crypto-news-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure crypto (BTC/ETH) news intelligence helpers — parallel to forex Module 3, no runtime wiring",
+  "main": "src/watchlist.js",
+  "engines": {
+    "node": ">=20"
+  }
+}

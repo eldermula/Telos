@@ -98,6 +98,13 @@ const REAL_CONNECTION_MAX_AGE_HOURS =
 const NEWS_LLM_ENABLED = process.env.NEWS_LLM_ENABLED === 'true';
 
 /**
+ * Crypto Increment B — parallel crypto headline Claude kill switch.
+ * Exact-string 'true' only. Default off. Independent of NEWS_LLM_ENABLED
+ * so forex soft-launch monitoring is never coupled to crypto LLM spend.
+ */
+const CRYPTO_NEWS_LLM_ENABLED = process.env.CRYPTO_NEWS_LLM_ENABLED === 'true';
+
+/**
  * Pure check so unit tests can cover every combination without
  * reloading this module. `allowDemoEnvPresent` is true when the env
  * var exists in the process environment at all — including empty
@@ -156,6 +163,7 @@ module.exports = {
   REAL_MAX_LOT,
   REAL_CONNECTION_MAX_AGE_HOURS,
   NEWS_LLM_ENABLED,
+  CRYPTO_NEWS_LLM_ENABLED,
   assertRealTradingDemoBypassAllowed,
   assertRealTradingDemoBypassAtStartup,
   isProduction: NODE_ENV === 'production',

@@ -147,12 +147,18 @@ def get_symbol_info(symbol: str | None) -> tuple[int, dict]:
         if info is None:
             return 422, {"ok": False, "message": f"symbol_info unavailable for {symbol}"}
         tick = mt5.symbol_info_tick(symbol)
+        # trade_contract_size: required for honest Module 7 sizing on
+        # non-FX CFDs (crypto Increment D; also fixes silent FX-default
+        # for gold). Read-only; no order path. Attribute name matches
+        # MetaTrader5's symbol_info.trade_contract_size.
+        trade_contract_size = getattr(info, "trade_contract_size", None)
         return 200, {
             "ok": True,
             "symbol": symbol,
             "volume_min": info.volume_min,
             "volume_max": info.volume_max,
             "volume_step": info.volume_step,
+            "trade_contract_size": trade_contract_size,
             "trade_mode": info.trade_mode,
             # SYMBOL_TRADE_MODE_FULL — anything else (incl. market closed
             # for the weekend) means order_send would be rejected.

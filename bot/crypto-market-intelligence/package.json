@@ -1,0 +1,10 @@
+{
+  "name": "@telos/crypto-market-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Crypto ATR-ratio volatility thresholds — pure helpers, no runtime wiring",
+  "main": "src/volatilityThresholds.js",
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -81,7 +81,7 @@ Defines the system-level component boundaries, data flow, and integration points
 
 **Connection method — confirmed: the official `MetaTrader5` Python package.** Free, native, and Windows-only — which happens to match the self-hosted machine's OS exactly, so no third-party bridge service or paid API is needed. This is a scoped exception to the Node.js-only backend stack (Blueprint Section 6): the MT5 connector runs as a small local Python service, called by the Bot's Execution Engine (`08_Bot_Architecture.md` Module 7) over an internal API — the rest of the Bot and the entire Backend API remain Node.js/Express as approved.
 
-**How it works:** the official library drives a locally running MT5 terminal instance per linked account. **Confirmed: one broker connection per user** (see Section 9) — so this means at most one MT5 terminal instance per user, which keeps resource usage on the 8GB self-hosted machine predictable at the confirmed 5-user initial scale (Section 8). This wouldn't hold up unchanged at "thousands of users" — noted in Section 9 as part of the longer-term scaling question, not a problem to solve now.
+**How it works:** the official library drives a locally running MT5 terminal instance per linked account. **Connection cardinality (Crypto Increment A / `11` §0.2):** the database allows one connection per `(user_id, broker_id)` — so a future crypto pathway can link a second broker without removing the bounded-cardinality guarantee. **The API still enforces a single connection per user** (`409 CONNECTION_ALREADY_EXISTS`) until a later control-plane increment relaxes that check; today that still means at most one MT5 terminal instance per user, which keeps resource usage on the 8GB self-hosted machine predictable at the confirmed 5-user initial scale (Section 8). This wouldn't hold up unchanged at "thousands of users" — noted in Section 9 as part of the longer-term scaling question, not a problem to solve now.
 
 - The user's own linked broker account (Blueprint 5a — non-custodial)
 - Credentials (MT5 login, password, server) captured once via `/broker-connections` (`06_API_Specification.md` Section 4), encrypted at rest, passed to the local MT5 terminal only at connection time — never persisted by the Python connector itself, only by the Backend API's encrypted storage (`09_Security.md` Section 3)
@@ -139,7 +139,7 @@ Telos has **two distinct AI integration points**, and they must not be merged in
 - ~~All items previously carried from `08_Bot_Architecture.md`~~ → all resolved there (Section 13).
 - ~~Initial scale target~~ → 5 real users on the self-hosted setup (Section 8).
 - ~~MT5/broker connection method~~ → official `MetaTrader5` Python package, local Python service alongside the Node.js backend (Section 3.6).
-- ~~Single vs. multi broker-account per user~~ → single, enforced at the application layer; schema stays multi-capable for later (Section 3.6).
+- ~~Single vs. multi broker-account per user~~ → **Crypto Increment A:** DB `UNIQUE(user_id, broker_id)` landed (`broker_connections.broker_id`); API still single-connection (`409`) until a later crypto control-plane increment. Schema was never `UNIQUE(user_id)` at the DB — that was always app-enforced (Section 3.6 / CHANGELOG).
 
 ---
 

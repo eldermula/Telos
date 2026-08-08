@@ -41,7 +41,8 @@ users ──1:1──> settings
 |---|---|---|
 | id | UUID (PK) | |
 | user_id | UUID (FK → users) | |
-| broker_name | text | which broker/MT5 endpoint (`FR-ONB-1`) |
+| broker_name | text | which broker/MT5 endpoint (`FR-ONB-1`) — display/label; not the uniqueness key |
+| broker_id | text, not null | **Added Crypto Increment A** (`11` §0.2). Controlled slug for connection cardinality (`UNIQUE(user_id, broker_id)`). Distinct from free-text `broker_name`. Existing rows backfilled from `lower(trim(broker_name))` (all current rows → `'mt5'`). `BEFORE INSERT` trigger derives `broker_id` from `broker_name` when omitted so `createConnection` needs no app change in A. API still rejects a second connection (`409 CONNECTION_ALREADY_EXISTS`) until a later crypto-control-plane increment relaxes that check |
 | encrypted_credentials | bytea | field-level encrypted, never plaintext (`NFR-2`) |
 | connection_status | enum('connected','disconnected','error') | `FR-ONB-4` |
 | account_type | enum('demo','contest','real') | **Added this revision (post-Phase-6, Bot Architecture §13 / Security §11).** Detected automatically from the live MT5 terminal at validate time (`mt5.account_info().trade_mode`) — never user-supplied, since a user-entered flag could be wrong in exactly the case this exists to protect against. Set on every `POST`/`PATCH /broker-connections` (re-validated on each, so it stays current with whichever account the stored credentials currently point at). `NOT NULL`, backfilled to `'demo'` — every connection this project has ever linked was against MetaQuotes-Demo, an honest backfill (same justification as `trades.symbol`'s in migration 005). Exposed via the public API (unlike `trades.conditions`) — this is useful, non-sensitive information the user should be able to see. Fixes the previously-flagged gap that every real-order code path (Module 7, `mt5Connector.placeOrder`/`closeOrder`) ran identically regardless of account type; consuming this field to actually gate/differentiate execution is Option 2's own responsibility when it's built, not retrofitted here |
@@ -72,6 +73,8 @@ users ──1:1──> settings
 | id | UUID (PK) | |
 | bot_instance_id | UUID (FK → bot_instances) | |
 | symbol | text, not null | **Added this revision (Bot Architecture §9.0, watchlist).** Which instrument this trade was in (e.g. `"EURUSD"`, `"XAUUSD"`) — the table was implicitly single-instrument before the watchlist existed, with no way to record which of several instruments a row referred to. `text`, not an enum, deliberately: the watchlist (Bot Architecture §9.0/§13) is admin-configured and may be revised without a schema migration each time, unlike `direction`/`status` below, which are fixed by the trading model itself, not by a config the Admin module can change |
+| user_id | UUID (FK → users), not null | **Added Crypto Increment A.** Denormalized from `bot_instances.user_id` so the system-wide one-open-position unique index (`11` §0.2) can live on `trades` without a join. Backfilled; `BEFORE INSERT` trigger copies from `bot_instances` when omitted — existing `insertOpen*` paths untouched |
+| asset_class | enum(`forex_gold`,`crypto`,`synthetic`), not null, default `forex_gold` | **Added Crypto Increment A** (`11` §0.2). Shared writers layer tag for the separate-pathway architecture. All existing rows backfilled `forex_gold`. `synthetic` reserved even though synthetics are deferred |
 | origin | enum('bot','manual') | distinguishes bot-originated trades from `FR-TRADE-5` manual orders — both still route through the same `bot_instance_id`/execution path, this only records who decided it |
 | direction | enum('BUY','SELL') | from Bot Architecture §9 Module 4 output |
 | entry_price | numeric | |
@@ -86,6 +89,8 @@ users ──1:1──> settings
 | pnl | numeric, nullable | |
 | conditions | jsonb, nullable | **Added this revision (6.5, Bot Architecture §8 — Learning Engine).** Snapshot of the scalar trade-input conditions present when this trade opened (`strategyConfidence`, `marketQuality`, `trendQuality`, `marketVolatility`, `currentATR`, `rollingAvgATR`, `dailyDrawdownPct`, `direction`, `strategy_id`, `strategy_name`) — written once, at open time only, never on close. `chosen_instrument` deliberately excluded (already `trades.symbol`); the raw Module 4 `selection`/`marketIntelligence` object is never stored here (it carries a ~100-bar OHLC array that would balloon every row). Nullable, no backfill — trades closed before this column existed have no honest value to backfill. Internal-only: read by `loadTradeHistoryForLearning` for the Learning Engine's rolling window; not added to the API-facing trade shape, not exposed via `GET /trading/positions`/`GET /trading/history`. `strategy_id` stays inside this jsonb blob rather than becoming its own FK column — a dedicated per-strategy analytics column is a larger, separate scope, deferred |
 
+**Indexes / triggers on `trades` (Crypto Increment A):** partial unique index `one_open_trade_per_user` on `(user_id) WHERE status = 'open'` — database-level enforcement of one open position system-wide across asset classes (`11` §0.2 / `08` §13). Trigger `trades_set_user_id_bi` keeps `user_id` populated without app writes.
+
 **`bot_decision_log`** — satisfies `FR-BOT-6` / `NFR-6` (auditability)
 | Column | Type | Notes |
 |---|---|---|
@@ -95,6 +100,7 @@ users ──1:1──> settings
 | decision_type | enum('strategy_switch','profit_lock','macro_circuit_breaker','micro_circuit_breaker','trade_approved','trade_rejected') | |
 | triggering_condition | text | human-readable reason |
 | details | jsonb | full environment dictionary snapshot, per Bot Architecture §10, that produced this decision |
+| asset_class | enum(`forex_gold`,`crypto`,`synthetic`), not null, default `forex_gold` | **Added Crypto Increment A.** Same shared-writers tag as `trades.asset_class`; backfilled `forex_gold` |
 
 **`notifications`**
 | Column | Type | Notes |
