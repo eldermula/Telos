@@ -356,6 +356,32 @@ async function disableSyntheticDemoConfirm(adminUserId) {
   return status;
 }
 
+async function getSyntheticDemoManualTradeStatus() {
+  return syntheticDemoDispatchService.getManualTestTradeStatus();
+}
+
+async function enableSyntheticDemoManualTrade(adminUserId, minutes) {
+  const status = await syntheticDemoDispatchService.enableManualTestTrade(
+    adminUserId,
+    minutes
+  );
+  await writeAudit({
+    adminUserId,
+    action: 'synthetic_demo_manual_trade.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableSyntheticDemoManualTrade(adminUserId) {
+  const status = await syntheticDemoDispatchService.disableManualTestTrade(adminUserId);
+  await writeAudit({
+    adminUserId,
+    action: 'synthetic_demo_manual_trade.disable',
+  });
+  return status;
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -370,5 +396,8 @@ module.exports = {
   getSyntheticDemoConfirmStatus,
   enableSyntheticDemoConfirm,
   disableSyntheticDemoConfirm,
+  getSyntheticDemoManualTradeStatus,
+  enableSyntheticDemoManualTrade,
+  disableSyntheticDemoManualTrade,
   writeAudit,
 };

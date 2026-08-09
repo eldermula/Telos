@@ -6,10 +6,7 @@ const { spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('path');
 
-const {
-  assertRealTradingDemoBypassAllowed,
-  assertSyntheticManualTestTradeBypassAllowed,
-} = require('./env');
+const { assertRealTradingDemoBypassAllowed } = require('./env');
 
 const ENV_JS = path.join(__dirname, 'env.js');
 
@@ -134,27 +131,14 @@ test('assertRealTradingDemoBypassAtStartup: development + REAL_TRADING_ALLOW_DEM
   assert.match(result.stdout, /BOOTED/);
 });
 
-test('assertSyntheticManualTestTradeBypassAllowed: production + present → refuses', () => {
-  assert.throws(
-    () =>
-      assertSyntheticManualTestTradeBypassAllowed({
-        nodeEnv: 'production',
-        allowDemoEnvPresent: true,
-      }),
-    /SYNTHETIC_ALLOW_MANUAL_TEST_TRADE must not be set when NODE_ENV=production/
-  );
-});
-
-test('assertRealTradingDemoBypassAtStartup: production + SYNTHETIC_ALLOW_MANUAL_TEST_TRADE → refuses', () => {
+test('assertRealTradingDemoBypassAtStartup: production + SYNTHETIC_ALLOW_MANUAL_TEST_TRADE present → still allows (retired tripwire)', () => {
+  // Manual test-trade is now an admin DB toggle; leftover env must not refuse boot.
   const result = loadEnvInChild(
     { NODE_ENV: 'production', SYNTHETIC_ALLOW_MANUAL_TEST_TRADE: 'true' },
     `require(${JSON.stringify(ENV_JS)}).assertRealTradingDemoBypassAtStartup(); console.log('BOOTED');`
   );
-  assert.notEqual(result.status, 0, 'expected non-zero exit');
-  assert.match(
-    result.stderr,
-    /SYNTHETIC_ALLOW_MANUAL_TEST_TRADE must not be set when NODE_ENV=production/
-  );
+  assert.equal(result.status, 0, `expected clean boot, stderr=${result.stderr}`);
+  assert.match(result.stdout, /BOOTED/);
 });
 
 test('REAL_TRADING_ALLOW_DEMO parsing: only exact "true" enables the boolean', () => {

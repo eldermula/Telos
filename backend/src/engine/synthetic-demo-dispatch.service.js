@@ -2,9 +2,10 @@
 
 /**
  * Admin-gated, auto-expiring synthetics demo bypasses:
- *   - Layer 3 dispatch:  enabled_until
- *   - Layer 2 confirm:   confirm_enabled_until
- * Postgres singleton + Redis cache (risk-tier pattern). Cache stores both
+ *   - Layer 3 dispatch:       enabled_until
+ *   - Layer 2 confirm:        confirm_enabled_until
+ *   - Manual test-dispatch:   manual_test_trade_enabled_until
+ * Postgres singleton + Redis cache (risk-tier pattern). Cache stores all
  * timestamps; each caller compares to Date.now() so expiry is immediate
  * even inside the Redis TTL window. Layers stay independently toggleable.
  */
@@ -17,7 +18,11 @@ const { AppError } = require('../utils/app-error');
 const CACHE_KEY = 'synthetic:demo-dispatch-config';
 const EXPIRY_LOG_KEY_DISPATCH = 'synthetic:demo-dispatch:expiry-logged';
 const EXPIRY_LOG_KEY_CONFIRM = 'synthetic:demo-confirm:expiry-logged';
+const EXPIRY_LOG_KEY_MANUAL = 'synthetic:demo-manual-trade:expiry-logged';
 const MAX_ENABLE_MINUTES = 30;
+
+const RETURNING_COLS =
+  'enabled_until, confirm_enabled_until, manual_test_trade_enabled_until, updated_at, updated_by_admin_user_id';
 
 function toStatus(enabledUntil) {
   const untilMs = enabledUntil ? new Date(enabledUntil).getTime() : NaN;
@@ -49,7 +54,7 @@ function parseMinutes(minutes) {
 
 async function fetchFromDatabase() {
   const result = await pool.query(
-    `SELECT enabled_until, confirm_enabled_until, updated_at, updated_by_admin_user_id
+    `SELECT ${RETURNING_COLS}
      FROM synthetic_demo_dispatch_config
      WHERE id = 1`
   );
@@ -65,6 +70,9 @@ function rowToPayload(row) {
     confirm_enabled_until: row.confirm_enabled_until
       ? new Date(row.confirm_enabled_until).toISOString()
       : null,
+    manual_test_trade_enabled_until: row.manual_test_trade_enabled_until
+      ? new Date(row.manual_test_trade_enabled_until).toISOString()
+      : null,
     updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null,
     updated_by_admin_user_id: row.updated_by_admin_user_id || null,
   };
@@ -79,7 +87,8 @@ async function getCachedOrDbRow() {
         parsed &&
         typeof parsed === 'object' &&
         'enabled_until' in parsed &&
-        'confirm_enabled_until' in parsed
+        'confirm_enabled_until' in parsed &&
+        'manual_test_trade_enabled_until' in parsed
       ) {
         return parsed;
       }
@@ -119,6 +128,7 @@ async function invalidateCache() {
   });
   await redis.del(EXPIRY_LOG_KEY_DISPATCH).catch(() => {});
   await redis.del(EXPIRY_LOG_KEY_CONFIRM).catch(() => {});
+  await redis.del(EXPIRY_LOG_KEY_MANUAL).catch(() => {});
 }
 
 /**
@@ -166,6 +176,27 @@ async function isDemoConfirmEnabled() {
   }
 }
 
+async function isManualTestTradeEnabled() {
+  try {
+    const row = await getCachedOrDbRow();
+    const status = toStatus(row.manual_test_trade_enabled_until);
+    if (!status.enabled && row.manual_test_trade_enabled_until) {
+      await maybeLogExpiry(
+        'manual-trade',
+        row.manual_test_trade_enabled_until,
+        EXPIRY_LOG_KEY_MANUAL,
+        'manual test-dispatch/close gate'
+      );
+    }
+    return status.enabled;
+  } catch (err) {
+    console.error(
+      `[synthetic-demo-manual-trade] read failed, treating as disabled: ${err.message}`
+    );
+    return false;
+  }
+}
+
 async function getDispatchStatus() {
   const row = await getCachedOrDbRow();
   const status = toStatus(row.enabled_until);
@@ -202,6 +233,24 @@ async function getConfirmStatus() {
   };
 }
 
+async function getManualTestTradeStatus() {
+  const row = await getCachedOrDbRow();
+  const status = toStatus(row.manual_test_trade_enabled_until);
+  if (!status.enabled && row.manual_test_trade_enabled_until) {
+    await maybeLogExpiry(
+      'manual-trade',
+      row.manual_test_trade_enabled_until,
+      EXPIRY_LOG_KEY_MANUAL,
+      'manual test-dispatch/close gate'
+    );
+  }
+  return {
+    ...status,
+    updated_at: row.updated_at || null,
+    updated_by_admin_user_id: row.updated_by_admin_user_id || null,
+  };
+}
+
 /** @deprecated use getDispatchStatus — kept for existing admin.service callers */
 async function getStatus() {
   return getDispatchStatus();
@@ -215,7 +264,7 @@ async function enableDispatch(adminUserId, minutes) {
          updated_at = now(),
          updated_by_admin_user_id = $2
      WHERE id = 1
-     RETURNING enabled_until, confirm_enabled_until, updated_at, updated_by_admin_user_id`,
+     RETURNING ${RETURNING_COLS}`,
     [mins, adminUserId]
   );
   await invalidateCache();
@@ -235,7 +284,7 @@ async function disableDispatch(adminUserId) {
          updated_at = now(),
          updated_by_admin_user_id = $1
      WHERE id = 1
-     RETURNING enabled_until, confirm_enabled_until, updated_at, updated_by_admin_user_id`,
+     RETURNING ${RETURNING_COLS}`,
     [adminUserId]
   );
   await invalidateCache();
@@ -253,7 +302,7 @@ async function enableConfirm(adminUserId, minutes) {
          updated_at = now(),
          updated_by_admin_user_id = $2
      WHERE id = 1
-     RETURNING enabled_until, confirm_enabled_until, updated_at, updated_by_admin_user_id`,
+     RETURNING ${RETURNING_COLS}`,
     [mins, adminUserId]
   );
   await invalidateCache();
@@ -273,7 +322,7 @@ async function disableConfirm(adminUserId) {
          updated_at = now(),
          updated_by_admin_user_id = $1
      WHERE id = 1
-     RETURNING enabled_until, confirm_enabled_until, updated_at, updated_by_admin_user_id`,
+     RETURNING ${RETURNING_COLS}`,
     [adminUserId]
   );
   await invalidateCache();
@@ -281,6 +330,44 @@ async function disableConfirm(adminUserId) {
     `[synthetic-demo-confirm] DISABLED early by admin_user_id=${adminUserId}`
   );
   return toStatus(result.rows[0].confirm_enabled_until);
+}
+
+async function enableManualTestTrade(adminUserId, minutes) {
+  const mins = parseMinutes(minutes);
+  const result = await pool.query(
+    `UPDATE synthetic_demo_dispatch_config
+     SET manual_test_trade_enabled_until = now() + ($1 * interval '1 minute'),
+         updated_at = now(),
+         updated_by_admin_user_id = $2
+     WHERE id = 1
+     RETURNING ${RETURNING_COLS}`,
+    [mins, adminUserId]
+  );
+  await invalidateCache();
+  const status = toStatus(result.rows[0].manual_test_trade_enabled_until);
+  console.warn(
+    `[synthetic-demo-manual-trade] ENABLED by admin_user_id=${adminUserId} ` +
+      `for ${mins} minute(s) until=${status.enabled_until} — ` +
+      'TESTING-ONLY manual test-dispatch/close gate'
+  );
+  return status;
+}
+
+async function disableManualTestTrade(adminUserId) {
+  const result = await pool.query(
+    `UPDATE synthetic_demo_dispatch_config
+     SET manual_test_trade_enabled_until = NULL,
+         updated_at = now(),
+         updated_by_admin_user_id = $1
+     WHERE id = 1
+     RETURNING ${RETURNING_COLS}`,
+    [adminUserId]
+  );
+  await invalidateCache();
+  console.warn(
+    `[synthetic-demo-manual-trade] DISABLED early by admin_user_id=${adminUserId}`
+  );
+  return toStatus(result.rows[0].manual_test_trade_enabled_until);
 }
 
 /** @deprecated use enableDispatch */
@@ -296,15 +383,19 @@ async function disable(adminUserId) {
 module.exports = {
   isDemoDispatchEnabled,
   isDemoConfirmEnabled,
+  isManualTestTradeEnabled,
   getStatus,
   getDispatchStatus,
   getConfirmStatus,
+  getManualTestTradeStatus,
   enable,
   disable,
   enableDispatch,
   disableDispatch,
   enableConfirm,
   disableConfirm,
+  enableManualTestTrade,
+  disableManualTestTrade,
   invalidateCache,
   toStatus,
   CACHE_KEY,

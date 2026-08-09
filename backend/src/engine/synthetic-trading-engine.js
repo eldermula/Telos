@@ -22,12 +22,7 @@ const {
   isConfirmationActive,
 } = require('./live-trading-confirmation');
 const { resolveExecutionMode } = require('./execution-mode');
-const {
-  NODE_ENV,
-  SYNTHETIC_REAL_TRADING_ENABLED,
-  SYNTHETIC_ALLOW_MANUAL_TEST_TRADE,
-  assertSyntheticManualTestTradeBypassAllowed,
-} = require('../config/env');
+const { SYNTHETIC_REAL_TRADING_ENABLED } = require('../config/env');
 const syntheticDemoDispatchService = require('./synthetic-demo-dispatch.service');
 const path = require('path');
 const { SYNTHETIC_WATCHLIST } = require(path.join(
@@ -191,24 +186,12 @@ async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
  * Bypasses strategy selection only; real open/monitor path unchanged.
  */
 async function testDispatchSyntheticReal(userId, { symbol, direction }) {
-  try {
-    assertSyntheticManualTestTradeBypassAllowed({
-      nodeEnv: NODE_ENV,
-      allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== undefined,
-    });
-  } catch (err) {
-    throw new AppError(
-      500,
-      'SYNTHETIC_MANUAL_TEST_TRADE_IN_PRODUCTION',
-      err.message
-    );
-  }
-
-  if (SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== true) {
+  const manualTestArmed = await syntheticDemoDispatchService.isManualTestTradeEnabled();
+  if (!manualTestArmed) {
     throw new AppError(
       403,
       'MANUAL_TEST_TRADE_DISABLED',
-      'SYNTHETIC_ALLOW_MANUAL_TEST_TRADE must be exact true to use test-dispatch-real'
+      'Admin manual test-trade toggle must be enabled to use test-dispatch-real'
     );
   }
 
@@ -286,7 +269,7 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
   }
 
   console.warn(
-    '[synthetic-trading-engine] test-dispatch-real INVOKED VIA SYNTHETIC_ALLOW_MANUAL_TEST_TRADE ' +
+    '[synthetic-trading-engine] test-dispatch-real INVOKED VIA admin manual test-trade toggle ' +
       `(testing-only) user_id=${userId} bot_instance_id=${instance.id} ` +
       `symbol=${sym} direction=${dir} account_type=${instance.account_type}`
   );
@@ -341,7 +324,7 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
  * Production: POST /bot/synthetic/positions/:tradeId/close
  * User-initiated close for an open synthetic paper or real trade.
  * Reuses natural-close resolution (paper at live price / real via
- * order-history). Not gated by SYNTHETIC_ALLOW_MANUAL_TEST_TRADE.
+ * order-history). Not gated by the admin manual test-trade toggle.
  */
 async function closeSyntheticPosition(userId, tradeId) {
   const id = String(tradeId || '');
@@ -417,24 +400,12 @@ async function closeSyntheticPosition(userId, tradeId) {
  * path natural closes use. Does not change Start/Stop/tick-loop design.
  */
 async function testCloseSyntheticReal(userId, { tradeId }) {
-  try {
-    assertSyntheticManualTestTradeBypassAllowed({
-      nodeEnv: NODE_ENV,
-      allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== undefined,
-    });
-  } catch (err) {
-    throw new AppError(
-      500,
-      'SYNTHETIC_MANUAL_TEST_TRADE_IN_PRODUCTION',
-      err.message
-    );
-  }
-
-  if (SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== true) {
+  const manualTestArmed = await syntheticDemoDispatchService.isManualTestTradeEnabled();
+  if (!manualTestArmed) {
     throw new AppError(
       403,
       'MANUAL_TEST_TRADE_DISABLED',
-      'SYNTHETIC_ALLOW_MANUAL_TEST_TRADE must be exact true to use test-close-real'
+      'Admin manual test-trade toggle must be enabled to use test-close-real'
     );
   }
 
@@ -475,7 +446,7 @@ async function testCloseSyntheticReal(userId, { tradeId }) {
   }
 
   console.warn(
-    '[synthetic-trading-engine] test-close-real INVOKED VIA SYNTHETIC_ALLOW_MANUAL_TEST_TRADE ' +
+    '[synthetic-trading-engine] test-close-real INVOKED VIA admin manual test-trade toggle ' +
       `(testing-only) user_id=${userId} bot_instance_id=${instance.id} ` +
       `trade_id=${id} ticket=${row.broker_ticket} ephemeral_runtime=${ephemeral}`
   );

@@ -61,4 +61,21 @@ router.post(
   controller.disableSyntheticDemoConfirm
 );
 
+// Synthetics manual test-dispatch/close gate — independently toggleable.
+router.get(
+  '/synthetic/demo-manual-trade-status',
+  rateLimit.read({ max: 20 }),
+  controller.getSyntheticDemoManualTradeStatus
+);
+router.post(
+  '/synthetic/demo-manual-trade-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableSyntheticDemoManualTrade
+);
+router.post(
+  '/synthetic/demo-manual-trade-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableSyntheticDemoManualTrade
+);
+
 module.exports = router;

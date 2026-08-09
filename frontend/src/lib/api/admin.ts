@@ -143,3 +143,23 @@ export function enableSyntheticDemoConfirm(minutes: number): Promise<SyntheticDe
 export function disableSyntheticDemoConfirm(): Promise<SyntheticDemoConfirmStatus> {
   return apiRequest('/admin/synthetic/demo-confirm-disable', { method: 'POST' });
 }
+
+/** Same shape — manual test-dispatch/close gate. */
+export type SyntheticDemoManualTradeStatus = SyntheticDemoDispatchStatus;
+
+export function getSyntheticDemoManualTradeStatus(): Promise<SyntheticDemoManualTradeStatus> {
+  return apiRequest('/admin/synthetic/demo-manual-trade-status');
+}
+
+export function enableSyntheticDemoManualTrade(
+  minutes: number,
+): Promise<SyntheticDemoManualTradeStatus> {
+  return apiRequest('/admin/synthetic/demo-manual-trade-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableSyntheticDemoManualTrade(): Promise<SyntheticDemoManualTradeStatus> {
+  return apiRequest('/admin/synthetic/demo-manual-trade-disable', { method: 'POST' });
+}

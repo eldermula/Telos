@@ -180,6 +180,37 @@ async function disableSyntheticDemoConfirm(req, res, next) {
   }
 }
 
+async function getSyntheticDemoManualTradeStatus(req, res, next) {
+  try {
+    const data = await adminService.getSyntheticDemoManualTradeStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableSyntheticDemoManualTrade(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableSyntheticDemoManualTrade(
+      req.user.id,
+      body.minutes
+    );
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableSyntheticDemoManualTrade(req, res, next) {
+  try {
+    const data = await adminService.disableSyntheticDemoManualTrade(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -194,4 +225,7 @@ module.exports = {
   getSyntheticDemoConfirmStatus,
   enableSyntheticDemoConfirm,
   disableSyntheticDemoConfirm,
+  getSyntheticDemoManualTradeStatus,
+  enableSyntheticDemoManualTrade,
+  disableSyntheticDemoManualTrade,
 };

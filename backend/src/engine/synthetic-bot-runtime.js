@@ -1133,7 +1133,7 @@ class SyntheticBotRuntime {
     };
 
     console.warn(
-      '[synthetic-bot-runtime] MANUAL TEST DISPATCH VIA SYNTHETIC_ALLOW_MANUAL_TEST_TRADE ' +
+      '[synthetic-bot-runtime] MANUAL TEST DISPATCH VIA admin manual test-trade toggle ' +
         `(testing-only) bot_instance_id=${this.botInstanceId} user_id=${this.userId} ` +
         `symbol=${sym} direction=${dir}`
     );
@@ -1169,7 +1169,7 @@ class SyntheticBotRuntime {
     }
 
     console.warn(
-      '[synthetic-bot-runtime] MANUAL TEST CLOSE VIA SYNTHETIC_ALLOW_MANUAL_TEST_TRADE ' +
+      '[synthetic-bot-runtime] MANUAL TEST CLOSE VIA admin manual test-trade toggle ' +
         `(testing-only) bot_instance_id=${this.botInstanceId} user_id=${this.userId} ` +
         `trade_id=${tradeId} ticket=${row.broker_ticket}`
     );

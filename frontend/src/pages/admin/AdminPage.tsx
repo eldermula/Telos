@@ -8,11 +8,14 @@ import { Input } from '../../components/ui/Input';
 import {
   disableSyntheticDemoConfirm,
   disableSyntheticDemoDispatch,
+  disableSyntheticDemoManualTrade,
   enableSyntheticDemoConfirm,
   enableSyntheticDemoDispatch,
+  enableSyntheticDemoManualTrade,
   getAdminUser,
   getSyntheticDemoConfirmStatus,
   getSyntheticDemoDispatchStatus,
+  getSyntheticDemoManualTradeStatus,
   getSystemHealth,
   listAdminUsers,
   listCandidateStrategies,
@@ -25,6 +28,7 @@ import {
   type RiskTier,
   type SyntheticDemoConfirmStatus,
   type SyntheticDemoDispatchStatus,
+  type SyntheticDemoManualTradeStatus,
   type SystemHealth,
 } from '../../lib/api/admin';
 import { ApiError } from '../../types/api';
@@ -50,8 +54,11 @@ export function AdminPage() {
   const [strategies, setStrategies] = useState<CandidateStrategy[]>([]);
   const [demoDispatch, setDemoDispatch] = useState<SyntheticDemoDispatchStatus | null>(null);
   const [demoConfirm, setDemoConfirm] = useState<SyntheticDemoConfirmStatus | null>(null);
+  const [demoManualTrade, setDemoManualTrade] =
+    useState<SyntheticDemoManualTradeStatus | null>(null);
   const [demoDispatchMinutes, setDemoDispatchMinutes] = useState('15');
   const [demoConfirmMinutes, setDemoConfirmMinutes] = useState('15');
+  const [demoManualTradeMinutes, setDemoManualTradeMinutes] = useState('15');
   const [editTier, setEditTier] = useState<RiskTier | null>(null);
   const [ceilingDraft, setCeilingDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -59,13 +66,14 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [h, u, t, s, d, c] = await Promise.all([
+    const [h, u, t, s, d, c, m] = await Promise.all([
       getSystemHealth(),
       listAdminUsers({ page: 1, limit: 50 }),
       listRiskTiers(),
       listCandidateStrategies(),
       getSyntheticDemoDispatchStatus(),
       getSyntheticDemoConfirmStatus(),
+      getSyntheticDemoManualTradeStatus(),
     ]);
     setHealth(h);
     setUsers(u.data);
@@ -73,6 +81,7 @@ export function AdminPage() {
     setStrategies(s.data);
     setDemoDispatch(d);
     setDemoConfirm(c);
+    setDemoManualTrade(m);
   }, []);
 
   useEffect(() => {
@@ -214,6 +223,44 @@ export function AdminPage() {
       const status = await disableSyntheticDemoConfirm();
       setDemoConfirm(status);
       setMessage('Layer 2 demo-confirm disabled.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Disable failed.');
+    }
+  }
+
+  async function onEnableDemoManualTrade() {
+    const minutes = Number.parseInt(demoManualTradeMinutes, 10);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30) {
+      setError('Manual test-trade duration must be an integer from 1 to 30 minutes.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Enable synthetics MANUAL test-dispatch/close for ${minutes} minute(s)? ` +
+          'Allows POST /bot/synthetic/test-dispatch-real and test-close-real. ' +
+          'Layer 2 + Layer 3 are still required for demo real execution.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await enableSyntheticDemoManualTrade(minutes);
+      setDemoManualTrade(status);
+      setMessage(`Manual test-trade enabled until ${status.enabled_until ?? '—'}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Enable failed.');
+    }
+  }
+
+  async function onDisableDemoManualTrade() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await disableSyntheticDemoManualTrade();
+      setDemoManualTrade(status);
+      setMessage('Manual test-trade disabled.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Disable failed.');
     }
@@ -429,10 +476,10 @@ export function AdminPage() {
       {tab === 'demo' ? (
         <div className="flex flex-col gap-6">
           <p className="type-caption text-state-danger">
-            Dangerous testing-only infrastructure. Both layers are needed for end-to-end
-            demo real-dispatch: Layer 2 lets a demo account pass confirm-live; Layer 3 lets
-            a confirmed session place real MT5 orders. Each auto-expires (max 30 minutes).
-            Not for real-account trading.
+            Dangerous testing-only infrastructure. Layer 2 lets a demo account pass
+            confirm-live; Layer 3 lets a confirmed session place real MT5 orders; the
+            manual test-trade toggle gates test-dispatch-real / test-close-real. Each
+            auto-expires (max 30 minutes). Not for real-account trading.
           </p>
 
           <GlassCard>
@@ -525,6 +572,57 @@ export function AdminPage() {
                 </Button>
                 {demoDispatch?.enabled ? (
                   <Button variant="ghost" onClick={() => void onDisableDemoDispatch()}>
+                    Disable now
+                  </Button>
+                ) : null}
+                <Button variant="ghost" onClick={() => void refresh()}>
+                  Refresh status
+                </Button>
+              </div>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Manual test-dispatch / close</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Gates the testing-only endpoints that force a real open or close outside the
+              strategy loop (test-dispatch-real / test-close-real). Does not replace Layer
+              2 or Layer 3 — those still control demo confirm and real dispatch.
+            </p>
+            {demoManualTrade ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {demoManualTrade.enabled ? 'ENABLED' : 'disabled'}
+                  </span>
+                </p>
+                {demoManualTrade.enabled ? (
+                  <>
+                    <p>Until: {demoManualTrade.enabled_until ?? '—'}</p>
+                    <p>Remaining: {formatRemaining(demoManualTrade.remaining_seconds)}</p>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex max-w-md flex-col gap-3">
+              <Input
+                label="Duration (minutes, 1–30)"
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                value={demoManualTradeMinutes}
+                onChange={(e) => setDemoManualTradeMinutes(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="destructive" onClick={() => void onEnableDemoManualTrade()}>
+                  Enable manual test-trade
+                </Button>
+                {demoManualTrade?.enabled ? (
+                  <Button variant="ghost" onClick={() => void onDisableDemoManualTrade()}>
                     Disable now
                   </Button>
                 ) : null}
