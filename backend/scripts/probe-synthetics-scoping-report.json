@@ -1,0 +1,2468 @@
+{
+  "method": {
+    "timeframe": "M15",
+    "countRequested": 1000,
+    "atrPeriod": 14,
+    "atrRollingPeriod": 20,
+    "adxPeriod": 14,
+    "ratio": "currentATR / SMA(last ATR_ROLLING ATR values incl. current)",
+    "trend_quality": "clamp(ADX/50, 0, 1) ΓÇö same as Module 2",
+    "starterGates": {
+      "ema": "trend_quality_min 0.6",
+      "breakout": "market_volatility_in [HIGH]",
+      "rsi": "trend_quality_max 0.4"
+    },
+    "note": "Read-only /symbol-info + /rates. No orders. First-cut thresholds only."
+  },
+  "catalogNote": "Exact MT5 names confirmed live on Deriv-Demo (not R_10 aliases). Full synthetic catalog also includes Boom/Crash, Jump, Step, DEX, High Frequency Vol, Crash Boom Flip ΓÇö out of ┬º6 Volatility-Indices-first scope; Boom/Crash/Jump remain strategy-mismatch risks per docs/11 ┬º6.3.",
+  "symbolsProbed": [
+    "Volatility 5 Index",
+    "Volatility 10 Index",
+    "Volatility 15 Index",
+    "Volatility 25 Index",
+    "Volatility 30 Index",
+    "Volatility 50 Index",
+    "Volatility 75 Index",
+    "Volatility 90 Index",
+    "Volatility 100 Index",
+    "Volatility 5 (1s) Index",
+    "Volatility 10 (1s) Index",
+    "Volatility 15 (1s) Index",
+    "Volatility 25 (1s) Index",
+    "Volatility 30 (1s) Index",
+    "Volatility 50 (1s) Index",
+    "Volatility 75 (1s) Index",
+    "Volatility 90 (1s) Index",
+    "Volatility 100 (1s) Index",
+    "Volatility 150 (1s) Index",
+    "Volatility 250 (1s) Index"
+  ],
+  "results": [
+    {
+      "symbol": "Volatility 5 Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 97969.891,
+        "ask": 97973.414,
+        "tick_time": 1786225444,
+        "trade_contract_size": 1,
+        "volume_min": 0.05,
+        "volume_step": 0.01,
+        "volume_max": 100,
+        "digits": 3,
+        "spread_proxy": 3.5230000000010477
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8868249630579808,
+        "max": 1.1673677229584478,
+        "mean": 1.00014308489681,
+        "p10": 0.943893178492216,
+        "p25": 0.9654157227327698,
+        "p50": 0.997127810836823,
+        "p75": 1.0330087438816924,
+        "p90": 1.0613716069218175,
+        "p95": 1.075850237422305
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 34.28570549287732,
+        "max": 47.2531133292473,
+        "mean": 40.951386738152685,
+        "p10": 37.76187431603712,
+        "p25": 39.26706272201892,
+        "p50": 40.96646056775455,
+        "p75": 42.722080227923016,
+        "p90": 44.151001813105644,
+        "p95": 44.83192458731705,
+        "atrPctOfPrice": 0.04179922017560405,
+        "midPrice": 97971.6525
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 132,
+          "NORMAL": 680,
+          "HIGH": 156
+        },
+        "pct": {
+          "LOW": 0.13636363636363635,
+          "NORMAL": 0.7024793388429752,
+          "HIGH": 0.16115702479338842
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.2249571351128805,
+        "max": 1,
+        "mean": 0.49969714163783435,
+        "p10": 0.29027242744752557,
+        "p25": 0.3547217085147599,
+        "p50": 0.4559632190338307,
+        "p75": 0.6218114937065401,
+        "p90": 0.7779359576028415,
+        "p95": 0.8486130014600715,
+        "emaGatePct": 0.2723535457348407,
+        "rsiGatePct": 0.36382322713257964,
+        "noisyMiddlePct": 0.36382322713257964,
+        "meanTq": 0.49969714163783435
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 31,
+        "breakoutFires": 158,
+        "rsiLevelBars": 97,
+        "rsiEdgeEntries": 30,
+        "emaPer100": 3.229166666666667,
+        "breakoutPer100": 16.458333333333332,
+        "rsiEdgePer100": 3.125
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.2723535457348407,
+          "signalRatePer100": 3.229166666666667,
+          "verdict": "PLAUSIBLE ΓÇö sustained high-TQ periods exist and EMA crosses fire"
+        },
+        "breakout": {
+          "signalRatePer100": 16.458333333333332,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.16115702479338842,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 16.1% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.36382322713257964,
+          "levelBarsPer100": 10.104166666666666,
+          "edgeEntriesPer100": 3.125,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 10 Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 4829.012,
+        "ask": 4829.358,
+        "tick_time": 1786225444,
+        "trade_contract_size": 1,
+        "volume_min": 0.5,
+        "volume_step": 0.01,
+        "volume_max": 400,
+        "digits": 3,
+        "spread_proxy": 0.3460000000004584
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8791496734098085,
+        "max": 1.1737477306301118,
+        "mean": 1.0003532877918788,
+        "p10": 0.9377284547013903,
+        "p25": 0.9641354955888962,
+        "p50": 0.9962713756490175,
+        "p75": 1.0344117800996155,
+        "p90": 1.068095344721406,
+        "p95": 1.0842009153160108
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 3.251857618889077,
+        "max": 4.730101631201301,
+        "mean": 4.0002688341351975,
+        "p10": 3.657242635826133,
+        "p25": 3.8060852665896463,
+        "p50": 3.9884303062653412,
+        "p75": 4.186718113057527,
+        "p90": 4.389451215565421,
+        "p95": 4.475134167733424,
+        "atrPctOfPrice": 0.08283527829509944,
+        "midPrice": 4829.1849999999995
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 148,
+          "NORMAL": 659,
+          "HIGH": 161
+        },
+        "pct": {
+          "LOW": 0.15289256198347106,
+          "NORMAL": 0.6807851239669421,
+          "HIGH": 0.16632231404958678
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.19164280122076174,
+        "max": 0.9504985841213373,
+        "mean": 0.4645478723547904,
+        "p10": 0.2847289709235249,
+        "p25": 0.34080423984870256,
+        "p50": 0.4355656490822328,
+        "p75": 0.5620644433064316,
+        "p90": 0.6930684253800796,
+        "p95": 0.7647200659055902,
+        "emaGatePct": 0.18396711202466598,
+        "rsiGatePct": 0.4039054470709147,
+        "noisyMiddlePct": 0.41212744090441933,
+        "meanTq": 0.4645478723547904
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 34,
+        "breakoutFires": 133,
+        "rsiLevelBars": 52,
+        "rsiEdgeEntries": 18,
+        "emaPer100": 3.5416666666666665,
+        "breakoutPer100": 13.854166666666668,
+        "rsiEdgePer100": 1.875
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.18396711202466598,
+          "signalRatePer100": 3.5416666666666665,
+          "verdict": "MARGINAL ΓÇö gate opens sometimes but signal rate is thin"
+        },
+        "breakout": {
+          "signalRatePer100": 13.854166666666668,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.16632231404958678,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 16.6% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.4039054470709147,
+          "levelBarsPer100": 5.416666666666667,
+          "edgeEntriesPer100": 1.875,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 15 Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 96225.69,
+        "ask": 96235.932,
+        "tick_time": 1786225444,
+        "trade_contract_size": 1,
+        "volume_min": 0.1,
+        "volume_step": 0.01,
+        "volume_max": 16,
+        "digits": 3,
+        "spread_proxy": 10.24199999999837
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8707243263568497,
+        "max": 1.1258721353241,
+        "mean": 1.0009183398666266,
+        "p10": 0.9475405684622179,
+        "p25": 0.975726767523571,
+        "p50": 0.9993270175990354,
+        "p75": 1.0309136747393204,
+        "p90": 1.0536842025359516,
+        "p95": 1.0674250658270654
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 105.38619068861628,
+        "max": 142.35204432537688,
+        "mean": 120.21398958983195,
+        "p10": 112.85540041611944,
+        "p25": 115.91249417596421,
+        "p50": 119.49072740366927,
+        "p75": 124.01145089687427,
+        "p90": 128.9977671204933,
+        "p95": 131.92974848503354,
+        "atrPctOfPrice": 0.12492255686157726,
+        "midPrice": 96230.811
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 103,
+          "NORMAL": 746,
+          "HIGH": 119
+        },
+        "pct": {
+          "LOW": 0.10640495867768596,
+          "NORMAL": 0.7706611570247934,
+          "HIGH": 0.12293388429752067
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.17831998054123385,
+        "max": 1,
+        "mean": 0.4965279936475598,
+        "p10": 0.2792973154327975,
+        "p25": 0.3366237688070977,
+        "p50": 0.4428965992064665,
+        "p75": 0.6495763989798452,
+        "p90": 0.8005650318966823,
+        "p95": 0.8565669613404393,
+        "emaGatePct": 0.28879753340184994,
+        "rsiGatePct": 0.4172661870503597,
+        "noisyMiddlePct": 0.29393627954779034,
+        "meanTq": 0.4965279936475598
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 38,
+        "breakoutFires": 145,
+        "rsiLevelBars": 124,
+        "rsiEdgeEntries": 26,
+        "emaPer100": 3.958333333333333,
+        "breakoutPer100": 15.104166666666666,
+        "rsiEdgePer100": 2.7083333333333335
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.28879753340184994,
+          "signalRatePer100": 3.958333333333333,
+          "verdict": "PLAUSIBLE ΓÇö sustained high-TQ periods exist and EMA crosses fire"
+        },
+        "breakout": {
+          "signalRatePer100": 15.104166666666666,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.12293388429752067,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 12.3% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.4172661870503597,
+          "levelBarsPer100": 12.916666666666668,
+          "edgeEntriesPer100": 2.7083333333333335,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 25 Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 2608.41,
+        "ask": 2609.016,
+        "tick_time": 1786225444,
+        "trade_contract_size": 1,
+        "volume_min": 0.5,
+        "volume_step": 0.01,
+        "volume_max": 400,
+        "digits": 3,
+        "spread_proxy": 0.6060000000002219
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8818930761372015,
+        "max": 1.1668310135608342,
+        "mean": 1.000192650144618,
+        "p10": 0.9420316710093617,
+        "p25": 0.968865723715583,
+        "p50": 1.0000103245244536,
+        "p75": 1.0297929923510634,
+        "p90": 1.0555348969603928,
+        "p95": 1.071343869679259
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 4.594680327461132,
+        "max": 7.003221702197051,
+        "mean": 5.554996497077971,
+        "p10": 5.093594983264761,
+        "p25": 5.297136068248985,
+        "p50": 5.569846962219759,
+        "p75": 5.8009529133875235,
+        "p90": 6.003714967062538,
+        "p95": 6.121971240816981,
+        "atrPctOfPrice": 0.21294011633621526,
+        "midPrice": 2608.7129999999997
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 126,
+          "NORMAL": 720,
+          "HIGH": 122
+        },
+        "pct": {
+          "LOW": 0.13016528925619836,
+          "NORMAL": 0.743801652892562,
+          "HIGH": 0.12603305785123967
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.169686570220938,
+        "max": 1,
+        "mean": 0.5002814664736023,
+        "p10": 0.2781264502425035,
+        "p25": 0.3445091692052589,
+        "p50": 0.45453130626172494,
+        "p75": 0.6482472323602769,
+        "p90": 0.7765666516008638,
+        "p95": 0.8608771676693334,
+        "emaGatePct": 0.31346351490236385,
+        "rsiGatePct": 0.3926002055498458,
+        "noisyMiddlePct": 0.29393627954779034,
+        "meanTq": 0.5002814664736023
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 36,
+        "breakoutFires": 152,
+        "rsiLevelBars": 70,
+        "rsiEdgeEntries": 32,
+        "emaPer100": 3.75,
+        "breakoutPer100": 15.833333333333332,
+        "rsiEdgePer100": 3.3333333333333335
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.31346351490236385,
+          "signalRatePer100": 3.75,
+          "verdict": "PLAUSIBLE ΓÇö sustained high-TQ periods exist and EMA crosses fire"
+        },
+        "breakout": {
+          "signalRatePer100": 15.833333333333332,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.12603305785123967,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 12.6% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.3926002055498458,
+          "levelBarsPer100": 7.291666666666667,
+          "edgeEntriesPer100": 3.3333333333333335,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 30 Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 118090.514,
+        "ask": 118114.735,
+        "tick_time": 1786225444,
+        "trade_contract_size": 1,
+        "volume_min": 0.05,
+        "volume_step": 0.01,
+        "volume_max": 6,
+        "digits": 3,
+        "spread_proxy": 24.221000000005006
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8837761740412341,
+        "max": 1.1790939781594187,
+        "mean": 1.0006758686034734,
+        "p10": 0.9452588528618504,
+        "p25": 0.9665017409462324,
+        "p50": 0.9990414791017683,
+        "p75": 1.0321320060361943,
+        "p90": 1.058728344198122,
+        "p95": 1.075495563271204
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 242.52776720708923,
+        "max": 341.7724191138937,
+        "mean": 287.30417940125307,
+        "p10": 265.9784642059225,
+        "p25": 274.62963901068434,
+        "p50": 286.29184374967804,
+        "p75": 300.40768934412773,
+        "p90": 310.3479700460965,
+        "p95": 316.7974696834576,
+        "atrPctOfPrice": 0.24326654942477846,
+        "midPrice": 118102.6245
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 137,
+          "NORMAL": 696,
+          "HIGH": 135
+        },
+        "pct": {
+          "LOW": 0.1415289256198347,
+          "NORMAL": 0.71900826446281,
+          "HIGH": 0.13946280991735538
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.19312409385025656,
+        "max": 1,
+        "mean": 0.44519221222136224,
+        "p10": 0.2729654335651458,
+        "p25": 0.3187940102935813,
+        "p50": 0.39349933224270345,
+        "p75": 0.5116710619735628,
+        "p90": 0.7228003330009797,
+        "p95": 0.8532279532154439,
+        "emaGatePct": 0.17163412127440905,
+        "rsiGatePct": 0.5159301130524152,
+        "noisyMiddlePct": 0.31243576567317577,
+        "meanTq": 0.44519221222136224
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 46,
+        "breakoutFires": 139,
+        "rsiLevelBars": 99,
+        "rsiEdgeEntries": 18,
+        "emaPer100": 4.791666666666667,
+        "breakoutPer100": 14.479166666666668,
+        "rsiEdgePer100": 1.875
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.17163412127440905,
+          "signalRatePer100": 4.791666666666667,
+          "verdict": "MARGINAL ΓÇö gate opens sometimes but signal rate is thin"
+        },
+        "breakout": {
+          "signalRatePer100": 14.479166666666668,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.13946280991735538,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 13.9% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.5159301130524152,
+          "levelBarsPer100": 10.3125,
+          "edgeEntriesPer100": 1.875,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 50 Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 105.312,
+        "ask": 105.3529,
+        "tick_time": 1786225444,
+        "trade_contract_size": 1,
+        "volume_min": 4,
+        "volume_step": 0.01,
+        "volume_max": 3700,
+        "digits": 4,
+        "spread_proxy": 0.04090000000000771
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8953000033500668,
+        "max": 1.1468857716870617,
+        "mean": 1.0013330080382168,
+        "p10": 0.951282914752271,
+        "p25": 0.9737040078907795,
+        "p50": 1.00075296652033,
+        "p75": 1.0278274294199874,
+        "p90": 1.0519746007191373,
+        "p95": 1.0662276479409187
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 0.33481697796946813,
+        "max": 0.5211878855660105,
+        "mean": 0.4396652560893431,
+        "p10": 0.4112803712665481,
+        "p25": 0.42587234266107793,
+        "p50": 0.4403122405558791,
+        "p75": 0.45609546768628695,
+        "p90": 0.4727668906549825,
+        "p95": 0.48327701400683243,
+        "atrPctOfPrice": 0.4174072245441392,
+        "midPrice": 105.33245
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 93,
+          "NORMAL": 770,
+          "HIGH": 105
+        },
+        "pct": {
+          "LOW": 0.09607438016528926,
+          "NORMAL": 0.7954545454545454,
+          "HIGH": 0.10847107438016529
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.18215276490264326,
+        "max": 1,
+        "mean": 0.4714674471800639,
+        "p10": 0.2835860732958208,
+        "p25": 0.3455262437645656,
+        "p50": 0.4237694269245539,
+        "p75": 0.5728577577475736,
+        "p90": 0.7210306124215263,
+        "p95": 0.8386349774066097,
+        "emaGatePct": 0.22199383350462487,
+        "rsiGatePct": 0.43782117163412126,
+        "noisyMiddlePct": 0.34018499486125386,
+        "meanTq": 0.4714674471800639
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 34,
+        "breakoutFires": 144,
+        "rsiLevelBars": 66,
+        "rsiEdgeEntries": 24,
+        "emaPer100": 3.5416666666666665,
+        "breakoutPer100": 15,
+        "rsiEdgePer100": 2.5
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.22199383350462487,
+          "signalRatePer100": 3.5416666666666665,
+          "verdict": "MARGINAL ΓÇö gate opens sometimes but signal rate is thin"
+        },
+        "breakout": {
+          "signalRatePer100": 15,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.10847107438016529,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 10.8% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.43782117163412126,
+          "levelBarsPer100": 6.875000000000001,
+          "edgeEntriesPer100": 2.5,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 75 Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 49013.59,
+        "ask": 49052.08,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.01,
+        "volume_step": 0.001,
+        "volume_max": 15,
+        "digits": 2,
+        "spread_proxy": 38.49000000000524
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8855541047835946,
+        "max": 1.1903524300055912,
+        "mean": 0.9975597825153307,
+        "p10": 0.9362709695482228,
+        "p25": 0.9655560154287647,
+        "p50": 0.9960049000890128,
+        "p75": 1.028345235582776,
+        "p90": 1.058281803904006,
+        "p95": 1.0841212379121106
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 251.2392759039495,
+        "max": 368.1740202345788,
+        "mean": 307.8687114855858,
+        "p10": 280.3730110255769,
+        "p25": 293.209400890267,
+        "p50": 307.90354693299486,
+        "p75": 322.57153608642193,
+        "p90": 335.1702576647802,
+        "p95": 341.4825955517085,
+        "atrPctOfPrice": 0.6278827473173554,
+        "midPrice": 49032.835
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 150,
+          "NORMAL": 693,
+          "HIGH": 125
+        },
+        "pct": {
+          "LOW": 0.15495867768595042,
+          "NORMAL": 0.7159090909090909,
+          "HIGH": 0.12913223140495866
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.17898303486570477,
+        "max": 1,
+        "mean": 0.5263019121536533,
+        "p10": 0.30492837589621336,
+        "p25": 0.38556456997322236,
+        "p50": 0.4895581807577687,
+        "p75": 0.6359340486243552,
+        "p90": 0.8211114458990202,
+        "p95": 0.9595820591140987,
+        "emaGatePct": 0.2959917780061665,
+        "rsiGatePct": 0.27646454265159304,
+        "noisyMiddlePct": 0.42754367934224047,
+        "meanTq": 0.5263019121536533
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 27,
+        "breakoutFires": 132,
+        "rsiLevelBars": 100,
+        "rsiEdgeEntries": 21,
+        "emaPer100": 2.8125,
+        "breakoutPer100": 13.750000000000002,
+        "rsiEdgePer100": 2.1875
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.2959917780061665,
+          "signalRatePer100": 2.8125,
+          "verdict": "PLAUSIBLE ΓÇö sustained high-TQ periods exist and EMA crosses fire"
+        },
+        "breakout": {
+          "signalRatePer100": 13.750000000000002,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.12913223140495866,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 12.9% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.27646454265159304,
+          "levelBarsPer100": 10.416666666666668,
+          "edgeEntriesPer100": 2.1875,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 90 Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 189498.521,
+        "ask": 189622.833,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.05,
+        "volume_step": 0.01,
+        "volume_max": 2,
+        "digits": 3,
+        "spread_proxy": 124.31200000000536
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8722019746102018,
+        "max": 1.2092810564328313,
+        "mean": 0.9998701517425694,
+        "p10": 0.9402701743153903,
+        "p25": 0.9662744899989714,
+        "p50": 0.9961462680408371,
+        "p75": 1.0308951809210651,
+        "p90": 1.0635038143041502,
+        "p95": 1.083889191652906
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 1131.0159166777623,
+        "max": 1784.2241685236402,
+        "mean": 1373.6120789584172,
+        "p10": 1225.553302268175,
+        "p25": 1290.3508302282303,
+        "p50": 1370.3935456934444,
+        "p75": 1441.1560267218172,
+        "p90": 1534.928475352786,
+        "p95": 1576.417573737619,
+        "atrPctOfPrice": 0.7246292325482764,
+        "midPrice": 189560.67700000003
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 138,
+          "NORMAL": 689,
+          "HIGH": 141
+        },
+        "pct": {
+          "LOW": 0.14256198347107438,
+          "NORMAL": 0.7117768595041323,
+          "HIGH": 0.14566115702479338
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.14685597284375695,
+        "max": 1,
+        "mean": 0.45419141892045095,
+        "p10": 0.24111070135071944,
+        "p25": 0.3081399893032179,
+        "p50": 0.4167990210067497,
+        "p75": 0.5656757266430862,
+        "p90": 0.7372731851974518,
+        "p95": 0.803248584245277,
+        "emaGatePct": 0.2199383350462487,
+        "rsiGatePct": 0.4563206577595067,
+        "noisyMiddlePct": 0.3237410071942446,
+        "meanTq": 0.45419141892045095
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 31,
+        "breakoutFires": 118,
+        "rsiLevelBars": 63,
+        "rsiEdgeEntries": 26,
+        "emaPer100": 3.229166666666667,
+        "breakoutPer100": 12.291666666666666,
+        "rsiEdgePer100": 2.7083333333333335
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.2199383350462487,
+          "signalRatePer100": 3.229166666666667,
+          "verdict": "MARGINAL ΓÇö gate opens sometimes but signal rate is thin"
+        },
+        "breakout": {
+          "signalRatePer100": 12.291666666666666,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.14566115702479338,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 14.6% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.4563206577595067,
+          "levelBarsPer100": 6.5625,
+          "edgeEntriesPer100": 2.7083333333333335,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 100 Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 592.57,
+        "ask": 593.05,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 1,
+        "volume_step": 0.01,
+        "volume_max": 220,
+        "digits": 2,
+        "spread_proxy": 0.4799999999999045
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8868734015971478,
+        "max": 1.1365588199599617,
+        "mean": 1.0006634437435953,
+        "p10": 0.9532841071709579,
+        "p25": 0.9737017197301863,
+        "p50": 0.9979395939968552,
+        "p75": 1.0277718893577648,
+        "p90": 1.0543577789727936,
+        "p95": 1.0679291874605588
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 4.246665215485302,
+        "max": 5.983586010521856,
+        "mean": 4.980566830880945,
+        "p10": 4.609079349192049,
+        "p25": 4.758385214067785,
+        "p50": 4.945095498698782,
+        "p75": 5.181104442960853,
+        "p90": 5.418109019949113,
+        "p95": 5.526073107949468,
+        "atrPctOfPrice": 0.8401624181240103,
+        "midPrice": 592.81
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 84,
+          "NORMAL": 769,
+          "HIGH": 115
+        },
+        "pct": {
+          "LOW": 0.08677685950413223,
+          "NORMAL": 0.7944214876033058,
+          "HIGH": 0.11880165289256199
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.19621634502895652,
+        "max": 0.931686752032117,
+        "mean": 0.4552812738527288,
+        "p10": 0.27766544678419686,
+        "p25": 0.3249984723947322,
+        "p50": 0.4224425315762629,
+        "p75": 0.567153497858795,
+        "p90": 0.693240889350063,
+        "p95": 0.7590220080693388,
+        "emaGatePct": 0.21788283658787255,
+        "rsiGatePct": 0.4563206577595067,
+        "noisyMiddlePct": 0.32579650565262075,
+        "meanTq": 0.4552812738527288
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 38,
+        "breakoutFires": 122,
+        "rsiLevelBars": 59,
+        "rsiEdgeEntries": 20,
+        "emaPer100": 3.958333333333333,
+        "breakoutPer100": 12.708333333333332,
+        "rsiEdgePer100": 2.083333333333333
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.21788283658787255,
+          "signalRatePer100": 3.958333333333333,
+          "verdict": "MARGINAL ΓÇö gate opens sometimes but signal rate is thin"
+        },
+        "breakout": {
+          "signalRatePer100": 12.708333333333332,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.11880165289256199,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 11.9% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.4563206577595067,
+          "levelBarsPer100": 6.145833333333333,
+          "edgeEntriesPer100": 2.083333333333333,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 5 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 98251.81,
+        "ask": 98255.39,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.05,
+        "volume_step": 0.01,
+        "volume_max": 100,
+        "digits": 2,
+        "spread_proxy": 3.5800000000017462
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.89309563319863,
+        "max": 1.132744386789333,
+        "mean": 0.9990583440192666,
+        "p10": 0.9461534501858528,
+        "p25": 0.967966287371838,
+        "p50": 0.9968467201326218,
+        "p75": 1.0282370938811787,
+        "p90": 1.0551804107940017,
+        "p95": 1.0700284833413864
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 34.75807928272801,
+        "max": 46.89542665032794,
+        "mean": 40.84314646454651,
+        "p10": 37.70515891573815,
+        "p25": 39.12662008799337,
+        "p50": 40.87683149281734,
+        "p75": 42.537212511369724,
+        "p90": 43.87390300061717,
+        "p95": 44.57860826124502,
+        "atrPctOfPrice": 0.04156910939095006,
+        "midPrice": 98253.6
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 120,
+          "NORMAL": 720,
+          "HIGH": 128
+        },
+        "pct": {
+          "LOW": 0.12396694214876033,
+          "NORMAL": 0.743801652892562,
+          "HIGH": 0.1322314049586777
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.1622344536046747,
+        "max": 1,
+        "mean": 0.4163326934646113,
+        "p10": 0.24715739847482815,
+        "p25": 0.30097956344798066,
+        "p50": 0.37443390399347676,
+        "p75": 0.4926870352620991,
+        "p90": 0.6485977612962365,
+        "p95": 0.7513730293871935,
+        "emaGatePct": 0.13052415210688592,
+        "rsiGatePct": 0.5683453237410072,
+        "noisyMiddlePct": 0.3011305241521069,
+        "meanTq": 0.4163326934646113
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 35,
+        "breakoutFires": 116,
+        "rsiLevelBars": 61,
+        "rsiEdgeEntries": 24,
+        "emaPer100": 3.6458333333333335,
+        "breakoutPer100": 12.083333333333334,
+        "rsiEdgePer100": 2.5
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.13052415210688592,
+          "signalRatePer100": 3.6458333333333335,
+          "verdict": "WEAK ΓÇö trend_quality rarely clears 0.6; EMA regime gate mostly closed"
+        },
+        "breakout": {
+          "signalRatePer100": 12.083333333333334,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.1322314049586777,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 13.2% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.5683453237410072,
+          "levelBarsPer100": 6.354166666666666,
+          "edgeEntriesPer100": 2.5,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 10 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 9560.75,
+        "ask": 9561.43,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.5,
+        "volume_step": 0.01,
+        "volume_max": 400,
+        "digits": 2,
+        "spread_proxy": 0.680000000000291
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8739709248840919,
+        "max": 1.158742848180846,
+        "mean": 0.9997844109057845,
+        "p10": 0.9379044122485822,
+        "p25": 0.9681727097791581,
+        "p50": 0.998873648368391,
+        "p75": 1.029202128526055,
+        "p90": 1.061416198568444,
+        "p95": 1.0807417328462559
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 6.864657110840596,
+        "max": 9.74949519405109,
+        "mean": 8.01265749449969,
+        "p10": 7.4445235763514255,
+        "p25": 7.680288844246198,
+        "p50": 7.973449673651726,
+        "p75": 8.289130396493505,
+        "p90": 8.617337466933261,
+        "p95": 8.821684796337198,
+        "atrPctOfPrice": 0.0838048537823584,
+        "midPrice": 9561.09
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 142,
+          "NORMAL": 701,
+          "HIGH": 125
+        },
+        "pct": {
+          "LOW": 0.14669421487603307,
+          "NORMAL": 0.7241735537190083,
+          "HIGH": 0.12913223140495866
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.21526500207054672,
+        "max": 1,
+        "mean": 0.5794867851263962,
+        "p10": 0.2897123507596181,
+        "p25": 0.34453265254833837,
+        "p50": 0.5104082634408756,
+        "p75": 0.802840783403698,
+        "p90": 1,
+        "p95": 1,
+        "emaGatePct": 0.3987667009249743,
+        "rsiGatePct": 0.34635149023638234,
+        "noisyMiddlePct": 0.25488180883864336,
+        "meanTq": 0.5794867851263962
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 39,
+        "breakoutFires": 151,
+        "rsiLevelBars": 165,
+        "rsiEdgeEntries": 35,
+        "emaPer100": 4.0625,
+        "breakoutPer100": 15.729166666666666,
+        "rsiEdgePer100": 3.6458333333333335
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.3987667009249743,
+          "signalRatePer100": 4.0625,
+          "verdict": "PLAUSIBLE ΓÇö sustained high-TQ periods exist and EMA crosses fire"
+        },
+        "breakout": {
+          "signalRatePer100": 15.729166666666666,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.12913223140495866,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 12.9% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.34635149023638234,
+          "levelBarsPer100": 17.1875,
+          "edgeEntriesPer100": 3.6458333333333335,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 15 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 12810.238,
+        "ask": 12811.585,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.2,
+        "volume_step": 0.01,
+        "volume_max": 100,
+        "digits": 3,
+        "spread_proxy": 1.3469999999997526
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8850832306701659,
+        "max": 1.1277017330613037,
+        "mean": 1.0001666808203122,
+        "p10": 0.9462751394655197,
+        "p25": 0.9692446640101183,
+        "p50": 0.9981154457125889,
+        "p75": 1.0267895164397571,
+        "p90": 1.0591556836519804,
+        "p95": 1.079487866035671
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 13.566501117541183,
+        "max": 18.5429795637173,
+        "mean": 16.036160060456066,
+        "p10": 14.894895596508466,
+        "p25": 15.48516444519564,
+        "p50": 16.079097374895788,
+        "p75": 16.606067116665862,
+        "p90": 17.10602018035224,
+        "p95": 17.419141104876758,
+        "atrPctOfPrice": 0.12517579299846127,
+        "midPrice": 12810.911499999998
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 117,
+          "NORMAL": 720,
+          "HIGH": 131
+        },
+        "pct": {
+          "LOW": 0.12086776859504132,
+          "NORMAL": 0.743801652892562,
+          "HIGH": 0.1353305785123967
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.21323369954490265,
+        "max": 1,
+        "mean": 0.4638433174184058,
+        "p10": 0.27996061489362334,
+        "p25": 0.33218148773019757,
+        "p50": 0.42628115680032613,
+        "p75": 0.5498808310810687,
+        "p90": 0.6863472534487366,
+        "p95": 0.8535804957534421,
+        "emaGatePct": 0.18088386433710174,
+        "rsiGatePct": 0.4234326824254882,
+        "noisyMiddlePct": 0.39568345323741005,
+        "meanTq": 0.4638433174184058
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 43,
+        "breakoutFires": 134,
+        "rsiLevelBars": 88,
+        "rsiEdgeEntries": 23,
+        "emaPer100": 4.479166666666667,
+        "breakoutPer100": 13.958333333333334,
+        "rsiEdgePer100": 2.3958333333333335
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.18088386433710174,
+          "signalRatePer100": 4.479166666666667,
+          "verdict": "MARGINAL ΓÇö gate opens sometimes but signal rate is thin"
+        },
+        "breakout": {
+          "signalRatePer100": 13.958333333333334,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.1353305785123967,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 13.5% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.4234326824254882,
+          "levelBarsPer100": 9.166666666666666,
+          "edgeEntriesPer100": 2.3958333333333335,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 25 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 786592.6,
+        "ask": 786734.86,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.005,
+        "volume_step": 0.001,
+        "volume_max": 2,
+        "digits": 2,
+        "spread_proxy": 142.2600000000093
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8901560719612868,
+        "max": 1.1316809214204295,
+        "mean": 1.0008573220514234,
+        "p10": 0.9492108418047964,
+        "p25": 0.9697428050891875,
+        "p50": 0.9971097103705099,
+        "p75": 1.029746341998341,
+        "p90": 1.0613168480988653,
+        "p95": 1.0758289518675892
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 1388.040609983484,
+        "max": 2072.4155042220923,
+        "mean": 1650.340060498756,
+        "p10": 1520.2205242416148,
+        "p25": 1581.4520005967297,
+        "p50": 1651.6620359834433,
+        "p75": 1712.161638104011,
+        "p90": 1766.9314564150516,
+        "p95": 1808.063476920444,
+        "atrPctOfPrice": 0.20978977389726053,
+        "midPrice": 786663.73
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 102,
+          "NORMAL": 725,
+          "HIGH": 141
+        },
+        "pct": {
+          "LOW": 0.10537190082644628,
+          "NORMAL": 0.7489669421487604,
+          "HIGH": 0.14566115702479338
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.1903674867766609,
+        "max": 1,
+        "mean": 0.4585186246398133,
+        "p10": 0.2813999034462557,
+        "p25": 0.33016261590148605,
+        "p50": 0.4297114738314009,
+        "p75": 0.5648833061009474,
+        "p90": 0.6581775777067946,
+        "p95": 0.7773289499324263,
+        "emaGatePct": 0.19527235354573483,
+        "rsiGatePct": 0.4244604316546763,
+        "noisyMiddlePct": 0.3802672147995889,
+        "meanTq": 0.4585186246398133
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 32,
+        "breakoutFires": 137,
+        "rsiLevelBars": 65,
+        "rsiEdgeEntries": 21,
+        "emaPer100": 3.3333333333333335,
+        "breakoutPer100": 14.270833333333332,
+        "rsiEdgePer100": 2.1875
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.19527235354573483,
+          "signalRatePer100": 3.3333333333333335,
+          "verdict": "MARGINAL ΓÇö gate opens sometimes but signal rate is thin"
+        },
+        "breakout": {
+          "signalRatePer100": 14.270833333333332,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.14566115702479338,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 14.6% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.4244604316546763,
+          "levelBarsPer100": 6.770833333333333,
+          "edgeEntriesPer100": 2.1875,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 30 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 6580.684,
+        "ask": 6581.981,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.2,
+        "volume_step": 0.01,
+        "volume_max": 120,
+        "digits": 3,
+        "spread_proxy": 1.2969999999995707
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8654742704122493,
+        "max": 1.1546873949524854,
+        "mean": 0.9981927499733517,
+        "p10": 0.9476704831701194,
+        "p25": 0.9688151613995185,
+        "p50": 0.9950208980632599,
+        "p75": 1.025721423334514,
+        "p90": 1.0502128604589498,
+        "p95": 1.069449135275883
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 14.329496082881123,
+        "max": 19.99757803104016,
+        "mean": 16.400108474709835,
+        "p10": 15.348927626117185,
+        "p25": 15.79216574781373,
+        "p50": 16.335835049294694,
+        "p75": 16.90725279993278,
+        "p90": 17.556902348650254,
+        "p95": 18.020826289526994,
+        "atrPctOfPrice": 0.24919130699915001,
+        "midPrice": 6581.3325
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 110,
+          "NORMAL": 759,
+          "HIGH": 99
+        },
+        "pct": {
+          "LOW": 0.11363636363636363,
+          "NORMAL": 0.7840909090909091,
+          "HIGH": 0.10227272727272728
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.21649074479908,
+        "max": 1,
+        "mean": 0.5731365485908291,
+        "p10": 0.346332876939999,
+        "p25": 0.41607267335880044,
+        "p50": 0.5539717514086294,
+        "p75": 0.699062163222202,
+        "p90": 0.862670776708802,
+        "p95": 0.9228906855649965,
+        "emaGatePct": 0.3936279547790339,
+        "rsiGatePct": 0.20863309352517986,
+        "noisyMiddlePct": 0.3977389516957862,
+        "meanTq": 0.5731365485908291
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 23,
+        "breakoutFires": 150,
+        "rsiLevelBars": 137,
+        "rsiEdgeEntries": 33,
+        "emaPer100": 2.3958333333333335,
+        "breakoutPer100": 15.625,
+        "rsiEdgePer100": 3.4375000000000004
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.3936279547790339,
+          "signalRatePer100": 2.3958333333333335,
+          "verdict": "PLAUSIBLE ΓÇö sustained high-TQ periods exist and EMA crosses fire"
+        },
+        "breakout": {
+          "signalRatePer100": 15.625,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.10227272727272728,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 10.2% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.20863309352517986,
+          "levelBarsPer100": 14.270833333333332,
+          "edgeEntriesPer100": 3.4375000000000004,
+          "verdict": "MARGINAL ΓÇö some low-TQ bars but thin RSI edge activity"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 50 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 237682.31,
+        "ask": 237778.1,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.005,
+        "volume_step": 0.001,
+        "volume_max": 2,
+        "digits": 2,
+        "spread_proxy": 95.79000000000815
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8715454239795254,
+        "max": 1.163365245934304,
+        "mean": 0.9980602073001873,
+        "p10": 0.9437574730828553,
+        "p25": 0.964822159761541,
+        "p50": 0.9949368043735175,
+        "p75": 1.0262246571113793,
+        "p90": 1.056387270955098,
+        "p95": 1.0791561762511945
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 871.0474735552872,
+        "max": 1315.140714097323,
+        "mean": 1071.5445102869173,
+        "p10": 961.8627091776981,
+        "p25": 1005.4561022405186,
+        "p50": 1065.2598659827536,
+        "p75": 1128.7676210088266,
+        "p90": 1201.8195678295822,
+        "p95": 1233.1252310800658,
+        "atrPctOfPrice": 0.45073974099627656,
+        "midPrice": 237730.20500000002
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 129,
+          "NORMAL": 722,
+          "HIGH": 117
+        },
+        "pct": {
+          "LOW": 0.13326446280991736,
+          "NORMAL": 0.7458677685950413,
+          "HIGH": 0.12086776859504132
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.18212108712339833,
+        "max": 1,
+        "mean": 0.4592576781983215,
+        "p10": 0.26119900726026724,
+        "p25": 0.3265986153565255,
+        "p50": 0.42314974060229177,
+        "p75": 0.5588920791158754,
+        "p90": 0.7238801250437493,
+        "p95": 0.7889414084956248,
+        "emaGatePct": 0.2147995889003083,
+        "rsiGatePct": 0.44912641315519014,
+        "noisyMiddlePct": 0.33607399794450155,
+        "meanTq": 0.4592576781983215
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 47,
+        "breakoutFires": 121,
+        "rsiLevelBars": 72,
+        "rsiEdgeEntries": 23,
+        "emaPer100": 4.895833333333333,
+        "breakoutPer100": 12.604166666666666,
+        "rsiEdgePer100": 2.3958333333333335
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.2147995889003083,
+          "signalRatePer100": 4.895833333333333,
+          "verdict": "MARGINAL ΓÇö gate opens sometimes but signal rate is thin"
+        },
+        "breakout": {
+          "signalRatePer100": 12.604166666666666,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.12086776859504132,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 12.1% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.44912641315519014,
+          "levelBarsPer100": 7.5,
+          "edgeEntriesPer100": 2.3958333333333335,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 75 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 7086.25,
+        "ask": 7091.66,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.05,
+        "volume_step": 0.001,
+        "volume_max": 80,
+        "digits": 2,
+        "spread_proxy": 5.4099999999998545
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8812518074615953,
+        "max": 1.1503119593745628,
+        "mean": 1.000234120047244,
+        "p10": 0.941367881870713,
+        "p25": 0.9660227636906811,
+        "p50": 0.9964145335191108,
+        "p75": 1.0286151348789574,
+        "p90": 1.0674068675688477,
+        "p95": 1.088283751321841
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 38.07680643178615,
+        "max": 56.4975455368841,
+        "mean": 48.04045567324803,
+        "p10": 43.62078945481844,
+        "p25": 45.57096680279861,
+        "p50": 48.086907478015746,
+        "p75": 50.42568108272509,
+        "p90": 52.76337806422782,
+        "p95": 53.95492830595721,
+        "atrPctOfPrice": 0.6776803587164544,
+        "midPrice": 7088.955
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 139,
+          "NORMAL": 680,
+          "HIGH": 149
+        },
+        "pct": {
+          "LOW": 0.14359504132231404,
+          "NORMAL": 0.7024793388429752,
+          "HIGH": 0.15392561983471073
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.2046375269145585,
+        "max": 1,
+        "mean": 0.5188149152151509,
+        "p10": 0.3174595180909225,
+        "p25": 0.39590265831032484,
+        "p50": 0.48004637363188574,
+        "p75": 0.6079812858947458,
+        "p90": 0.7796381899525933,
+        "p95": 0.9124310619424341,
+        "emaGatePct": 0.26104830421377184,
+        "rsiGatePct": 0.26104830421377184,
+        "noisyMiddlePct": 0.4779033915724563,
+        "meanTq": 0.5188149152151509
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 39,
+        "breakoutFires": 157,
+        "rsiLevelBars": 118,
+        "rsiEdgeEntries": 29,
+        "emaPer100": 4.0625,
+        "breakoutPer100": 16.354166666666668,
+        "rsiEdgePer100": 3.0208333333333335
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.26104830421377184,
+          "signalRatePer100": 4.0625,
+          "verdict": "CAUTION ΓÇö large share of bars sit in 0.4ΓÇô0.6 ADX middle (noisy, not sustained trend)"
+        },
+        "breakout": {
+          "signalRatePer100": 16.354166666666668,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.15392561983471073,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 15.4% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.26104830421377184,
+          "levelBarsPer100": 12.291666666666666,
+          "edgeEntriesPer100": 3.0208333333333335,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 90 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 14559.066,
+        "ask": 14569.328,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 0.1,
+        "volume_step": 0.01,
+        "volume_max": 20,
+        "digits": 3,
+        "spread_proxy": 10.261999999998807
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8826629398665757,
+        "max": 1.1897273899150391,
+        "mean": 0.9985200136636232,
+        "p10": 0.946010768775149,
+        "p25": 0.9665325276423113,
+        "p50": 0.9943411793659744,
+        "p75": 1.027594171517975,
+        "p90": 1.060495886033339,
+        "p95": 1.076095795403429
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 93.80200055670598,
+        "max": 136.92665559737745,
+        "mean": 111.04285588873807,
+        "p10": 102.7327974701732,
+        "p25": 106.99015433786332,
+        "p50": 110.89025891488066,
+        "p75": 114.58821212887352,
+        "p90": 118.68064810129584,
+        "p95": 123.05397799237964,
+        "atrPctOfPrice": 0.7624372005455438,
+        "midPrice": 14564.197
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 120,
+          "NORMAL": 722,
+          "HIGH": 126
+        },
+        "pct": {
+          "LOW": 0.12396694214876033,
+          "NORMAL": 0.7458677685950413,
+          "HIGH": 0.13016528925619836
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.15020525352701564,
+        "max": 1,
+        "mean": 0.5045556335939827,
+        "p10": 0.2783035814257807,
+        "p25": 0.3603504529112609,
+        "p50": 0.4518651220083643,
+        "p75": 0.6085196909707116,
+        "p90": 0.8498864049168058,
+        "p95": 0.9698149844243242,
+        "emaGatePct": 0.25590955806783144,
+        "rsiGatePct": 0.3473792394655704,
+        "noisyMiddlePct": 0.39671120246659813,
+        "meanTq": 0.5045556335939827
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 33,
+        "breakoutFires": 135,
+        "rsiLevelBars": 91,
+        "rsiEdgeEntries": 32,
+        "emaPer100": 3.4375000000000004,
+        "breakoutPer100": 14.0625,
+        "rsiEdgePer100": 3.3333333333333335
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.25590955806783144,
+          "signalRatePer100": 3.4375000000000004,
+          "verdict": "PLAUSIBLE ΓÇö sustained high-TQ periods exist and EMA crosses fire"
+        },
+        "breakout": {
+          "signalRatePer100": 14.0625,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.13016528925619836,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 13.0% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.3473792394655704,
+          "levelBarsPer100": 9.479166666666666,
+          "edgeEntriesPer100": 3.3333333333333335,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 100 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 699.63,
+        "ask": 700.19,
+        "tick_time": 1786225447,
+        "trade_contract_size": 1,
+        "volume_min": 1,
+        "volume_step": 0.01,
+        "volume_max": 330,
+        "digits": 2,
+        "spread_proxy": 0.5600000000000591
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.9028460353830597,
+        "max": 1.145622725376091,
+        "mean": 0.9974534753373568,
+        "p10": 0.9457851721321924,
+        "p25": 0.9703798080136532,
+        "p50": 0.9947382370732168,
+        "p75": 1.024449754637868,
+        "p90": 1.049350002477991,
+        "p95": 1.0678814171109607
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 5.054423793570915,
+        "max": 7.95181285116631,
+        "mean": 6.411611577559356,
+        "p10": 5.712270345755105,
+        "p25": 6.031547498459983,
+        "p50": 6.390554071661519,
+        "p75": 6.8089420637722355,
+        "p90": 7.1338742736397265,
+        "p95": 7.29826809277254,
+        "atrPctOfPrice": 0.9160622905172601,
+        "midPrice": 699.9100000000001
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 116,
+          "NORMAL": 759,
+          "HIGH": 93
+        },
+        "pct": {
+          "LOW": 0.11983471074380166,
+          "NORMAL": 0.7840909090909091,
+          "HIGH": 0.09607438016528926
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.1685552202762546,
+        "max": 1,
+        "mean": 0.4900805912083963,
+        "p10": 0.2741505267299458,
+        "p25": 0.3439837592078788,
+        "p50": 0.4779720405271553,
+        "p75": 0.6111334593879189,
+        "p90": 0.7254057357251563,
+        "p95": 0.7924643790498369,
+        "emaGatePct": 0.26515930113052416,
+        "rsiGatePct": 0.3473792394655704,
+        "noisyMiddlePct": 0.3874614594039055,
+        "meanTq": 0.4900805912083963
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 28,
+        "breakoutFires": 148,
+        "rsiLevelBars": 94,
+        "rsiEdgeEntries": 40,
+        "emaPer100": 2.9166666666666665,
+        "breakoutPer100": 15.416666666666668,
+        "rsiEdgePer100": 4.166666666666666
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.26515930113052416,
+          "signalRatePer100": 2.9166666666666665,
+          "verdict": "PLAUSIBLE ΓÇö sustained high-TQ periods exist and EMA crosses fire"
+        },
+        "breakout": {
+          "signalRatePer100": 15.416666666666668,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.09607438016528926,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "CAUTION under proposed 0.95/1.05 ΓÇö HIGH share thin (9.6%)",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.3473792394655704,
+          "levelBarsPer100": 9.791666666666666,
+          "edgeEntriesPer100": 4.166666666666666,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 150 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 27.44,
+        "ask": 27.54,
+        "tick_time": 1786225446,
+        "trade_contract_size": 1,
+        "volume_min": 1,
+        "volume_step": 0.001,
+        "volume_max": 50,
+        "digits": 2,
+        "spread_proxy": 0.09999999999999787
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8969781887933753,
+        "max": 1.1680920619295412,
+        "mean": 0.9970628099174946,
+        "p10": 0.941339364271494,
+        "p25": 0.9656588615149219,
+        "p50": 0.9955213485476968,
+        "p75": 1.0267913401506557,
+        "p90": 1.0532527192785324,
+        "p95": 1.0718632036145008
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 0.3285694509349269,
+        "max": 0.5745756949895314,
+        "mean": 0.43884421342410695,
+        "p10": 0.3607410439455867,
+        "p25": 0.3942280313612598,
+        "p50": 0.4481260418730274,
+        "p75": 0.48069237350888,
+        "p90": 0.5046156718215601,
+        "p95": 0.5164587730921989,
+        "atrPctOfPrice": 1.596377640684274,
+        "midPrice": 27.490000000000002
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 143,
+          "NORMAL": 711,
+          "HIGH": 114
+        },
+        "pct": {
+          "LOW": 0.14772727272727273,
+          "NORMAL": 0.734504132231405,
+          "HIGH": 0.11776859504132231
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.1815172814765873,
+        "max": 1,
+        "mean": 0.5060183614048884,
+        "p10": 0.3008664918626744,
+        "p25": 0.36718087160854523,
+        "p50": 0.48662777277493663,
+        "p75": 0.6169218317108123,
+        "p90": 0.7550464738844527,
+        "p95": 0.8175139130234235,
+        "emaGatePct": 0.2733812949640288,
+        "rsiGatePct": 0.31963001027749227,
+        "noisyMiddlePct": 0.40698869475847893,
+        "meanTq": 0.5060183614048884
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 29,
+        "breakoutFires": 139,
+        "rsiLevelBars": 85,
+        "rsiEdgeEntries": 27,
+        "emaPer100": 3.0208333333333335,
+        "breakoutPer100": 14.479166666666668,
+        "rsiEdgePer100": 2.8125
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.2733812949640288,
+          "signalRatePer100": 3.0208333333333335,
+          "verdict": "PLAUSIBLE ΓÇö sustained high-TQ periods exist and EMA crosses fire"
+        },
+        "breakout": {
+          "signalRatePer100": 14.479166666666668,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.11776859504132231,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 11.8% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.31963001027749227,
+          "levelBarsPer100": 8.854166666666668,
+          "edgeEntriesPer100": 2.8125,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    },
+    {
+      "symbol": "Volatility 250 (1s) Index",
+      "ok": true,
+      "info": {
+        "trade_mode_full": true,
+        "bid": 0.33049,
+        "ask": 0.33308,
+        "tick_time": 1786225447,
+        "trade_contract_size": 1,
+        "volume_min": 10,
+        "volume_step": 0.001,
+        "volume_max": 30,
+        "digits": 5,
+        "spread_proxy": 0.002589999999999981
+      },
+      "barsFetched": 1000,
+      "firstBarTime": 1785325500,
+      "lastBarTime": 1786224600,
+      "atrRatio": {
+        "n": 968,
+        "min": 0.8362006724849166,
+        "max": 1.2248415716413643,
+        "mean": 1.000884454436054,
+        "p10": 0.9405418592293797,
+        "p25": 0.9652785972297155,
+        "p50": 0.9950310149737073,
+        "p75": 1.0321369629143191,
+        "p90": 1.0707672155932557,
+        "p95": 1.0996750359934724
+      },
+      "atrAbsolute": {
+        "n": 968,
+        "min": 0.004957337899799989,
+        "max": 0.009422860812556213,
+        "mean": 0.006442233998122631,
+        "p10": 0.005564906324487231,
+        "p25": 0.005845751332961604,
+        "p50": 0.006241371460656803,
+        "p75": 0.006878780431238305,
+        "p90": 0.007657410244875235,
+        "p95": 0.007971900679770471,
+        "atrPctOfPrice": 1.9416893464510545,
+        "midPrice": 0.331785
+      },
+      "underForexBands_0_8_1_3": {
+        "counts": {
+          "LOW": 0,
+          "NORMAL": 968,
+          "HIGH": 0
+        },
+        "pct": {
+          "LOW": 0,
+          "NORMAL": 1,
+          "HIGH": 0
+        }
+      },
+      "proposedThresholds": {
+        "lowMax": 0.95,
+        "highMin": 1.05,
+        "note": "first-cut from this window only ΓÇö not final calibration"
+      },
+      "underProposedThresholds": {
+        "counts": {
+          "LOW": 146,
+          "NORMAL": 661,
+          "HIGH": 161
+        },
+        "pct": {
+          "LOW": 0.15082644628099173,
+          "NORMAL": 0.6828512396694215,
+          "HIGH": 0.16632231404958678
+        }
+      },
+      "trendQuality": {
+        "n": 973,
+        "min": 0.1775707529889458,
+        "max": 1,
+        "mean": 0.4705841436497113,
+        "p10": 0.2713273842592968,
+        "p25": 0.33671386576557766,
+        "p50": 0.4571010563783576,
+        "p75": 0.5810937425442024,
+        "p90": 0.682066562676999,
+        "p95": 0.7262457251523718,
+        "emaGatePct": 0.22918807810894143,
+        "rsiGatePct": 0.37307297019527236,
+        "noisyMiddlePct": 0.3977389516957862,
+        "meanTq": 0.4705841436497113
+      },
+      "strategyFires": {
+        "evaluatedBars": 960,
+        "emaCrossFires": 33,
+        "breakoutFires": 152,
+        "rsiLevelBars": 67,
+        "rsiEdgeEntries": 28,
+        "emaPer100": 3.4375000000000004,
+        "breakoutPer100": 15.833333333333332,
+        "rsiEdgePer100": 2.9166666666666665
+      },
+      "strategyFit": {
+        "ema": {
+          "gateOpenShare": 0.22918807810894143,
+          "signalRatePer100": 3.4375000000000004,
+          "verdict": "MARGINAL ΓÇö gate opens sometimes but signal rate is thin"
+        },
+        "breakout": {
+          "signalRatePer100": 15.833333333333332,
+          "highVolShareForex": 0,
+          "highVolShareProposed": 0.16632231404958678,
+          "verdictForexBands": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves",
+          "verdictProposedBands": "PLAUSIBLE under proposed 0.95/1.05 ΓÇö HIGH 16.6% and breakout edges fire",
+          "verdict": "WEAK under forex 0.8/1.3 ΓÇö HIGH share 0.0%; breakout regime gate starves"
+        },
+        "rsi": {
+          "gateOpenShare": 0.37307297019527236,
+          "levelBarsPer100": 6.979166666666667,
+          "edgeEntriesPer100": 2.9166666666666665,
+          "verdict": "PLAUSIBLE ΓÇö ranging/low-TQ periods exist and RSI extremes occur"
+        }
+      }
+    }
+  ],
+  "recommendation": {
+    "runtimeFile": "OWN FILE (synthetic-bot-runtime.js) ΓÇö do not fold into crypto-bot-runtime.js. Probe shows designed fixed-vol ATR-ratio profiles that differ across Volatility Index variants; ┬º3 no-news-correlation is a hard architectural difference from crypto's shock-news pipeline; surface 24/7 similarity alone is not enough to share a dispatcher.",
+    "instrumentScopeFirstCut": "Start with continuous Volatility Indices only (standard tick cadence). Defer Boom/Crash/Jump (spike design). Treat 1s variants as a separate sub-watchlist ΓÇö higher designed frequency, different spread/volume_min profile.",
+    "thresholds": "Ratio p10/p90 collapses to ~0.95/1.05 across all Volatility Index variants in this window ΓÇö designed-fixed vol makes the ATR-ratio nearly stationary. Per-symbol differentiation shows up in absolute ATR (% of price), volume_min, and spread, not in the ratio cutoffs. First-cut ratio bands may therefore be shared within the Volatility Index family, with per-symbol Module 7 specs. Flagged for report-before-build: ratio-based HIGH/LOW may be the wrong primary regime axis for these instruments.",
+    "strategyTransfer": "See per-symbol strategyFit verdicts ΓÇö EMA/breakout/RSI assessed independently. Breakout primary verdict uses unmodified forex 0.8/1.3 bands."
+  }
+}
