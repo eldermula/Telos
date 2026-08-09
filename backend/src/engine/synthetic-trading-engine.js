@@ -14,8 +14,8 @@ const notificationsService = require('../services/notifications.service');
 const { LIVE_TRADING_CONFIRMATION_PHRASE } = require('./live-trading-confirmation');
 const {
   NODE_ENV,
-  REAL_TRADING_ALLOW_DEMO,
-  assertRealTradingDemoBypassAllowed,
+  SYNTHETIC_ALLOW_DEMO_CONFIRM,
+  assertSyntheticDemoConfirmBypassAllowed,
 } = require('../config/env');
 
 async function ensureBotInstance(userId) {
@@ -67,52 +67,52 @@ async function startSyntheticSession(userId, runtimeOptions = {}) {
 }
 
 /**
- * Stop synthetics paper bot. Clears synthetic Layer 2 confirmation on
- * every Stop (including already-stopped), matching forex stopSession.
+ * Stop synthetics bot. Always clears synthetic_live_trading_confirmed_at,
+ * including when the session is already stopped (no-op status transition).
  */
 async function stopSyntheticSession(userId) {
   const instance = await ensureBotInstance(userId);
   await stopSyntheticRuntime(instance.id);
 
-  if (instance.synthetic_status === 'stopped') {
-    if (instance.synthetic_live_trading_confirmed_at) {
-      const cleared = await botInstanceRepository.updateStatusFields(instance.id, {
-        synthetic_live_trading_confirmed_at: null,
-      });
-      return botStatusCache.setStatus(cleared);
-    }
-    return botStatusCache.setStatus(instance);
-  }
-
+  const wasRunning = instance.synthetic_status !== 'stopped';
+  // Confirmation clear is unconditional — write null even on already-stopped.
   const updated = await botInstanceRepository.updateStatusFields(instance.id, {
-    synthetic_status: 'stopped',
+    ...(wasRunning ? { synthetic_status: 'stopped' } : {}),
     synthetic_live_trading_confirmed_at: null,
   });
   const cached = await botStatusCache.setStatus(updated);
-  await publishBotEvent(updated.id, 'bot.status_changed', {
-    status: updated.status,
-    crypto_status: updated.crypto_status,
-    synthetic_status: 'stopped',
-    timestamp: cached.updated_at,
-  });
-  await notificationsService.maybeNotifyUser(userId, 'bot_stop', 'Synthetics paper bot stopped.');
+
+  if (wasRunning) {
+    await publishBotEvent(updated.id, 'bot.status_changed', {
+      status: updated.status,
+      crypto_status: updated.crypto_status,
+      synthetic_status: 'stopped',
+      timestamp: cached.updated_at,
+    });
+    await notificationsService.maybeNotifyUser(
+      userId,
+      'bot_stop',
+      'Synthetics paper bot stopped.'
+    );
+  }
   return cached;
 }
 
 /**
- * Synthetics Layer 2 confirm-live — mirrors trading-engine.confirmLiveTrading
- * but writes synthetic_live_trading_confirmed_at and gates on synthetic_status.
+ * Synthetics Layer 2 confirm-live — writes synthetic_live_trading_confirmed_at
+ * and gates on synthetic_status. Demo accounts require
+ * SYNTHETIC_ALLOW_DEMO_CONFIRM===true (logged when used).
  */
 async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
   try {
-    assertRealTradingDemoBypassAllowed({
+    assertSyntheticDemoConfirmBypassAllowed({
       nodeEnv: NODE_ENV,
-      allowDemoEnvPresent: process.env.REAL_TRADING_ALLOW_DEMO !== undefined,
+      allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_DEMO_CONFIRM !== undefined,
     });
   } catch (err) {
     throw new AppError(
       500,
-      'REAL_TRADING_DEMO_BYPASS_IN_PRODUCTION',
+      'SYNTHETIC_DEMO_CONFIRM_BYPASS_IN_PRODUCTION',
       err.message
     );
   }
@@ -127,11 +127,11 @@ async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
     );
   }
 
-  const demoAcceptanceAllowed =
-    REAL_TRADING_ALLOW_DEMO === true && NODE_ENV !== 'production';
-  const accountQualifies =
-    instance.account_type === 'real' ||
-    (demoAcceptanceAllowed && instance.account_type === 'demo');
+  const demoBypassActive =
+    SYNTHETIC_ALLOW_DEMO_CONFIRM === true && NODE_ENV !== 'production';
+  const isReal = instance.account_type === 'real';
+  const isDemo = instance.account_type === 'demo';
+  const accountQualifies = isReal || (demoBypassActive && isDemo);
   if (!accountQualifies) {
     throw new AppError(
       409,
@@ -148,6 +148,20 @@ async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
     );
   }
 
+  const usedDemoBypass = isDemo && demoBypassActive;
+  if (usedDemoBypass) {
+    console.warn(
+      '[synthetic-trading-engine] confirm-live SUCCEEDED VIA SYNTHETIC_ALLOW_DEMO_CONFIRM ' +
+        `(testing-only demo bypass) user_id=${userId} account_type=demo ` +
+        `login_broker_connection_id=${instance.broker_connection_id}`
+    );
+  } else {
+    console.info(
+      '[synthetic-trading-engine] confirm-live succeeded on real account ' +
+        `user_id=${userId} account_type=real`
+    );
+  }
+
   const updated = await botInstanceRepository.updateStatusFields(instance.id, {
     synthetic_live_trading_confirmed_at: new Date(),
   });
@@ -155,7 +169,9 @@ async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
   await notificationsService.maybeNotifyUser(
     userId,
     'live_trading_confirmed',
-    'Synthetics live trading confirmed — real synthetics orders may be placed starting from the next Start (when Batch 2 dispatch is enabled).'
+    usedDemoBypass
+      ? 'Synthetics live trading confirmed (DEMO BYPASS — SYNTHETIC_ALLOW_DEMO_CONFIRM). Testing only.'
+      : 'Synthetics live trading confirmed — real synthetics orders may be placed starting from the next Start.'
   );
   return cached;
 }

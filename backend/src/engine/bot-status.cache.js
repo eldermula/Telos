@@ -2,7 +2,11 @@
 
 const path = require('path');
 const { redis } = require('../db/redis');
-const { REAL_TRADING_ENABLED, SYNTHETIC_REAL_TRADING_ENABLED } = require('../config/env');
+const {
+  REAL_TRADING_ENABLED,
+  SYNTHETIC_REAL_TRADING_ENABLED,
+  SYNTHETIC_ALLOW_DEMO_CONFIRM,
+} = require('../config/env');
 const { isConfirmationActive } = require('./live-trading-confirmation');
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
@@ -61,11 +65,19 @@ function toCachePayload(instance, updatedAt = new Date()) {
       ? instance.live_trading_confirmed_at
       : null,
     // Synthetics Layer 1/2 — independent of forex real_trading_* fields.
+    // Demo accounts only surface when SYNTHETIC_ALLOW_DEMO_CONFIRM is on
+    // (testing-only; confirm-live still enforces the same flag server-side).
     synthetic_real_trading_available:
-      SYNTHETIC_REAL_TRADING_ENABLED && instance.account_type === 'real',
+      SYNTHETIC_REAL_TRADING_ENABLED &&
+      (instance.account_type === 'real' ||
+        (SYNTHETIC_ALLOW_DEMO_CONFIRM && instance.account_type === 'demo')),
+    // Already TTL-filtered: null when expired — frontend must not re-check.
     synthetic_live_trading_confirmed_at: syntheticConfirmationActive
       ? instance.synthetic_live_trading_confirmed_at
       : null,
+    // Surfaces the testing flag so the confirm modal can accept demo
+    // account_type in the UI; the POST route remains the real gate.
+    synthetic_allow_demo_confirm: SYNTHETIC_ALLOW_DEMO_CONFIRM === true,
     synthetic_active_trading_balance:
       instance.synthetic_active_trading_balance == null
         ? null

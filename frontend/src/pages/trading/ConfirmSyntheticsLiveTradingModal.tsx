@@ -10,20 +10,26 @@ type Props = {
   confirming: boolean;
   onClose: () => void;
   onConfirm: (phrase: string) => Promise<void>;
+  /**
+   * When true (session.synthetic_allow_demo_confirm), UI accepts a live
+   * demo account_type so Deriv-Demo walkthroughs can type the phrase.
+   * Server still enforces SYNTHETIC_ALLOW_DEMO_CONFIRM on POST.
+   */
+  allowDemoConfirm?: boolean;
 };
 
 /**
  * Synthetics Layer 2 — deliberate-typing gate before a real-mode
- * synthetics Start. Mirrors ConfirmLiveTradingModal: live
- * GET /trading/account-info must load successfully, account_type must
- * be `real`, and the phrase must match exactly. Confirm posts to
- * POST /bot/synthetic/confirm-live (not forex confirm-live).
+ * synthetics Start. Live GET /trading/account-info must load; account
+ * must be `real` (or `demo` when allowDemoConfirm). Phrase must match.
+ * Confirm posts to POST /bot/synthetic/confirm-live.
  */
 export function ConfirmSyntheticsLiveTradingModal({
   open,
   confirming,
   onClose,
   onConfirm,
+  allowDemoConfirm = false,
 }: Props) {
   const [phrase, setPhrase] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -51,7 +57,10 @@ export function ConfirmSyntheticsLiveTradingModal({
         const info = await getLiveAccountInfo();
         if (cancelled) return;
         setAccountInfo(info);
-        if (info.account_type !== 'real') {
+        const accountOk =
+          info.account_type === 'real' ||
+          (allowDemoConfirm && info.account_type === 'demo');
+        if (!accountOk) {
           setAccountError(
             `Attached MT5 account is ${info.account_type}, not real. Live trading cannot be confirmed.`,
           );
@@ -71,11 +80,14 @@ export function ConfirmSyntheticsLiveTradingModal({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, allowDemoConfirm]);
 
   const matches = phrase === LIVE_TRADING_CONFIRMATION_PHRASE;
-  const liveContextReady =
-    accountInfo !== null && accountInfo.account_type === 'real' && !accountError;
+  const accountOk =
+    accountInfo != null &&
+    (accountInfo.account_type === 'real' ||
+      (allowDemoConfirm && accountInfo.account_type === 'demo'));
+  const liveContextReady = accountOk && !accountError;
 
   async function handleConfirm() {
     if (!matches || !liveContextReady) return;

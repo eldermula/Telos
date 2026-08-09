@@ -90,9 +90,13 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
 
   useBotEvents(onBotEvent);
 
-  const mode: 'paper' | 'real' = session?.synthetic_live_trading_confirmed_at
-    ? 'real'
-    : 'paper';
+  // Mode pill: trust the session field as already TTL-filtered by the
+  // backend (bot-status.cache → isConfirmationActive). Never re-parse
+  // or independently age-check a raw timestamp on the client.
+  const mode: 'paper' | 'real' =
+    session != null && session.synthetic_live_trading_confirmed_at != null
+      ? 'real'
+      : 'paper';
 
   // Real-mode balance grid: live connector read (same endpoint as Confirm Live).
   useEffect(() => {
@@ -206,7 +210,17 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
                 Stop synthetics
               </Button>
             ) : (
-              <Button onClick={() => setConfirmAction('start')}>Start synthetics</Button>
+              <>
+                <Button onClick={() => setConfirmAction('start')}>Start synthetics</Button>
+                {/* Stop remains available while REAL-armed but not running so
+                    Stop can clear synthetic_live_trading_confirmed_at without
+                    requiring a Start (which would dispatch real orders). */}
+                {mode === 'real' ? (
+                  <Button variant="destructive" onClick={() => setConfirmAction('stop')}>
+                    Stop synthetics
+                  </Button>
+                ) : null}
+              </>
             )}
             {realAvailable && mode === 'paper' ? (
               <Button
@@ -303,6 +317,7 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
       <ConfirmSyntheticsLiveTradingModal
         open={confirmLiveOpen}
         confirming={confirmLivePending}
+        allowDemoConfirm={Boolean(session.synthetic_allow_demo_confirm)}
         onClose={() => setConfirmLiveOpen(false)}
         onConfirm={onConfirmLive}
       />

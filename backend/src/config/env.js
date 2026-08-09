@@ -70,6 +70,17 @@ const SYNTHETIC_REAL_TRADING_ENABLED =
   process.env.SYNTHETIC_REAL_TRADING_ENABLED === 'true';
 
 /**
+ * Synthetics Layer 2 confirm-live demo bypass — testing only.
+ * Exact-string 'true' only; default off. When set, POST
+ * /bot/synthetic/confirm-live may succeed against a demo
+ * broker_connections.account_type (Deriv-Demo walkthroughs).
+ * Must be off before any real-account rollout. Production refuses
+ * to boot if this env var is present at all (any value).
+ */
+const SYNTHETIC_ALLOW_DEMO_CONFIRM =
+  process.env.SYNTHETIC_ALLOW_DEMO_CONFIRM === 'true';
+
+/**
  * Option 2 Increment E (E1 verification strategy) — non-production
  * dispatch bypass so the real-mode *methods* can be exercised against
  * a MetaQuotes-Demo account without real capital. Strict exact-string
@@ -137,6 +148,24 @@ function assertRealTradingDemoBypassAtStartup() {
     nodeEnv: NODE_ENV,
     allowDemoEnvPresent: process.env.REAL_TRADING_ALLOW_DEMO !== undefined,
   });
+  assertSyntheticDemoConfirmBypassAllowed({
+    nodeEnv: NODE_ENV,
+    allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_DEMO_CONFIRM !== undefined,
+  });
+}
+
+/**
+ * Same production foot-gun as REAL_TRADING_ALLOW_DEMO: the variable
+ * must be entirely absent under NODE_ENV=production.
+ */
+function assertSyntheticDemoConfirmBypassAllowed({ nodeEnv, allowDemoEnvPresent }) {
+  if (nodeEnv === 'production' && allowDemoEnvPresent) {
+    throw new Error(
+      'SYNTHETIC_ALLOW_DEMO_CONFIRM must not be set when NODE_ENV=production ' +
+        '(synthetics demo confirm-live bypass is testing-only; remove the ' +
+        'variable entirely before real-account rollout)'
+    );
+  }
 }
 
 module.exports = {
@@ -167,6 +196,7 @@ module.exports = {
   ACCESS_GATE_COOKIE_NAME,
   REAL_TRADING_ENABLED,
   SYNTHETIC_REAL_TRADING_ENABLED,
+  SYNTHETIC_ALLOW_DEMO_CONFIRM,
   REAL_TRADING_ALLOW_DEMO,
   REAL_MAX_LOT,
   REAL_CONNECTION_MAX_AGE_HOURS,
@@ -174,5 +204,6 @@ module.exports = {
   CRYPTO_NEWS_LLM_ENABLED,
   assertRealTradingDemoBypassAllowed,
   assertRealTradingDemoBypassAtStartup,
+  assertSyntheticDemoConfirmBypassAllowed,
   isProduction: NODE_ENV === 'production',
 };
