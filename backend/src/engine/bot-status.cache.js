@@ -66,6 +66,16 @@ function toCachePayload(instance, updatedAt = new Date()) {
     synthetic_live_trading_confirmed_at: syntheticConfirmationActive
       ? instance.synthetic_live_trading_confirmed_at
       : null,
+    synthetic_active_trading_balance:
+      instance.synthetic_active_trading_balance == null
+        ? null
+        : Number(instance.synthetic_active_trading_balance),
+    synthetic_peak_equity:
+      instance.synthetic_peak_equity == null
+        ? null
+        : Number(instance.synthetic_peak_equity),
+    synthetic_current_tier:
+      instance.synthetic_current_tier == null ? 0 : instance.synthetic_current_tier,
     updated_at:
       updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt),
   };
