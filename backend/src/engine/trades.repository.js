@@ -214,6 +214,20 @@ async function listOpenTrades(botInstanceId) {
   return result.rows.map(mapTrade);
 }
 
+/** Single trade by id scoped to owning user (includes conditions for resume/close). */
+async function findTradeByIdForUser(tradeId, userId) {
+  const result = await pool.query(
+    `SELECT ${TRADE_RETURNING}, conditions, user_id
+     FROM trades
+     WHERE id = $1 AND user_id = $2
+     LIMIT 1`,
+    [tradeId, userId]
+  );
+  if (!result.rows[0]) return null;
+  const row = result.rows[0];
+  return { ...mapTrade(row), conditions: row.conditions ?? null, user_id: row.user_id };
+}
+
 /** System-wide open check (docs/11 §0.2) — any asset_class for this user. */
 async function listOpenTradesForUser(userId) {
   const result = await pool.query(
@@ -344,6 +358,7 @@ module.exports = {
   closeRealTrade,
   listOpenTrades,
   listOpenTradesForUser,
+  findTradeByIdForUser,
   listOpenTradesForResume,
   listOpenCryptoTradesForResume,
   listOpenSyntheticTradesForResume,

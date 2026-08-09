@@ -18,5 +18,10 @@ router.post(
   rateLimit.write({ max: 3 }),
   controller.testDispatchSyntheticReal
 );
+router.post(
+  '/test-close-real',
+  rateLimit.write({ max: 3 }),
+  controller.testCloseSyntheticReal
+);
 
 module.exports = router;

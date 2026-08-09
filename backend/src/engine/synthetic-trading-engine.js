@@ -10,6 +10,7 @@ const botInstanceRepository = require('./bot-instance.repository');
 const botStatusCache = require('./bot-status.cache');
 const tradesRepository = require('./trades.repository');
 const {
+  SyntheticBotRuntime,
   startSyntheticRuntime,
   stopSyntheticRuntime,
   getSyntheticRuntime,
@@ -349,6 +350,111 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
   };
 }
 
+/**
+ * Testing-only: POST /bot/synthetic/test-close-real
+ * Closes an open real synthetic trade via connector /order/close, then
+ * reconciles with the same getOrderHistory → _applyRealCloseFromHistory
+ * path natural closes use. Does not change Start/Stop/tick-loop design.
+ */
+async function testCloseSyntheticReal(userId, { tradeId }) {
+  try {
+    assertSyntheticManualTestTradeBypassAllowed({
+      nodeEnv: NODE_ENV,
+      allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== undefined,
+    });
+  } catch (err) {
+    throw new AppError(
+      500,
+      'SYNTHETIC_MANUAL_TEST_TRADE_IN_PRODUCTION',
+      err.message
+    );
+  }
+
+  if (SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== true) {
+    throw new AppError(
+      403,
+      'MANUAL_TEST_TRADE_DISABLED',
+      'SYNTHETIC_ALLOW_MANUAL_TEST_TRADE must be exact true to use test-close-real'
+    );
+  }
+
+  const id = String(tradeId || '');
+  if (!id) {
+    throw new AppError(422, 'VALIDATION_ERROR', 'tradeId is required');
+  }
+
+  const instance = await ensureBotInstance(userId);
+  const row = await tradesRepository.findTradeByIdForUser(id, userId);
+  if (!row) {
+    throw new AppError(404, 'TRADE_NOT_FOUND', 'Trade not found for this user');
+  }
+  if (row.bot_instance_id !== instance.id) {
+    throw new AppError(404, 'TRADE_NOT_FOUND', 'Trade not found for this user');
+  }
+  if (row.status !== 'open') {
+    throw new AppError(409, 'TRADE_NOT_OPEN', `Trade status is '${row.status}', expected open`);
+  }
+  if (row.execution_mode !== 'real') {
+    throw new AppError(409, 'TRADE_NOT_REAL', 'Trade is not execution_mode=real');
+  }
+  if (row.asset_class !== 'synthetic') {
+    throw new AppError(409, 'TRADE_NOT_SYNTHETIC', 'Trade is not asset_class=synthetic');
+  }
+  if (row.broker_ticket == null) {
+    throw new AppError(409, 'TRADE_MISSING_TICKET', 'Trade has no broker_ticket');
+  }
+
+  let runtime = getSyntheticRuntime(instance.id);
+  let ephemeral = false;
+  if (!runtime) {
+    // Do not Start the tick loop — only construct an in-process runtime so
+    // we can reuse _applyRealCloseFromHistory without changing Stop/monitor design.
+    runtime = new SyntheticBotRuntime(instance, { autoTick: false });
+    await runtime.initialize();
+    ephemeral = true;
+  }
+
+  console.warn(
+    '[synthetic-trading-engine] test-close-real INVOKED VIA SYNTHETIC_ALLOW_MANUAL_TEST_TRADE ' +
+      `(testing-only) user_id=${userId} bot_instance_id=${instance.id} ` +
+      `trade_id=${id} ticket=${row.broker_ticket} ephemeral_runtime=${ephemeral}`
+  );
+
+  let result;
+  try {
+    result = await runtime.dispatchManualTestClose({ tradeId: id });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(502, 'MANUAL_TEST_CLOSE_FAILED', err.message || 'test-close-real failed');
+  }
+
+  if (result?.error) {
+    throw new AppError(
+      502,
+      'MANUAL_TEST_CLOSE_INCOMPLETE',
+      `Broker close may have succeeded but reconciliation failed (${result.reason || 'unknown'})`,
+      {
+        close_order: result.closeOrderRaw || null,
+        history_error: result.history_error || null,
+      }
+    );
+  }
+  if (!result?.trade) {
+    throw new AppError(
+      502,
+      'MANUAL_TEST_CLOSE_NO_TRADE',
+      'Close path did not return a closed trade row'
+    );
+  }
+
+  return {
+    trade: result.trade,
+    close_order: result.closeOrderRaw || null,
+    order_history: result.history || null,
+    dispatch_origin: 'manual_test_close',
+  };
+}
+
 async function rehydrateSyntheticRunningRuntimes(deps = {}) {
   const listFn =
     deps.listSyntheticRunning || (() => botInstanceRepository.listSyntheticRunning());
@@ -376,5 +482,6 @@ module.exports = {
   stopSyntheticSession,
   confirmSyntheticLiveTrading,
   testDispatchSyntheticReal,
+  testCloseSyntheticReal,
   rehydrateSyntheticRunningRuntimes,
 };

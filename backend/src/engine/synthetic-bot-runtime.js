@@ -226,11 +226,17 @@ class SyntheticBotRuntime {
       getOrderHistory:
         options.getOrderHistory || ((ticket) => mt5Connector.getOrderHistory(ticket)),
       placeOrder: options.placeOrder || ((args) => mt5Connector.placeOrder(args)),
+      closeOrder:
+        options.closeOrder ||
+        ((ticket, args) => mt5Connector.closeOrder(ticket, args)),
       insertOpenRealTrade:
         options.insertOpenRealTrade || ((args) => tradesRepository.insertOpenRealTrade(args)),
       closeRealTrade:
         options.closeRealTrade ||
         ((tradeId, args) => tradesRepository.closeRealTrade(tradeId, args)),
+      findTradeByIdForUser:
+        options.findTradeByIdForUser ||
+        ((tradeId, userId) => tradesRepository.findTradeByIdForUser(tradeId, userId)),
       insertDecision:
         options.insertDecision || ((args) => decisionLogRepository.insertDecision(args)),
       forceNotifyUser:
@@ -1134,6 +1140,110 @@ class SyntheticBotRuntime {
     });
   }
 
+  /**
+   * Testing-only: force-close an open real synthetic trade via connector
+   * /order/close, then reconcile with the same getOrderHistory →
+   * _applyRealCloseFromHistory path natural closes use.
+   */
+  async dispatchManualTestClose({ tradeId }) {
+    const deps = this._real;
+    const row = await deps.findTradeByIdForUser(tradeId, this.userId);
+    if (!row) {
+      throw new Error(`trade not found for user: ${tradeId}`);
+    }
+    if (row.bot_instance_id !== this.botInstanceId) {
+      throw new Error(`trade ${tradeId} belongs to a different bot instance`);
+    }
+    if (row.status !== 'open') {
+      throw new Error(`trade ${tradeId} is not open (status=${row.status})`);
+    }
+    if (row.execution_mode !== 'real') {
+      throw new Error(`trade ${tradeId} is not execution_mode=real`);
+    }
+    if (row.asset_class !== 'synthetic') {
+      throw new Error(`trade ${tradeId} is not asset_class=synthetic`);
+    }
+    if (row.broker_ticket == null) {
+      throw new Error(`trade ${tradeId} missing broker_ticket`);
+    }
+
+    const accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
+    const expectedAccountType = resolveExpectedAccountTypeForLayer0(accountInfo.account_type);
+
+    console.warn(
+      '[synthetic-bot-runtime] MANUAL TEST CLOSE VIA SYNTHETIC_ALLOW_MANUAL_TEST_TRADE ' +
+        `(testing-only) bot_instance_id=${this.botInstanceId} user_id=${this.userId} ` +
+        `trade_id=${tradeId} ticket=${row.broker_ticket}`
+    );
+
+    const closeOrderRaw = await deps.closeOrder(row.broker_ticket, {
+      expectedAccountType,
+    });
+
+    // Same getOrderHistory source as _monitorOpenPositionReal — retry for
+    // history lag without the halt side-effect of _fetchOrderHistoryWithRetries
+    // (broker already closed; we must not kill the runtime for lag).
+    let history = null;
+    let lastHistErr = null;
+    const maxHistRetries = deps.historyRetryTicks;
+    for (let i = 0; i < maxHistRetries; i += 1) {
+      try {
+        history = await deps.getOrderHistory(row.broker_ticket);
+        lastHistErr = null;
+        break;
+      } catch (err) {
+        lastHistErr = err;
+        console.warn(
+          `[synthetic-bot-runtime] manual_test_close history lag for ticket ${row.broker_ticket} ` +
+            `(${i + 1}/${maxHistRetries}): ${err.message}`
+        );
+        await new Promise((r) => setTimeout(r, ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS));
+      }
+    }
+    if (!history) {
+      return {
+        error: true,
+        reason: 'order_history_unavailable',
+        closeOrderRaw,
+        trade: null,
+        history: null,
+        history_error: lastHistErr ? lastHistErr.message : null,
+      };
+    }
+
+    let pos = this.openPosition;
+    if (
+      !pos ||
+      pos.executionMode !== 'real' ||
+      Number(pos.brokerTicket) !== Number(row.broker_ticket)
+    ) {
+      if (!this.state) {
+        const tradeHistory = await deps.loadTradeHistoryForLearning(this.botInstanceId);
+        const instance = await deps.findInstanceById(this.botInstanceId);
+        this.state = instanceToApirsState(instance, tradeHistory);
+        this.dailyDrawdownMarkers = markersFromInstance(instance);
+      }
+      const tradeHistory = await deps.loadTradeHistoryForLearning(this.botInstanceId);
+      pos = this._buildResumedOpenPosition(row, tradeHistory, {
+        executionMode: 'real',
+        brokerTicket: Number(row.broker_ticket),
+        historyRetryCount: 0,
+      });
+      this.openPosition = pos;
+    }
+
+    const applied = await this._applyRealCloseFromHistory(pos, history, {
+      manualTest: true,
+      closeOrderRaw,
+    });
+    return {
+      ...applied,
+      closeOrderRaw,
+      history,
+      manual_test: true,
+    };
+  }
+
   async _monitorOpenPositionPaper() {
     const pos = this.openPosition;
 
@@ -1289,8 +1399,14 @@ class SyntheticBotRuntime {
     return this._applyRealCloseFromHistory(pos, history);
   }
 
-  async _applyRealCloseFromHistory(pos, history) {
+  /**
+   * @param {object} pos
+   * @param {object} history
+   * @param {{ manualTest?: boolean, closeOrderRaw?: object|null }} [options]
+   */
+  async _applyRealCloseFromHistory(pos, history, options = {}) {
     const deps = this._real;
+    const manualTest = options.manualTest === true;
     const exitPrice = Number(history.close_price);
     const pnlAmount = Number(history.profit);
     if (!(exitPrice > 0) || !Number.isFinite(pnlAmount)) {
@@ -1333,7 +1449,9 @@ class SyntheticBotRuntime {
     await deps.insertDecision({
       botInstanceId: this.botInstanceId,
       decisionType: 'real_order_closed',
-      triggeringCondition: `ticket=${pos.brokerTicket} pnl=${pnlAmount}`,
+      triggeringCondition: manualTest
+        ? `manual_test_close ticket=${pos.brokerTicket} pnl=${pnlAmount}`
+        : `ticket=${pos.brokerTicket} pnl=${pnlAmount}`,
       details: {
         trade_id: pos.tradeRowId,
         broker_ticket: pos.brokerTicket,
@@ -1343,6 +1461,9 @@ class SyntheticBotRuntime {
         pnl: pnlAmount,
         was_win: wasWin,
         history,
+        manual_test: manualTest,
+        dispatch_origin: manualTest ? 'manual_test_close' : 'bot',
+        close_order_raw: options.closeOrderRaw || null,
       },
       assetClass: ASSET_CLASS,
     });

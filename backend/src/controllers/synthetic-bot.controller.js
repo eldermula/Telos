@@ -5,6 +5,7 @@ const { AppError } = require('../utils/app-error');
 const {
   confirmLiveTradingSchema,
   syntheticTestDispatchRealSchema,
+  syntheticTestCloseRealSchema,
 } = require('../validators/trading.schemas');
 
 function parseBody(schema, body) {
@@ -74,10 +75,23 @@ async function testDispatchSyntheticReal(req, res, next) {
   }
 }
 
+async function testCloseSyntheticReal(req, res, next) {
+  try {
+    const body = parseBody(syntheticTestCloseRealSchema, req.body);
+    const data = await syntheticTradingEngine.testCloseSyntheticReal(req.user.id, {
+      tradeId: body.tradeId,
+    });
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getSyntheticSession,
   startSynthetic,
   stopSynthetic,
   confirmSyntheticLive,
   testDispatchSyntheticReal,
+  testCloseSyntheticReal,
 };

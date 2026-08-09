@@ -11,7 +11,12 @@ const syntheticTestDispatchRealSchema = z.object({
   direction: z.enum(['BUY', 'SELL', 'buy', 'sell']),
 });
 
+const syntheticTestCloseRealSchema = z.object({
+  tradeId: z.string().uuid(),
+});
+
 module.exports = {
   confirmLiveTradingSchema,
   syntheticTestDispatchRealSchema,
+  syntheticTestCloseRealSchema,
 };
