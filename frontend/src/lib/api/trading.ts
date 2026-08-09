@@ -45,6 +45,19 @@ export function getLiveAccountInfo() {
   return apiRequest<LiveAccountInfo>('/trading/account-info');
 }
 
+/** Currently attached MT5 terminal (broker onboarding preview). No login-match. */
+export type AttachedAccountInfo = {
+  login: number;
+  account_type: 'demo' | 'contest' | 'real';
+  balance: number;
+  equity: number;
+  currency: string | null;
+};
+
+export function getAttachedAccountInfo() {
+  return apiRequest<AttachedAccountInfo>('/trading/attached-account-info');
+}
+
 export function getPositions() {
   return apiRequest<Trade[]>('/trading/positions');
 }
