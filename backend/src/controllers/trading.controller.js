@@ -64,6 +64,15 @@ async function getAccountInfo(req, res, next) {
   }
 }
 
+async function getAttachedAccountInfo(req, res, next) {
+  try {
+    const data = await tradingService.getAttachedAccountInfo();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function getPositions(req, res, next) {
   try {
     const data = await tradingService.getPositions(req.user.id);
@@ -108,6 +117,7 @@ module.exports = {
   stopSession,
   confirmLive,
   getAccountInfo,
+  getAttachedAccountInfo,
   getPositions,
   getOrders,
   getHistory,
