@@ -226,6 +226,72 @@ describe('SyntheticBotRuntime real dispatch', () => {
     assert.ok(decisions.some((d) => d.triggeringCondition === 'lot_clamp_below_volume_min'));
   });
 
+  it('account-info pre-check: one read-only retry then succeeds (not placeOrder)', async () => {
+    let accountInfoCalls = 0;
+    const placed = [];
+    const { runtime } = createRuntime({
+      getMatchedAccountInfoForBotInstance: async () => {
+        accountInfoCalls += 1;
+        if (accountInfoCalls === 1) {
+          const err = new Error("MT5 account_info unavailable: (-10004, 'No IPC connection')");
+          err.code = 'MT5_ACCOUNT_INFO_FAILED';
+          throw err;
+        }
+        return {
+          equity: 9984.65,
+          balance: 9984.65,
+          account_type: 'demo',
+          last_validated_at: new Date(),
+        };
+      },
+      placeOrder: async (args) => {
+        placed.push(args);
+        return { ticket: 77, price: 4801, volume: 0.5 };
+      },
+      clampLotSize: () => ({ size: 0.5, skipped: false, reason: null }),
+    });
+    runtime._resolveExecutionModeForTick = async () => 'real';
+    runtime._reconcileSyntheticRealAgainstBroker = async () => {};
+
+    const result = await runtime.tickOnce();
+    assert.equal(accountInfoCalls, 2, 'account-info called twice (fail then retry)');
+    assert.equal(placed.length, 1, 'placeOrder still once — no order retry');
+    assert.equal(result.trade.broker_ticket, 77);
+  });
+
+  it('account-info pre-check: both attempts fail → halt (same as before)', async () => {
+    let accountInfoCalls = 0;
+    const placed = [];
+    const { runtime, decisions } = createRuntime({
+      getMatchedAccountInfoForBotInstance: async () => {
+        accountInfoCalls += 1;
+        const err = new Error("MT5 account_info unavailable: (-10004, 'No IPC connection')");
+        err.code = 'MT5_ACCOUNT_INFO_FAILED';
+        throw err;
+      },
+      placeOrder: async (args) => {
+        placed.push(args);
+        return { ticket: 1, price: 1, volume: 0.5 };
+      },
+      clampLotSize: () => ({ size: 0.5, skipped: false, reason: null }),
+    });
+    runtime._resolveExecutionModeForTick = async () => 'real';
+    runtime._reconcileSyntheticRealAgainstBroker = async () => {};
+
+    const result = await runtime.tickOnce();
+    assert.equal(accountInfoCalls, 2);
+    assert.equal(placed.length, 0);
+    assert.equal(result.error, true);
+    assert.equal(runtime._halted, true);
+    assert.ok(
+      decisions.some(
+        (d) =>
+          d.decisionType === 'real_order_failed' &&
+          d.triggeringCondition === 'account_info_unavailable'
+      )
+    );
+  });
+
   it('on placeOrder rejection: skip tick, no paper fallback, no halt', async () => {
     const { runtime, decisions } = createRuntime({
       clampLotSize: () => ({ size: 0.5, skipped: false, reason: null }),

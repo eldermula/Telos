@@ -65,6 +65,8 @@ const DEFAULT_TICK_MS =
 const ASSET_CLASS = 'synthetic';
 const REAL_HISTORY_RETRY_TICKS = 3;
 const REAL_ORDER_LATENCY_WARN_MS = 200;
+/** Read-only account-info pre-check only — never used for placeOrder. */
+const ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS = 400;
 const SYNTHETIC_WATCHLIST_SET = new Set(SYNTHETIC_WATCHLIST);
 
 function markersFromInstance(instance) {
@@ -668,15 +670,31 @@ class SyntheticBotRuntime {
       return null;
     }
 
+    // Read-only Layer 0 / equity pre-check. One short retry absorbs a
+    // transient MT5 IPC blip (-10004). Deliberately NOT shared with
+    // placeOrder — Batch 2 keeps "log, skip, no auto-retry" for real orders
+    // to avoid double-fills.
     let accountInfo;
     try {
       accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
-    } catch (err) {
-      await this._haltRealFailure('account_info_unavailable', {
-        message: err.message,
-        code: err.code || null,
-      });
-      return { state: this.state, entryResult: null, trade: null, error: true };
+    } catch (firstErr) {
+      console.warn(
+        '[synthetic-bot-runtime] account-info pre-check failed; one read-only retry ' +
+          `after ${ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS}ms (not placeOrder)`,
+        { message: firstErr.message, code: firstErr.code || null }
+      );
+      try {
+        await new Promise((r) => setTimeout(r, ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS));
+        accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
+      } catch (err) {
+        await this._haltRealFailure('account_info_unavailable', {
+          message: err.message,
+          code: err.code || null,
+          retried: true,
+          first_error: firstErr.message,
+        });
+        return { state: this.state, entryResult: null, trade: null, error: true };
+      }
     }
 
     if (!isConnectionFresh(accountInfo.last_validated_at, deps.maxAgeHours, deps.now())) {
