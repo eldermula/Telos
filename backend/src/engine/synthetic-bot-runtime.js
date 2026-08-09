@@ -46,6 +46,9 @@ const {
   clampLotSize,
   computeSyntheticRawLotSize,
 } = require('./synthetic-lot-clamp');
+const {
+  getSyntheticMarketIntelligence,
+} = require('./synthetic-market-intelligence.service');
 const { SYNTHETIC_WATCHLIST } = require(path.join(
   __dirname,
   '..',
@@ -56,6 +59,7 @@ const { SYNTHETIC_WATCHLIST } = require(path.join(
   'src',
   'watchlist.js'
 ));
+const SYNTHETIC_WATCHLIST_SET = new Set(SYNTHETIC_WATCHLIST);
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
 const { evaluateEntry, resolveExit } = require(path.join(apirsPath, 'paperTradingHarness.js'));
@@ -70,7 +74,6 @@ const REAL_HISTORY_RETRY_TICKS = 3;
 const REAL_ORDER_LATENCY_WARN_MS = 200;
 /** Read-only account-info pre-check only — never used for placeOrder. */
 const ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS = 400;
-const SYNTHETIC_WATCHLIST_SET = new Set(SYNTHETIC_WATCHLIST);
 
 function markersFromInstance(instance) {
   return {
@@ -703,8 +706,20 @@ class SyntheticBotRuntime {
     return { state: this.state, entryResult, trade: tradeRow };
   }
 
-  async _maybeOpenPositionReal() {
+  /**
+   * @param {{
+   *   forcedSelection?: object|null,
+   *   manualTest?: boolean,
+   * }} [options]
+   * When forcedSelection is set, strategy selection is skipped and the
+   * provided selection drives symbol/direction (and ATR stop/target via
+   * the normal computeSelectionStopTarget path). Everything after that
+   * is identical to automatic real open.
+   */
+  async _maybeOpenPositionReal(options = {}) {
     const deps = this._real;
+    const forcedSelection = options.forcedSelection || null;
+    const manualTest = options.manualTest === true;
 
     if (await this._hasAnyOpenTradeForUser()) {
       return null;
@@ -772,7 +787,9 @@ class SyntheticBotRuntime {
     // Must NEVER be derived from resolveExecutionMode()'s 'real' dispatch.
     const expectedAccountType = resolveExpectedAccountTypeForLayer0(accountInfo.account_type);
 
-    const selection = await this.strategySelection.selectSyntheticTradeAcrossWatchlist();
+    const selection =
+      forcedSelection ||
+      (await this.strategySelection.selectSyntheticTradeAcrossWatchlist());
     if (!selection) {
       return null;
     }
@@ -898,6 +915,12 @@ class SyntheticBotRuntime {
       strategy_name: selection.strategy_name,
       trade_contract_size: spec.trade_contract_size,
       asset_class: ASSET_CLASS,
+      ...(manualTest
+        ? {
+            dispatch_origin: 'manual_test',
+            manual_test: true,
+          }
+        : {}),
     };
 
     const placeStarted = Date.now();
@@ -926,6 +949,7 @@ class SyntheticBotRuntime {
           expected_account_type: expectedAccountType,
           detected_account_type: accountInfo.account_type,
           latency_ms: latencyMs,
+          manual_test: manualTest,
         }
       );
       await deps.insertDecision({
@@ -942,6 +966,7 @@ class SyntheticBotRuntime {
           expected_account_type: expectedAccountType,
           detected_account_type: accountInfo.account_type,
           latency_ms: latencyMs,
+          manual_test: manualTest,
         },
         assetClass: ASSET_CLASS,
       });
@@ -973,6 +998,7 @@ class SyntheticBotRuntime {
         brokerTicket,
         conditions,
         assetClass: ASSET_CLASS,
+        origin: manualTest ? 'manual' : 'bot',
       });
     } catch (err) {
       if (err && err.code === '23505') {
@@ -1002,7 +1028,9 @@ class SyntheticBotRuntime {
     await deps.insertDecision({
       botInstanceId: this.botInstanceId,
       decisionType: 'real_order_placed',
-      triggeringCondition: `${direction} ${symbol} ticket=${brokerTicket} lots=${lotSize}`,
+      triggeringCondition: manualTest
+        ? `manual_test ${direction} ${symbol} ticket=${brokerTicket} lots=${lotSize}`
+        : `${direction} ${symbol} ticket=${brokerTicket} lots=${lotSize}`,
       details: {
         trade_id: tradeRow.id,
         broker_ticket: brokerTicket,
@@ -1010,6 +1038,7 @@ class SyntheticBotRuntime {
         direction,
         lot_size: lotSize,
         calculated_size: calculatedSize,
+        sizing,
         clamped,
         entry_price: entryPrice,
         stop_price: stopPrice,
@@ -1018,6 +1047,9 @@ class SyntheticBotRuntime {
         detected_account_type: accountInfo.account_type,
         latency_ms: latencyMs,
         latency_flagged: latencyMs > REAL_ORDER_LATENCY_WARN_MS,
+        manual_test: manualTest,
+        dispatch_origin: manualTest ? 'manual_test' : 'bot',
+        place_order_raw: placeResult,
       },
       assetClass: ASSET_CLASS,
     });
@@ -1036,7 +1068,70 @@ class SyntheticBotRuntime {
     );
 
     await deps.publishBotEvent(this.botInstanceId, 'trade.opened', tradeRow);
-    return { state: this.state, entryResult, trade: tradeRow };
+    return {
+      state: this.state,
+      entryResult,
+      trade: tradeRow,
+      sizing,
+      clamped,
+      calculatedSize,
+      placeResult,
+      stopPrice,
+      targetPrice,
+      quoteEntry,
+      symbol,
+      direction,
+    };
+  }
+
+  /**
+   * Testing-only: force a real open for {symbol, direction} while reusing
+   * `_maybeOpenPositionReal` end-to-end. Stop/target use live ATR via the
+   * normal computeSelectionStopTarget path.
+   */
+  async dispatchManualTestReal({ symbol, direction }) {
+    const sym = String(symbol || '');
+    const dir = String(direction || '').toUpperCase();
+    if (!SYNTHETIC_WATCHLIST_SET.has(sym)) {
+      throw new Error(`symbol not on synthetic watchlist: ${sym}`);
+    }
+    if (dir !== 'BUY' && dir !== 'SELL') {
+      throw new Error(`direction must be BUY or SELL, got ${dir}`);
+    }
+
+    const marketIntelligence = await getSyntheticMarketIntelligence(sym);
+    if (
+      !marketIntelligence ||
+      marketIntelligence.stale ||
+      !(Number(marketIntelligence.diagnostics?.currentATR) > 0)
+    ) {
+      throw new Error(
+        `live ATR unavailable for ${sym} (stale=${Boolean(marketIntelligence?.stale)})`
+      );
+    }
+
+    const forcedSelection = {
+      chosen_instrument: sym,
+      direction: dir,
+      strategy_id: 'manual_test',
+      strategy_name: 'manual_test',
+      strategy_confidence: 0.99,
+      stopRule: { multiple: 1.5 },
+      targetRule: { ratio: 2 },
+      newsIntelligence: { market_quality: 0.5 },
+      marketIntelligence,
+    };
+
+    console.warn(
+      '[synthetic-bot-runtime] MANUAL TEST DISPATCH VIA SYNTHETIC_ALLOW_MANUAL_TEST_TRADE ' +
+        `(testing-only) bot_instance_id=${this.botInstanceId} user_id=${this.userId} ` +
+        `symbol=${sym} direction=${dir}`
+    );
+
+    return this._maybeOpenPositionReal({
+      forcedSelection,
+      manualTest: true,
+    });
   }
 
   async _monitorOpenPositionPaper() {

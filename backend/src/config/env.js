@@ -94,6 +94,17 @@ const SYNTHETIC_REAL_TRADING_ALLOW_DEMO =
   process.env.SYNTHETIC_REAL_TRADING_ALLOW_DEMO === 'true';
 
 /**
+ * Synthetics testing-only — manual real-order test dispatch.
+ * Exact-string 'true' only; default off. Gates
+ * POST /bot/synthetic/test-dispatch-real, which bypasses strategy
+ * selection only and still runs stop/target, clampLotSize, placeOrder,
+ * DB insert, and monitoring through the normal real path. Production
+ * refuses to boot if this env var is present at all.
+ */
+const SYNTHETIC_ALLOW_MANUAL_TEST_TRADE =
+  process.env.SYNTHETIC_ALLOW_MANUAL_TEST_TRADE === 'true';
+
+/**
  * Option 2 Increment E (E1 verification strategy) — non-production
  * dispatch bypass so the real-mode *methods* can be exercised against
  * a MetaQuotes-Demo account without real capital. Strict exact-string
@@ -169,6 +180,10 @@ function assertRealTradingDemoBypassAtStartup() {
     nodeEnv: NODE_ENV,
     allowDemoEnvPresent: process.env.SYNTHETIC_REAL_TRADING_ALLOW_DEMO !== undefined,
   });
+  assertSyntheticManualTestTradeBypassAllowed({
+    nodeEnv: NODE_ENV,
+    allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== undefined,
+  });
 }
 
 /**
@@ -197,6 +212,23 @@ function assertSyntheticRealTradingDemoBypassAllowed({
     throw new Error(
       'SYNTHETIC_REAL_TRADING_ALLOW_DEMO must not be set when NODE_ENV=production ' +
         '(synthetics demo real-dispatch bypass is testing-only; remove the ' +
+        'variable entirely before real-account rollout)'
+    );
+  }
+}
+
+/**
+ * Production foot-gun for manual test-dispatch — must be entirely
+ * absent under NODE_ENV=production.
+ */
+function assertSyntheticManualTestTradeBypassAllowed({
+  nodeEnv,
+  allowDemoEnvPresent,
+}) {
+  if (nodeEnv === 'production' && allowDemoEnvPresent) {
+    throw new Error(
+      'SYNTHETIC_ALLOW_MANUAL_TEST_TRADE must not be set when NODE_ENV=production ' +
+        '(manual synthetics real test-dispatch is testing-only; remove the ' +
         'variable entirely before real-account rollout)'
     );
   }
@@ -232,6 +264,7 @@ module.exports = {
   SYNTHETIC_REAL_TRADING_ENABLED,
   SYNTHETIC_ALLOW_DEMO_CONFIRM,
   SYNTHETIC_REAL_TRADING_ALLOW_DEMO,
+  SYNTHETIC_ALLOW_MANUAL_TEST_TRADE,
   REAL_TRADING_ALLOW_DEMO,
   REAL_MAX_LOT,
   REAL_CONNECTION_MAX_AGE_HOURS,
@@ -241,5 +274,6 @@ module.exports = {
   assertRealTradingDemoBypassAtStartup,
   assertSyntheticDemoConfirmBypassAllowed,
   assertSyntheticRealTradingDemoBypassAllowed,
+  assertSyntheticManualTestTradeBypassAllowed,
   isProduction: NODE_ENV === 'production',
 };

@@ -2,7 +2,10 @@
 
 const syntheticTradingEngine = require('../engine/synthetic-trading-engine');
 const { AppError } = require('../utils/app-error');
-const { confirmLiveTradingSchema } = require('../validators/trading.schemas');
+const {
+  confirmLiveTradingSchema,
+  syntheticTestDispatchRealSchema,
+} = require('../validators/trading.schemas');
 
 function parseBody(schema, body) {
   const parsed = schema.safeParse(body);
@@ -58,9 +61,23 @@ async function confirmSyntheticLive(req, res, next) {
   }
 }
 
+async function testDispatchSyntheticReal(req, res, next) {
+  try {
+    const body = parseBody(syntheticTestDispatchRealSchema, req.body);
+    const data = await syntheticTradingEngine.testDispatchSyntheticReal(req.user.id, {
+      symbol: body.symbol,
+      direction: String(body.direction).toUpperCase(),
+    });
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getSyntheticSession,
   startSynthetic,
   stopSynthetic,
   confirmSyntheticLive,
+  testDispatchSyntheticReal,
 };

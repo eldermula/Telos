@@ -6,6 +6,12 @@ const confirmLiveTradingSchema = z.object({
   confirmationPhrase: z.string().min(1).max(200),
 });
 
+const syntheticTestDispatchRealSchema = z.object({
+  symbol: z.string().min(1).max(64),
+  direction: z.enum(['BUY', 'SELL', 'buy', 'sell']),
+});
+
 module.exports = {
   confirmLiveTradingSchema,
+  syntheticTestDispatchRealSchema,
 };

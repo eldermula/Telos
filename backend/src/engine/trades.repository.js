@@ -142,19 +142,24 @@ async function insertOpenRealTrade({
   conditions = null,
   openedAt = new Date(),
   assetClass = 'forex_gold',
+  origin = 'bot',
 }) {
   if (brokerTicket == null) {
     throw new Error('insertOpenRealTrade requires brokerTicket');
   }
+  // Schema enum is only ('bot', 'manual') — use conditions.dispatch_origin
+  // for finer labels like 'manual_test'.
+  const originValue = origin === 'manual' ? 'manual' : 'bot';
   const result = await pool.query(
     `INSERT INTO trades
        (bot_instance_id, origin, symbol, direction, entry_price, stop_price, target_price,
         lot_size, final_applied_position_risk, status, opened_at, conditions,
         execution_mode, broker_ticket, asset_class)
-     VALUES ($1, 'bot', $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10::jsonb, 'real', $11, $12)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10, $11::jsonb, 'real', $12, $13)
      RETURNING ${TRADE_RETURNING}`,
     [
       botInstanceId,
+      originValue,
       symbol,
       direction,
       entryPrice,

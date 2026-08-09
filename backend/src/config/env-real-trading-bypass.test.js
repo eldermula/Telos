@@ -3,9 +3,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
+const os = require('node:os');
 const path = require('path');
 
-const { assertRealTradingDemoBypassAllowed } = require('./env');
+const {
+  assertRealTradingDemoBypassAllowed,
+  assertSyntheticManualTestTradeBypassAllowed,
+} = require('./env');
 
 const ENV_JS = path.join(__dirname, 'env.js');
 
@@ -19,6 +23,9 @@ function loadEnvInChild(envOverrides, evalExpr) {
     process.execPath,
     ['-e', `require(${JSON.stringify(ENV_JS)}); ${evalExpr}`],
     {
+      // cwd outside the repo so dotenv.config() cannot load backend/.env
+      // (which may contain testing-only SYNTHETIC_* flags).
+      cwd: os.tmpdir(),
       env: {
         // Minimal env — no dotenv file load of the parent's .env unless
         // dotenv finds one; point cwd away isn't reliable, so strip the
@@ -125,6 +132,29 @@ test('assertRealTradingDemoBypassAtStartup: development + REAL_TRADING_ALLOW_DEM
   );
   assert.equal(result.status, 0, `expected clean boot, stderr=${result.stderr}`);
   assert.match(result.stdout, /BOOTED/);
+});
+
+test('assertSyntheticManualTestTradeBypassAllowed: production + present → refuses', () => {
+  assert.throws(
+    () =>
+      assertSyntheticManualTestTradeBypassAllowed({
+        nodeEnv: 'production',
+        allowDemoEnvPresent: true,
+      }),
+    /SYNTHETIC_ALLOW_MANUAL_TEST_TRADE must not be set when NODE_ENV=production/
+  );
+});
+
+test('assertRealTradingDemoBypassAtStartup: production + SYNTHETIC_ALLOW_MANUAL_TEST_TRADE → refuses', () => {
+  const result = loadEnvInChild(
+    { NODE_ENV: 'production', SYNTHETIC_ALLOW_MANUAL_TEST_TRADE: 'true' },
+    `require(${JSON.stringify(ENV_JS)}).assertRealTradingDemoBypassAtStartup(); console.log('BOOTED');`
+  );
+  assert.notEqual(result.status, 0, 'expected non-zero exit');
+  assert.match(
+    result.stderr,
+    /SYNTHETIC_ALLOW_MANUAL_TEST_TRADE must not be set when NODE_ENV=production/
+  );
 });
 
 test('REAL_TRADING_ALLOW_DEMO parsing: only exact "true" enables the boolean', () => {

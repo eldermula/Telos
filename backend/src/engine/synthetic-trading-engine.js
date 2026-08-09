@@ -8,15 +8,39 @@
 const { AppError } = require('../utils/app-error');
 const botInstanceRepository = require('./bot-instance.repository');
 const botStatusCache = require('./bot-status.cache');
-const { startSyntheticRuntime, stopSyntheticRuntime } = require('./synthetic-bot-runtime');
+const tradesRepository = require('./trades.repository');
+const {
+  startSyntheticRuntime,
+  stopSyntheticRuntime,
+  getSyntheticRuntime,
+} = require('./synthetic-bot-runtime');
 const { publishBotEvent } = require('./event-publisher');
 const notificationsService = require('../services/notifications.service');
-const { LIVE_TRADING_CONFIRMATION_PHRASE } = require('./live-trading-confirmation');
+const {
+  LIVE_TRADING_CONFIRMATION_PHRASE,
+  isConfirmationActive,
+} = require('./live-trading-confirmation');
+const { resolveExecutionMode } = require('./execution-mode');
 const {
   NODE_ENV,
   SYNTHETIC_ALLOW_DEMO_CONFIRM,
+  SYNTHETIC_REAL_TRADING_ENABLED,
+  SYNTHETIC_REAL_TRADING_ALLOW_DEMO,
+  SYNTHETIC_ALLOW_MANUAL_TEST_TRADE,
   assertSyntheticDemoConfirmBypassAllowed,
+  assertSyntheticManualTestTradeBypassAllowed,
 } = require('../config/env');
+const path = require('path');
+const { SYNTHETIC_WATCHLIST } = require(path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'bot',
+  'synthetic-market-intelligence',
+  'src',
+  'watchlist.js'
+));
 
 async function ensureBotInstance(userId) {
   const instance = await botInstanceRepository.ensureForUser(userId);
@@ -176,6 +200,155 @@ async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
   return cached;
 }
 
+/**
+ * Testing-only: POST /bot/synthetic/test-dispatch-real
+ * Bypasses strategy selection only; real open/monitor path unchanged.
+ */
+async function testDispatchSyntheticReal(userId, { symbol, direction }) {
+  try {
+    assertSyntheticManualTestTradeBypassAllowed({
+      nodeEnv: NODE_ENV,
+      allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== undefined,
+    });
+  } catch (err) {
+    throw new AppError(
+      500,
+      'SYNTHETIC_MANUAL_TEST_TRADE_IN_PRODUCTION',
+      err.message
+    );
+  }
+
+  if (SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== true) {
+    throw new AppError(
+      403,
+      'MANUAL_TEST_TRADE_DISABLED',
+      'SYNTHETIC_ALLOW_MANUAL_TEST_TRADE must be exact true to use test-dispatch-real'
+    );
+  }
+
+  if (SYNTHETIC_REAL_TRADING_ENABLED !== true) {
+    throw new AppError(
+      403,
+      'SYNTHETIC_REAL_TRADING_DISABLED',
+      'SYNTHETIC_REAL_TRADING_ENABLED must be true for test-dispatch-real'
+    );
+  }
+
+  const sym = String(symbol || '');
+  const dir = String(direction || '').toUpperCase();
+  if (!SYNTHETIC_WATCHLIST.includes(sym)) {
+    throw new AppError(
+      422,
+      'VALIDATION_ERROR',
+      `symbol must be one of: ${SYNTHETIC_WATCHLIST.join(', ')}`
+    );
+  }
+  if (dir !== 'BUY' && dir !== 'SELL') {
+    throw new AppError(422, 'VALIDATION_ERROR', 'direction must be BUY or SELL');
+  }
+
+  const instance = await ensureBotInstance(userId);
+
+  if (instance.synthetic_status !== 'running') {
+    throw new AppError(
+      409,
+      'SYNTHETIC_NOT_RUNNING',
+      'Start the synthetics bot before test-dispatch-real (monitoring needs a running session)'
+    );
+  }
+
+  if (!isConfirmationActive(instance.synthetic_live_trading_confirmed_at)) {
+    throw new AppError(
+      409,
+      'LIVE_CONFIRMATION_REQUIRED',
+      'synthetic_live_trading_confirmed_at must be currently active (confirm-live within TTL)'
+    );
+  }
+
+  const resolvedMode = resolveExecutionMode({
+    realTradingEnabled: SYNTHETIC_REAL_TRADING_ENABLED,
+    accountType: instance.account_type,
+    liveTradingConfirmedAt: instance.synthetic_live_trading_confirmed_at,
+    allowDemoRealExecution: SYNTHETIC_REAL_TRADING_ALLOW_DEMO === true,
+  });
+  if (resolvedMode !== 'real') {
+    throw new AppError(
+      409,
+      'REAL_DISPATCH_NOT_ARMED',
+      `resolveExecutionMode is '${resolvedMode}', not 'real' (check demo Layer-3 flag if on demo)`
+    );
+  }
+
+  const openTrades = await tradesRepository.listOpenTradesForUser(userId);
+  if (openTrades.length > 0) {
+    throw new AppError(
+      409,
+      'ONE_OPEN_TRADE_PER_USER',
+      'An open trade already exists for this user (system-wide one_open_trade_per_user)'
+    );
+  }
+
+  const runtime = getSyntheticRuntime(instance.id);
+  if (!runtime) {
+    throw new AppError(
+      409,
+      'SYNTHETIC_RUNTIME_NOT_LOADED',
+      'Synthetics runtime is not loaded in-process; Stop then Start and retry'
+    );
+  }
+
+  console.warn(
+    '[synthetic-trading-engine] test-dispatch-real INVOKED VIA SYNTHETIC_ALLOW_MANUAL_TEST_TRADE ' +
+      `(testing-only) user_id=${userId} bot_instance_id=${instance.id} ` +
+      `symbol=${sym} direction=${dir} account_type=${instance.account_type}`
+  );
+
+  const result = await runtime.dispatchManualTestReal({ symbol: sym, direction: dir });
+
+  if (result?.error) {
+    throw new AppError(
+      503,
+      'REAL_OPEN_HALTED',
+      'Real open path halted (account-info / connection failure) — see decision log'
+    );
+  }
+  if (result?.placeRejected) {
+    throw new AppError(
+      502,
+      'PLACE_ORDER_REJECTED',
+      'Broker placeOrder rejected — see decision log real_order_failed'
+    );
+  }
+  if (result?.lotSkipped) {
+    throw new AppError(
+      409,
+      'LOT_CLAMP_SKIPPED',
+      'Lot sizing/clamp skipped the open — see decision log trade_rejected'
+    );
+  }
+  if (!result?.trade) {
+    throw new AppError(
+      409,
+      'TRADE_NOT_OPENED',
+      'Real open path did not open a trade (entry rejected or no selection) — see decision log'
+    );
+  }
+
+  return {
+    trade: result.trade,
+    sizing: result.sizing || null,
+    calculated_size: result.calculatedSize ?? null,
+    clamped: result.clamped || null,
+    place_order: result.placeResult || null,
+    stop_price: result.stopPrice ?? null,
+    target_price: result.targetPrice ?? null,
+    quote_entry: result.quoteEntry ?? null,
+    symbol: result.symbol || sym,
+    direction: result.direction || dir,
+    dispatch_origin: 'manual_test',
+  };
+}
+
 async function rehydrateSyntheticRunningRuntimes(deps = {}) {
   const listFn =
     deps.listSyntheticRunning || (() => botInstanceRepository.listSyntheticRunning());
@@ -202,5 +375,6 @@ module.exports = {
   startSyntheticSession,
   stopSyntheticSession,
   confirmSyntheticLiveTrading,
+  testDispatchSyntheticReal,
   rehydrateSyntheticRunningRuntimes,
 };
