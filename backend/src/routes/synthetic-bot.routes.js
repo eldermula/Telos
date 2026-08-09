@@ -23,5 +23,10 @@ router.post(
   rateLimit.write({ max: 3 }),
   controller.testCloseSyntheticReal
 );
+router.post(
+  '/positions/:tradeId/close',
+  rateLimit.write({ max: 10 }),
+  controller.closeSyntheticPosition
+);
 
 module.exports = router;

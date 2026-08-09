@@ -351,6 +351,79 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
 }
 
 /**
+ * Production: POST /bot/synthetic/positions/:tradeId/close
+ * User-initiated close for an open synthetic paper or real trade.
+ * Reuses natural-close resolution (paper at live price / real via
+ * order-history). Not gated by SYNTHETIC_ALLOW_MANUAL_TEST_TRADE.
+ */
+async function closeSyntheticPosition(userId, tradeId) {
+  const id = String(tradeId || '');
+  if (!id) {
+    throw new AppError(422, 'VALIDATION_ERROR', 'tradeId is required');
+  }
+
+  const instance = await ensureBotInstance(userId);
+  const row = await tradesRepository.findTradeByIdForUser(id, userId);
+  if (!row || row.bot_instance_id !== instance.id) {
+    throw new AppError(404, 'TRADE_NOT_FOUND', 'Trade not found for this user');
+  }
+  if (row.status !== 'open') {
+    throw new AppError(409, 'TRADE_NOT_OPEN', 'Trade is not open');
+  }
+  if (row.asset_class !== 'synthetic') {
+    throw new AppError(409, 'TRADE_NOT_SYNTHETIC', 'Trade is not a synthetics position');
+  }
+
+  let runtime = getSyntheticRuntime(instance.id);
+  let ephemeral = false;
+  if (!runtime) {
+    runtime = new SyntheticBotRuntime(instance, { autoTick: false });
+    await runtime.initialize();
+    ephemeral = true;
+  }
+
+  console.info(
+    `[synthetic-trading-engine] user close position trade_id=${id} ` +
+      `bot_instance_id=${instance.id} execution_mode=${row.execution_mode} ` +
+      `ephemeral_runtime=${ephemeral}`
+  );
+
+  let result;
+  try {
+    result = await runtime.closeOpenPosition({ tradeId: id });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    const code = err.code || 'CLOSE_FAILED';
+    const status =
+      code === 'TRADE_NOT_FOUND'
+        ? 404
+        : code === 'TRADE_NOT_OPEN' || code === 'TRADE_NOT_SYNTHETIC'
+          ? 409
+          : code === 'PRICE_UNAVAILABLE'
+            ? 503
+            : 502;
+    throw new AppError(status, code, err.message || 'Failed to close position');
+  }
+
+  if (result?.error) {
+    throw new AppError(
+      502,
+      'CLOSE_INCOMPLETE',
+      `Close may have reached the broker but reconciliation failed (${result.reason || 'unknown'})`,
+      {
+        close_order: result.closeOrderRaw || null,
+        history_error: result.history_error || null,
+      }
+    );
+  }
+  if (!result?.trade) {
+    throw new AppError(502, 'CLOSE_NO_TRADE', 'Close path did not return a closed trade row');
+  }
+
+  return { trade: result.trade };
+}
+
+/**
  * Testing-only: POST /bot/synthetic/test-close-real
  * Closes an open real synthetic trade via connector /order/close, then
  * reconciles with the same getOrderHistory → _applyRealCloseFromHistory
@@ -483,5 +556,6 @@ module.exports = {
   confirmSyntheticLiveTrading,
   testDispatchSyntheticReal,
   testCloseSyntheticReal,
+  closeSyntheticPosition,
   rehydrateSyntheticRunningRuntimes,
 };

@@ -36,3 +36,11 @@ export function confirmSyntheticLiveSession(confirmationPhrase: string) {
     body: { confirmationPhrase },
   });
 }
+
+/** Production user Close for an open synthetic paper or real trade. */
+export function closeSyntheticPosition(tradeId: string) {
+  return apiRequest<{ trade: import('../../types/trading').Trade }>(
+    `/bot/synthetic/positions/${tradeId}/close`,
+    { method: 'POST' },
+  );
+}

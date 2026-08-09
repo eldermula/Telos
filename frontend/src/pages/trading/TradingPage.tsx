@@ -230,7 +230,13 @@ export function TradingPage() {
 
       <SyntheticsPaperPanel refreshKey={tradeRefreshKey} />
 
-      <TradingTables refreshKey={tradeRefreshKey} />
+      <TradingTables
+        refreshKey={tradeRefreshKey}
+        onClosed={() => {
+          setTradeRefreshKey((k) => k + 1);
+          void reload();
+        }}
+      />
 
       <Modal
         open={confirmAction !== null}

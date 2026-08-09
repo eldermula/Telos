@@ -234,6 +234,9 @@ class SyntheticBotRuntime {
       closeRealTrade:
         options.closeRealTrade ||
         ((tradeId, args) => tradesRepository.closeRealTrade(tradeId, args)),
+      closePaperTrade:
+        options.closePaperTrade ||
+        ((tradeId, args) => tradesRepository.closePaperTrade(tradeId, args)),
       findTradeByIdForUser:
         options.findTradeByIdForUser ||
         ((tradeId, userId) => tradesRepository.findTradeByIdForUser(tradeId, userId)),
@@ -1163,12 +1166,6 @@ class SyntheticBotRuntime {
     if (row.asset_class !== 'synthetic') {
       throw new Error(`trade ${tradeId} is not asset_class=synthetic`);
     }
-    if (row.broker_ticket == null) {
-      throw new Error(`trade ${tradeId} missing broker_ticket`);
-    }
-
-    const accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
-    const expectedAccountType = resolveExpectedAccountTypeForLayer0(accountInfo.account_type);
 
     console.warn(
       '[synthetic-bot-runtime] MANUAL TEST CLOSE VIA SYNTHETIC_ALLOW_MANUAL_TEST_TRADE ' +
@@ -1176,72 +1173,7 @@ class SyntheticBotRuntime {
         `trade_id=${tradeId} ticket=${row.broker_ticket}`
     );
 
-    const closeOrderRaw = await deps.closeOrder(row.broker_ticket, {
-      expectedAccountType,
-    });
-
-    // Same getOrderHistory source as _monitorOpenPositionReal — retry for
-    // history lag without the halt side-effect of _fetchOrderHistoryWithRetries
-    // (broker already closed; we must not kill the runtime for lag).
-    let history = null;
-    let lastHistErr = null;
-    const maxHistRetries = deps.historyRetryTicks;
-    for (let i = 0; i < maxHistRetries; i += 1) {
-      try {
-        history = await deps.getOrderHistory(row.broker_ticket);
-        lastHistErr = null;
-        break;
-      } catch (err) {
-        lastHistErr = err;
-        console.warn(
-          `[synthetic-bot-runtime] manual_test_close history lag for ticket ${row.broker_ticket} ` +
-            `(${i + 1}/${maxHistRetries}): ${err.message}`
-        );
-        await new Promise((r) => setTimeout(r, ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS));
-      }
-    }
-    if (!history) {
-      return {
-        error: true,
-        reason: 'order_history_unavailable',
-        closeOrderRaw,
-        trade: null,
-        history: null,
-        history_error: lastHistErr ? lastHistErr.message : null,
-      };
-    }
-
-    let pos = this.openPosition;
-    if (
-      !pos ||
-      pos.executionMode !== 'real' ||
-      Number(pos.brokerTicket) !== Number(row.broker_ticket)
-    ) {
-      if (!this.state) {
-        const tradeHistory = await deps.loadTradeHistoryForLearning(this.botInstanceId);
-        const instance = await deps.findInstanceById(this.botInstanceId);
-        this.state = instanceToApirsState(instance, tradeHistory);
-        this.dailyDrawdownMarkers = markersFromInstance(instance);
-      }
-      const tradeHistory = await deps.loadTradeHistoryForLearning(this.botInstanceId);
-      pos = this._buildResumedOpenPosition(row, tradeHistory, {
-        executionMode: 'real',
-        brokerTicket: Number(row.broker_ticket),
-        historyRetryCount: 0,
-      });
-      this.openPosition = pos;
-    }
-
-    const applied = await this._applyRealCloseFromHistory(pos, history, {
-      manualTest: true,
-      closeOrderRaw,
-    });
-    return {
-      ...applied,
-      closeOrderRaw,
-      history,
-      manual_test: true,
-    };
+    return this._closeRealOpenTradeRow(row, { manualTest: true });
   }
 
   async _monitorOpenPositionPaper() {
@@ -1278,14 +1210,22 @@ class SyntheticBotRuntime {
       return null;
     }
 
-    const exitPrice = current;
+    return this._applyPaperCloseAtPrice(pos, current);
+  }
+
+  /**
+   * Shared paper-close resolution (natural stop/target hit AND user Close).
+   * PnL from riskedAmount × R-multiple vs live exit — same formula as before.
+   */
+  async _applyPaperCloseAtPrice(pos, exitPrice) {
+    const deps = this._real;
     const stopDistance = Math.abs(pos.entryPrice - pos.stopPrice);
     const signedMove = (exitPrice - pos.entryPrice) * (pos.direction === 'BUY' ? 1 : -1);
     const realRMultiple = stopDistance > 0 ? signedMove / stopDistance : 0;
     const pnlAmount = pos.entryResult.riskedAmount * realRMultiple;
     const wasWin = pnlAmount > 0;
 
-    const tierRows = await this._real.getTierRows();
+    const tierRows = await deps.getTierRows();
     const previousMode = this.state.activeStrategyMode;
     const { state: nextState, trace } = resolveExit(
       this.state,
@@ -1301,28 +1241,32 @@ class SyntheticBotRuntime {
     this._shrinkDailyDrawdownForProfitLock(trace, nextState.balance);
     const ddClose = await this._refreshDailyDrawdown(nextState.balance, { persist: false });
 
-    const closedTrade = await tradesRepository.closePaperTrade(pos.tradeRowId, {
+    const closedTrade = await deps.closePaperTrade(pos.tradeRowId, {
       exitPrice,
       pnl: pnlAmount,
     });
 
-    await logExitDecisions(this.botInstanceId, this.userId, previousMode, trace, this._real);
+    await logExitDecisions(this.botInstanceId, this.userId, previousMode, trace, deps);
 
     if (closedTrade) {
-      await this._real.publishBotEvent(this.botInstanceId, 'trade.closed', closedTrade);
+      await deps.publishBotEvent(this.botInstanceId, 'trade.closed', closedTrade);
     }
 
-    const updated = await this._real.updateStatusFields(this.botInstanceId, {
-      synthetic_status: 'running',
+    const statusFields = {
       active_strategy_mode: nextState.activeStrategyMode,
       synthetic_active_trading_balance: nextState.balance,
       synthetic_peak_equity: nextState.peakEquity,
       synthetic_current_tier: nextState.currentTier,
       ...dailyFieldsFromMarkers(ddClose.markers),
-    });
-    const cached = await this._real.setStatus(updated);
+    };
+    if (this.running) {
+      statusFields.synthetic_status = 'running';
+    }
 
-    await this._real.publishBotEvent(this.botInstanceId, 'equity.updated', {
+    const updated = await deps.updateStatusFields(this.botInstanceId, statusFields);
+    const cached = await deps.setStatus(updated);
+
+    await deps.publishBotEvent(this.botInstanceId, 'equity.updated', {
       synthetic_active_trading_balance: nextState.balance,
       synthetic_peak_equity: nextState.peakEquity,
       timestamp: cached.updated_at,
@@ -1330,6 +1274,151 @@ class SyntheticBotRuntime {
 
     this.openPosition = null;
     return { state: nextState, trace, trade: closedTrade, session: cached };
+  }
+
+  async _ensureStateLoaded() {
+    if (this.state) return;
+    const deps = this._real;
+    const tradeHistory = await deps.loadTradeHistoryForLearning(this.botInstanceId);
+    const instance = await deps.findInstanceById(this.botInstanceId);
+    this.state = instanceToApirsState(instance, tradeHistory);
+    this.dailyDrawdownMarkers = markersFromInstance(instance);
+  }
+
+  async _ensureOpenPositionForRow(row) {
+    const ticket =
+      row.broker_ticket == null ? null : Number(row.broker_ticket);
+    if (
+      this.openPosition &&
+      this.openPosition.tradeRowId === row.id &&
+      (row.execution_mode !== 'real' ||
+        Number(this.openPosition.brokerTicket) === ticket)
+    ) {
+      return this.openPosition;
+    }
+    await this._ensureStateLoaded();
+    const tradeHistory = await this._real.loadTradeHistoryForLearning(this.botInstanceId);
+    const pos = this._buildResumedOpenPosition(row, tradeHistory, {
+      executionMode: row.execution_mode === 'real' ? 'real' : 'paper',
+      brokerTicket: ticket,
+      historyRetryCount: 0,
+    });
+    this.openPosition = pos;
+    return pos;
+  }
+
+  /**
+   * Production user Close — paper or real. Reuses natural-close resolution.
+   */
+  async closeOpenPosition({ tradeId }) {
+    const deps = this._real;
+    const row = await deps.findTradeByIdForUser(tradeId, this.userId);
+    if (!row) {
+      const err = new Error('Trade not found for this user');
+      err.code = 'TRADE_NOT_FOUND';
+      throw err;
+    }
+    if (row.bot_instance_id !== this.botInstanceId) {
+      const err = new Error('Trade not found for this user');
+      err.code = 'TRADE_NOT_FOUND';
+      throw err;
+    }
+    if (row.status !== 'open') {
+      const err = new Error(`Trade is not open (status=${row.status})`);
+      err.code = 'TRADE_NOT_OPEN';
+      throw err;
+    }
+    if (row.asset_class !== 'synthetic') {
+      const err = new Error('Trade is not a synthetics position');
+      err.code = 'TRADE_NOT_SYNTHETIC';
+      throw err;
+    }
+
+    if (row.execution_mode === 'real') {
+      return this._closeRealOpenTradeRow(row, { manualTest: false });
+    }
+
+    const pos = await this._ensureOpenPositionForRow(row);
+    let symbolInfo;
+    try {
+      symbolInfo = await deps.getSymbolInfo(pos.symbol);
+    } catch (err) {
+      const e = new Error(`Could not fetch live price for ${pos.symbol}: ${err.message}`);
+      e.code = 'PRICE_UNAVAILABLE';
+      throw e;
+    }
+    if (
+      symbolInfo.bid == null ||
+      symbolInfo.ask == null ||
+      !(Number(symbolInfo.bid) > 0) ||
+      !(Number(symbolInfo.ask) > 0)
+    ) {
+      const e = new Error(`No usable live tick for ${pos.symbol}`);
+      e.code = 'PRICE_UNAVAILABLE';
+      throw e;
+    }
+    const exitPrice = pos.direction === 'BUY' ? Number(symbolInfo.bid) : Number(symbolInfo.ask);
+    return this._applyPaperCloseAtPrice(pos, exitPrice);
+  }
+
+  /**
+   * Broker close + history reconcile — shared by natural-monitor helpers,
+   * production user Close, and testing-only test-close-real.
+   */
+  async _closeRealOpenTradeRow(row, { manualTest = false } = {}) {
+    const deps = this._real;
+    if (row.broker_ticket == null) {
+      const err = new Error('Trade has no broker_ticket');
+      err.code = 'TRADE_MISSING_TICKET';
+      throw err;
+    }
+
+    const accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
+    const expectedAccountType = resolveExpectedAccountTypeForLayer0(accountInfo.account_type);
+
+    const closeOrderRaw = await deps.closeOrder(row.broker_ticket, {
+      expectedAccountType,
+    });
+
+    let history = null;
+    let lastHistErr = null;
+    const maxHistRetries = deps.historyRetryTicks;
+    for (let i = 0; i < maxHistRetries; i += 1) {
+      try {
+        history = await deps.getOrderHistory(row.broker_ticket);
+        lastHistErr = null;
+        break;
+      } catch (err) {
+        lastHistErr = err;
+        console.warn(
+          `[synthetic-bot-runtime] real close history lag for ticket ${row.broker_ticket} ` +
+            `(${i + 1}/${maxHistRetries}): ${err.message}`
+        );
+        await new Promise((r) => setTimeout(r, ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS));
+      }
+    }
+    if (!history) {
+      return {
+        error: true,
+        reason: 'order_history_unavailable',
+        closeOrderRaw,
+        trade: null,
+        history: null,
+        history_error: lastHistErr ? lastHistErr.message : null,
+      };
+    }
+
+    const pos = await this._ensureOpenPositionForRow(row);
+    const applied = await this._applyRealCloseFromHistory(pos, history, {
+      manualTest,
+      closeOrderRaw,
+    });
+    return {
+      ...applied,
+      closeOrderRaw,
+      history,
+      manual_test: manualTest,
+    };
   }
 
   /**

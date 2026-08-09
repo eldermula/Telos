@@ -87,6 +87,22 @@ async function testCloseSyntheticReal(req, res, next) {
   }
 }
 
+async function closeSyntheticPosition(req, res, next) {
+  try {
+    const parsed = require('zod').z.string().uuid().safeParse(req.params.tradeId);
+    if (!parsed.success) {
+      throw new AppError(422, 'VALIDATION_ERROR', 'tradeId must be a UUID');
+    }
+    const data = await syntheticTradingEngine.closeSyntheticPosition(
+      req.user.id,
+      parsed.data
+    );
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getSyntheticSession,
   startSynthetic,
@@ -94,4 +110,5 @@ module.exports = {
   confirmSyntheticLive,
   testDispatchSyntheticReal,
   testCloseSyntheticReal,
+  closeSyntheticPosition,
 };
