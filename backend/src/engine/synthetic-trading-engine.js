@@ -26,11 +26,11 @@ const {
   NODE_ENV,
   SYNTHETIC_ALLOW_DEMO_CONFIRM,
   SYNTHETIC_REAL_TRADING_ENABLED,
-  SYNTHETIC_REAL_TRADING_ALLOW_DEMO,
   SYNTHETIC_ALLOW_MANUAL_TEST_TRADE,
   assertSyntheticDemoConfirmBypassAllowed,
   assertSyntheticManualTestTradeBypassAllowed,
 } = require('../config/env');
+const syntheticDemoDispatchService = require('./synthetic-demo-dispatch.service');
 const path = require('path');
 const { SYNTHETIC_WATCHLIST } = require(path.join(
   __dirname,
@@ -266,17 +266,19 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
     );
   }
 
+  const allowDemoRealExecution =
+    await syntheticDemoDispatchService.isDemoDispatchEnabled();
   const resolvedMode = resolveExecutionMode({
     realTradingEnabled: SYNTHETIC_REAL_TRADING_ENABLED,
     accountType: instance.account_type,
     liveTradingConfirmedAt: instance.synthetic_live_trading_confirmed_at,
-    allowDemoRealExecution: SYNTHETIC_REAL_TRADING_ALLOW_DEMO === true,
+    allowDemoRealExecution,
   });
   if (resolvedMode !== 'real') {
     throw new AppError(
       409,
       'REAL_DISPATCH_NOT_ARMED',
-      `resolveExecutionMode is '${resolvedMode}', not 'real' (check demo Layer-3 flag if on demo)`
+      `resolveExecutionMode is '${resolvedMode}', not 'real' (enable admin demo-dispatch toggle if on demo)`
     );
   }
 

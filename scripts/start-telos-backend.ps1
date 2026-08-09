@@ -7,7 +7,13 @@ $BackendDir = Join-Path $PSScriptRoot '..\backend' | Resolve-Path
 
 $env:NODE_ENV = 'production'
 $env:CORS_ORIGIN = 'https://www.telostrust.com'
+# Clear leftover shell exports. dotenv still loads any of these if they are
+# still present (uncommented) in backend/.env — keep them absent there for
+# production boots or assertRealTradingDemoBypassAtStartup will refuse.
 Remove-Item Env:\REAL_TRADING_ALLOW_DEMO -ErrorAction SilentlyContinue
+Remove-Item Env:\SYNTHETIC_ALLOW_DEMO_CONFIRM -ErrorAction SilentlyContinue
+Remove-Item Env:\SYNTHETIC_REAL_TRADING_ALLOW_DEMO -ErrorAction SilentlyContinue
+Remove-Item Env:\SYNTHETIC_ALLOW_MANUAL_TEST_TRADE -ErrorAction SilentlyContinue
 
 Set-Location $BackendDir
 & node src/index.js

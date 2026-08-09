@@ -38,6 +38,12 @@ const candidatePatchSchema = z
   })
   .strict();
 
+const demoDispatchEnableSchema = z
+  .object({
+    minutes: z.number().int().min(1).max(30),
+  })
+  .strict();
+
 async function listUsers(req, res, next) {
   try {
     const pagination = parsePagination(req.query);
@@ -112,6 +118,37 @@ async function patchCandidateStrategy(req, res, next) {
   }
 }
 
+async function getSyntheticDemoDispatchStatus(req, res, next) {
+  try {
+    const data = await adminService.getSyntheticDemoDispatchStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableSyntheticDemoDispatch(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableSyntheticDemoDispatch(
+      req.user.id,
+      body.minutes
+    );
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableSyntheticDemoDispatch(req, res, next) {
+  try {
+    const data = await adminService.disableSyntheticDemoDispatch(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -120,4 +157,7 @@ module.exports = {
   patchRiskTier,
   listCandidateStrategies,
   patchCandidateStrategy,
+  getSyntheticDemoDispatchStatus,
+  enableSyntheticDemoDispatch,
+  disableSyntheticDemoDispatch,
 };

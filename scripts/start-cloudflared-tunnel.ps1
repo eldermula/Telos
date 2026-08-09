@@ -9,7 +9,7 @@ if (-not (Test-Path $Cloudflared)) {
   throw "cloudflared not found at $Cloudflared"
 }
 if (-not (Test-Path $Config)) {
-  throw "Missing tunnel config: $Config — run named-tunnel setup first"
+  throw "Missing tunnel config: $Config - run named-tunnel setup first"
 }
 
 & $Cloudflared tunnel --config $Config run

@@ -81,19 +81,6 @@ const SYNTHETIC_ALLOW_DEMO_CONFIRM =
   process.env.SYNTHETIC_ALLOW_DEMO_CONFIRM === 'true';
 
 /**
- * Synthetics Layer 3 execution-mode demo bypass — testing only.
- * Exact-string 'true' only; default off. Distinct from
- * SYNTHETIC_ALLOW_DEMO_CONFIRM (Layer 2 confirm-live only): when set,
- * resolveExecutionMode may return 'real' for a demo
- * broker_connections.account_type so SyntheticBotRuntime dispatches
- * real open/monitor paths. Must NEVER alter expectedAccountType for
- * placeOrder/closeOrder (Layer 0 always sees true detected type).
- * Production refuses to boot if this env var is present at all.
- */
-const SYNTHETIC_REAL_TRADING_ALLOW_DEMO =
-  process.env.SYNTHETIC_REAL_TRADING_ALLOW_DEMO === 'true';
-
-/**
  * Synthetics testing-only — manual real-order test dispatch.
  * Exact-string 'true' only; default off. Gates
  * POST /bot/synthetic/test-dispatch-real, which bypasses strategy
@@ -176,10 +163,6 @@ function assertRealTradingDemoBypassAtStartup() {
     nodeEnv: NODE_ENV,
     allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_DEMO_CONFIRM !== undefined,
   });
-  assertSyntheticRealTradingDemoBypassAllowed({
-    nodeEnv: NODE_ENV,
-    allowDemoEnvPresent: process.env.SYNTHETIC_REAL_TRADING_ALLOW_DEMO !== undefined,
-  });
   assertSyntheticManualTestTradeBypassAllowed({
     nodeEnv: NODE_ENV,
     allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_MANUAL_TEST_TRADE !== undefined,
@@ -195,23 +178,6 @@ function assertSyntheticDemoConfirmBypassAllowed({ nodeEnv, allowDemoEnvPresent 
     throw new Error(
       'SYNTHETIC_ALLOW_DEMO_CONFIRM must not be set when NODE_ENV=production ' +
         '(synthetics demo confirm-live bypass is testing-only; remove the ' +
-        'variable entirely before real-account rollout)'
-    );
-  }
-}
-
-/**
- * Production foot-gun for Layer 3 synthetics demo dispatch — more
- * dangerous than confirm-only: enables actual placeOrder paths.
- */
-function assertSyntheticRealTradingDemoBypassAllowed({
-  nodeEnv,
-  allowDemoEnvPresent,
-}) {
-  if (nodeEnv === 'production' && allowDemoEnvPresent) {
-    throw new Error(
-      'SYNTHETIC_REAL_TRADING_ALLOW_DEMO must not be set when NODE_ENV=production ' +
-        '(synthetics demo real-dispatch bypass is testing-only; remove the ' +
         'variable entirely before real-account rollout)'
     );
   }
@@ -263,7 +229,6 @@ module.exports = {
   REAL_TRADING_ENABLED,
   SYNTHETIC_REAL_TRADING_ENABLED,
   SYNTHETIC_ALLOW_DEMO_CONFIRM,
-  SYNTHETIC_REAL_TRADING_ALLOW_DEMO,
   SYNTHETIC_ALLOW_MANUAL_TEST_TRADE,
   REAL_TRADING_ALLOW_DEMO,
   REAL_MAX_LOT,
@@ -273,7 +238,6 @@ module.exports = {
   assertRealTradingDemoBypassAllowed,
   assertRealTradingDemoBypassAtStartup,
   assertSyntheticDemoConfirmBypassAllowed,
-  assertSyntheticRealTradingDemoBypassAllowed,
   assertSyntheticManualTestTradeBypassAllowed,
   isProduction: NODE_ENV === 'production',
 };

@@ -102,3 +102,26 @@ export function patchCandidateStrategy(
 ): Promise<CandidateStrategy> {
   return apiRequest(`/admin/candidate-strategies/${id}`, { method: 'PATCH', body });
 }
+
+export type SyntheticDemoDispatchStatus = {
+  enabled: boolean;
+  enabled_until: string | null;
+  remaining_seconds: number;
+  updated_at?: string | null;
+  updated_by_admin_user_id?: string | null;
+};
+
+export function getSyntheticDemoDispatchStatus(): Promise<SyntheticDemoDispatchStatus> {
+  return apiRequest('/admin/synthetic/demo-dispatch-status');
+}
+
+export function enableSyntheticDemoDispatch(minutes: number): Promise<SyntheticDemoDispatchStatus> {
+  return apiRequest('/admin/synthetic/demo-dispatch-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableSyntheticDemoDispatch(): Promise<SyntheticDemoDispatchStatus> {
+  return apiRequest('/admin/synthetic/demo-dispatch-disable', { method: 'POST' });
+}

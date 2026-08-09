@@ -6,7 +6,10 @@ import { DataTable } from '../../components/ui/DataTable';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Input } from '../../components/ui/Input';
 import {
+  disableSyntheticDemoDispatch,
+  enableSyntheticDemoDispatch,
   getAdminUser,
+  getSyntheticDemoDispatchStatus,
   getSystemHealth,
   listAdminUsers,
   listCandidateStrategies,
@@ -17,6 +20,7 @@ import {
   type AdminUserDetail,
   type CandidateStrategy,
   type RiskTier,
+  type SyntheticDemoDispatchStatus,
   type SystemHealth,
 } from '../../lib/api/admin';
 import { ApiError } from '../../types/api';
@@ -24,14 +28,24 @@ import { ApiError } from '../../types/api';
 /** Admin accent per 07_UI_UX_Guide § open-questions settle (#5B7A9C). */
 const ADMIN_ACCENT = '#5B7A9C';
 
+function formatRemaining(seconds: number): string {
+  if (seconds <= 0) return '0s';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m <= 0) return `${s}s`;
+  return `${m}m ${s}s`;
+}
+
 export function AdminPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'health' | 'users' | 'tiers' | 'strategies'>('health');
+  const [tab, setTab] = useState<'health' | 'users' | 'tiers' | 'strategies' | 'demo'>('health');
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
   const [tiers, setTiers] = useState<RiskTier[]>([]);
   const [strategies, setStrategies] = useState<CandidateStrategy[]>([]);
+  const [demoDispatch, setDemoDispatch] = useState<SyntheticDemoDispatchStatus | null>(null);
+  const [demoMinutes, setDemoMinutes] = useState('15');
   const [editTier, setEditTier] = useState<RiskTier | null>(null);
   const [ceilingDraft, setCeilingDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -39,16 +53,18 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [h, u, t, s] = await Promise.all([
+    const [h, u, t, s, d] = await Promise.all([
       getSystemHealth(),
       listAdminUsers({ page: 1, limit: 50 }),
       listRiskTiers(),
       listCandidateStrategies(),
+      getSyntheticDemoDispatchStatus(),
     ]);
     setHealth(h);
     setUsers(u.data);
     setTiers(t.data);
     setStrategies(s.data);
+    setDemoDispatch(d);
   }, []);
 
   useEffect(() => {
@@ -121,6 +137,43 @@ export function AdminPage() {
     }
   }
 
+  async function onEnableDemoDispatch() {
+    const minutes = Number.parseInt(demoMinutes, 10);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30) {
+      setError('Duration must be an integer from 1 to 30 minutes.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Enable synthetics DEMO real-dispatch bypass for ${minutes} minute(s)? ` +
+          'This is dangerous testing-only infrastructure — demo accounts may place real MT5 orders.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await enableSyntheticDemoDispatch(minutes);
+      setDemoDispatch(status);
+      setMessage(`Demo-dispatch bypass enabled until ${status.enabled_until ?? '—'}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Enable failed.');
+    }
+  }
+
+  async function onDisableDemoDispatch() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await disableSyntheticDemoDispatch();
+      setDemoDispatch(status);
+      setMessage('Demo-dispatch bypass disabled.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Disable failed.');
+    }
+  }
+
   if (loading) {
     return <p className="text-text-secondary">Loading admin…</p>;
   }
@@ -132,7 +185,7 @@ export function AdminPage() {
           Admin
         </h1>
         <p className="mt-1 text-text-secondary">
-          Users, system health, risk-tier tuning, and candidate strategies.
+          Users, system health, risk-tier tuning, candidate strategies, and testing toggles.
         </p>
       </div>
 
@@ -150,6 +203,7 @@ export function AdminPage() {
             ['users', 'Users'],
             ['tiers', 'Risk tiers'],
             ['strategies', 'Strategies'],
+            ['demo', 'Demo dispatch'],
           ] as const
         ).map(([id, label]) => (
           <Button
@@ -324,6 +378,59 @@ export function AdminPage() {
             ]}
             rows={strategies}
           />
+        </GlassCard>
+      ) : null}
+
+      {tab === 'demo' ? (
+        <GlassCard>
+          <h2 className="type-heading mb-2">Synthetics demo-dispatch bypass</h2>
+          <p className="mb-4 type-caption text-state-danger">
+            Dangerous testing-only infrastructure. When enabled, synthetics may place and
+            monitor real MT5 orders against demo broker accounts (Layer 3). Auto-expires;
+            max 30 minutes. Not for real-account trading.
+          </p>
+          {demoDispatch ? (
+            <div className="mb-4 space-y-1 type-caption text-text-secondary">
+              <p>
+                Status:{' '}
+                <span className="text-text-primary">
+                  {demoDispatch.enabled ? 'ENABLED' : 'disabled'}
+                </span>
+              </p>
+              {demoDispatch.enabled ? (
+                <>
+                  <p>Until: {demoDispatch.enabled_until ?? '—'}</p>
+                  <p>Remaining: {formatRemaining(demoDispatch.remaining_seconds)}</p>
+                </>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mb-4 text-text-secondary">Status unavailable.</p>
+          )}
+          <div className="flex max-w-md flex-col gap-3">
+            <Input
+              label="Duration (minutes, 1–30)"
+              type="number"
+              min={1}
+              max={30}
+              step={1}
+              value={demoMinutes}
+              onChange={(e) => setDemoMinutes(e.target.value)}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button variant="destructive" onClick={() => void onEnableDemoDispatch()}>
+                Enable bypass
+              </Button>
+              {demoDispatch?.enabled ? (
+                <Button variant="ghost" onClick={() => void onDisableDemoDispatch()}>
+                  Disable now
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={() => void refresh()}>
+                Refresh status
+              </Button>
+            </div>
+          </div>
         </GlassCard>
       ) : null}
     </div>

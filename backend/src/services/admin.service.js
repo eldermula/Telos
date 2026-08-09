@@ -5,6 +5,7 @@ const { redis } = require('../db/redis');
 const { AppError } = require('../utils/app-error');
 const { toMeta } = require('../utils/pagination');
 const riskTierConfigService = require('../engine/risk-tier-config.service');
+const syntheticDemoDispatchService = require('../engine/synthetic-demo-dispatch.service');
 const { getNewsLlmUsage } = require('./news-llm-usage');
 const { NEWS_LLM_ENABLED } = require('../config/env');
 
@@ -309,6 +310,29 @@ async function patchCandidateStrategy(adminUserId, strategyId, patch) {
   return result.rows[0];
 }
 
+async function getSyntheticDemoDispatchStatus() {
+  return syntheticDemoDispatchService.getStatus();
+}
+
+async function enableSyntheticDemoDispatch(adminUserId, minutes) {
+  const status = await syntheticDemoDispatchService.enable(adminUserId, minutes);
+  await writeAudit({
+    adminUserId,
+    action: 'synthetic_demo_dispatch.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableSyntheticDemoDispatch(adminUserId) {
+  const status = await syntheticDemoDispatchService.disable(adminUserId);
+  await writeAudit({
+    adminUserId,
+    action: 'synthetic_demo_dispatch.disable',
+  });
+  return status;
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -317,5 +341,8 @@ module.exports = {
   patchRiskTier,
   listCandidateStrategies,
   patchCandidateStrategy,
+  getSyntheticDemoDispatchStatus,
+  enableSyntheticDemoDispatch,
+  disableSyntheticDemoDispatch,
   writeAudit,
 };

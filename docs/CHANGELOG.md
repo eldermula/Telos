@@ -2,6 +2,10 @@
 
 ## Phase 5 — Core Frontend (in progress)
 
+**2026-08-09**
+
+- **Synthetics Layer-3 demo-dispatch: admin time-limited toggle (replaces env):** Removed `SYNTHETIC_REAL_TRADING_ALLOW_DEMO` from `env.js` / boot tripwire. New singleton table `synthetic_demo_dispatch_config.enabled_until` (migration `019`) with Redis cache (risk-tier pattern). Admin JWT routes: `GET/POST /admin/synthetic/demo-dispatch-status|enable|disable` — enable body `{ minutes }` capped at 30; null/past = off. `_resolveExecutionModeForTick` and test-dispatch read `isDemoDispatchEnabled()` fresh each check (timestamp vs now, not a sticky boolean). Loud logs on enable, each tick the bypass arms real demo dispatch, and on expiry. Admin UI section on `/admin` (not Trading). Does **not** change `SYNTHETIC_ALLOW_DEMO_CONFIRM` or `SYNTHETIC_ALLOW_MANUAL_TEST_TRADE`.
+
 **2026-08-06 / 2026-08-07**
 
 - **5.1** Vite + React + TypeScript + Tailwind CSS v4 scaffold under `frontend/`. Design tokens from `07_UI_UX_Guide.md` Section 3 wired as CSS variables + Tailwind `@theme` (canvas/gold/glass/type roles). Fraunces, Public Sans, and IBM Plex Mono self-hosted as `.woff2` under `public/fonts/` (OFL 1.1 attribution alongside files; no Google Fonts CDN). Brand assets under `public/brand/` wired into `index.html` + `site.webmanifest` (`favicon-32`, `icon-192`, `icon-512`, `apple-touch-icon-180`); logo-mark / logo-full held back until Auth shell / Login layout increments place them. Smoke: `npm run build` → success.

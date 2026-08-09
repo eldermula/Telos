@@ -31,7 +31,6 @@ const {
 const {
   NODE_ENV,
   SYNTHETIC_REAL_TRADING_ENABLED,
-  SYNTHETIC_REAL_TRADING_ALLOW_DEMO,
   REAL_CONNECTION_MAX_AGE_HOURS,
 } = require('../config/env');
 const {
@@ -39,6 +38,7 @@ const {
   resolveExpectedAccountTypeForLayer0,
 } = require('./execution-mode');
 const { isConfirmationActive } = require('./live-trading-confirmation');
+const syntheticDemoDispatchService = require('./synthetic-demo-dispatch.service');
 const { resolveTickDispatch } = require('./tick-dispatch');
 const { getMatchedAccountInfoForBotInstance } = require('./broker-account.service');
 const { isConnectionFresh } = require('./connection-freshness');
@@ -513,7 +513,8 @@ class SyntheticBotRuntime {
     const confirmationActive = isConfirmationActive(
       instance.synthetic_live_trading_confirmed_at
     );
-    const allowDemoRealExecution = SYNTHETIC_REAL_TRADING_ALLOW_DEMO === true;
+    const allowDemoRealExecution =
+      await syntheticDemoDispatchService.isDemoDispatchEnabled();
     const resolvedMode = resolveExecutionMode({
       realTradingEnabled: SYNTHETIC_REAL_TRADING_ENABLED,
       accountType: instance.account_type,
@@ -527,8 +528,8 @@ class SyntheticBotRuntime {
       allowDemoRealExecution;
     if (usedDemoBypass) {
       console.warn(
-        '[synthetic-bot-runtime] real dispatch ENABLED VIA SYNTHETIC_REAL_TRADING_ALLOW_DEMO ' +
-          `(testing-only demo bypass) bot_instance_id=${this.botInstanceId} ` +
+        '[synthetic-bot-runtime] real dispatch ENABLED VIA admin demo-dispatch toggle ' +
+          `(testing-only Layer-3 bypass) bot_instance_id=${this.botInstanceId} ` +
           `user_id=${this.userId} account_type=demo`
       );
     }
@@ -538,7 +539,7 @@ class SyntheticBotRuntime {
         resolvedMode,
         account_type: instance.account_type,
         synthetic_real_trading_enabled: SYNTHETIC_REAL_TRADING_ENABLED === true,
-        synthetic_real_trading_allow_demo: allowDemoRealExecution,
+        synthetic_demo_dispatch_enabled: allowDemoRealExecution,
         confirmation_active: confirmationActive,
         open_position: Boolean(this.openPosition),
         bot_instance_id: this.botInstanceId,

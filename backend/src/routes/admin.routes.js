@@ -27,4 +27,21 @@ router.patch('/risk-tiers/:tier', rateLimit.write({ max: 5 }), controller.patchR
 router.get('/candidate-strategies', rateLimit.read({ max: 20 }), controller.listCandidateStrategies);
 router.patch('/candidate-strategies/:id', rateLimit.write({ max: 5 }), controller.patchCandidateStrategy);
 
+// Synthetics Layer-3 demo-dispatch bypass — time-limited testing toggle.
+router.get(
+  '/synthetic/demo-dispatch-status',
+  rateLimit.read({ max: 20 }),
+  controller.getSyntheticDemoDispatchStatus
+);
+router.post(
+  '/synthetic/demo-dispatch-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableSyntheticDemoDispatch
+);
+router.post(
+  '/synthetic/demo-dispatch-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableSyntheticDemoDispatch
+);
+
 module.exports = router;
