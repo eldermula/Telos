@@ -1,17 +1,79 @@
 'use strict';
 
 /**
- * Synthetics Batch 2 — clamp a calculated lot size to broker volume_*
- * constraints from /symbol-info.
+ * Synthetics lot sizing — risked dollars → raw lots, then broker clamp.
  *
- * Never rounds *up* past risked exposure: if the step-rounded size is
- * below volume_min, skip the trade rather than forcing volume_min.
+ * Formula (replaces the Phase-6 `appliedRisk * 0.1` placeholder):
+ *   stop_distance = |entry - stop|
+ *   dollar_risk   = effective_balance * applied_risk  (fraction 0–1)
+ *   raw_lot_size  = dollar_risk / (stop_distance * contract_size)
+ * then clampLotSize(raw, symbolInfo) — never upsizes below volume_min.
  */
 
 function roundToStep(value, step) {
   if (!step || !(step > 0)) return value;
   const steps = Math.round(value / step);
   return Number((steps * step).toFixed(8));
+}
+
+/**
+ * @param {object} args
+ * @param {number} args.effectiveBalance - live equity (real) or synthetic ledger (paper)
+ * @param {number} args.appliedRisk - fraction of balance risked (0–1)
+ * @param {number} args.entryPrice
+ * @param {number} args.stopPrice
+ * @param {number} args.contractSize - trade_contract_size from /symbol-info
+ * @returns {{
+ *   rawLotSize: number|null,
+ *   stopDistance: number|null,
+ *   dollarRisk: number|null,
+ *   reason: string|null
+ * }}
+ */
+function computeSyntheticRawLotSize({
+  effectiveBalance,
+  appliedRisk,
+  entryPrice,
+  stopPrice,
+  contractSize,
+}) {
+  const balance = Number(effectiveBalance);
+  const risk = Number(appliedRisk);
+  const entry = Number(entryPrice);
+  const stop = Number(stopPrice);
+  const cs = Number(contractSize);
+
+  if (!(balance > 0) || !(risk > 0) || !(cs > 0)) {
+    return {
+      rawLotSize: null,
+      stopDistance: null,
+      dollarRisk: null,
+      reason: 'invalid_inputs',
+    };
+  }
+
+  const stopDistance = Math.abs(entry - stop);
+  if (!(stopDistance > 0)) {
+    return {
+      rawLotSize: null,
+      stopDistance: 0,
+      dollarRisk: balance * risk,
+      reason: 'zero_stop_distance',
+    };
+  }
+
+  const dollarRisk = balance * risk;
+  const rawLotSize = dollarRisk / (stopDistance * cs);
+  if (!(rawLotSize > 0) || !Number.isFinite(rawLotSize)) {
+    return {
+      rawLotSize: null,
+      stopDistance,
+      dollarRisk,
+      reason: 'invalid_raw_lot',
+    };
+  }
+
+  return { rawLotSize, stopDistance, dollarRisk, reason: null };
 }
 
 /**
@@ -57,6 +119,7 @@ function clampLotSize(calculatedSize, symbolInfo) {
 }
 
 module.exports = {
+  computeSyntheticRawLotSize,
   clampLotSize,
   roundToStep,
 };

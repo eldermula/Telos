@@ -42,7 +42,10 @@ const { isConfirmationActive } = require('./live-trading-confirmation');
 const { resolveTickDispatch } = require('./tick-dispatch');
 const { getMatchedAccountInfoForBotInstance } = require('./broker-account.service');
 const { isConnectionFresh } = require('./connection-freshness');
-const { clampLotSize } = require('./synthetic-lot-clamp');
+const {
+  clampLotSize,
+  computeSyntheticRawLotSize,
+} = require('./synthetic-lot-clamp');
 const { SYNTHETIC_WATCHLIST } = require(path.join(
   __dirname,
   '..',
@@ -258,6 +261,8 @@ class SyntheticBotRuntime {
         options.loadTradeHistoryForLearning ||
         ((id) => tradesRepository.loadTradeHistoryForLearning(id)),
       clampLotSize: options.clampLotSize || clampLotSize,
+      computeSyntheticRawLotSize:
+        options.computeSyntheticRawLotSize || computeSyntheticRawLotSize,
     };
     // Back-compat for paper path tests that injected getSymbolInfo on the instance.
     this.getSymbolInfo = this._real.getSymbolInfo;
@@ -613,7 +618,42 @@ class SyntheticBotRuntime {
       selection,
       entryPrice
     );
-    const lotSize = Number((entryResult.riskResult.appliedRisk * 0.1).toFixed(4)) || 0.01;
+    // PAPER: size off synthetic ledger (this.state.balance).
+    const paperSizing = this._real.computeSyntheticRawLotSize({
+      effectiveBalance: this.state.balance,
+      appliedRisk: entryResult.riskResult.appliedRisk,
+      entryPrice,
+      stopPrice,
+      contractSize: spec.trade_contract_size,
+    });
+    if (paperSizing.rawLotSize == null) {
+      await this._real.insertDecision({
+        botInstanceId: this.botInstanceId,
+        decisionType: 'trade_rejected',
+        triggeringCondition: `lot_sizing_${paperSizing.reason || 'failed'}`,
+        details: { symbol, paperSizing, entryPrice, stopPrice },
+        assetClass: ASSET_CLASS,
+      });
+      return { state: this.state, entryResult, trade: null, lotSkipped: true };
+    }
+    const paperClamped = this._real.clampLotSize(paperSizing.rawLotSize, symbolInfo);
+    if (paperClamped.skipped) {
+      await this._real.insertDecision({
+        botInstanceId: this.botInstanceId,
+        decisionType: 'trade_rejected',
+        triggeringCondition: `lot_clamp_${paperClamped.reason}`,
+        details: {
+          symbol,
+          calculatedSize: paperSizing.rawLotSize,
+          paperSizing,
+          clamped: paperClamped,
+          symbolInfo,
+        },
+        assetClass: ASSET_CLASS,
+      });
+      return { state: this.state, entryResult, trade: null, lotSkipped: true };
+    }
+    const lotSize = paperClamped.size;
 
     const conditions = {
       ...tradeInput,
@@ -803,19 +843,50 @@ class SyntheticBotRuntime {
       quoteEntry
     );
 
-    const calculatedSize =
-      Number((entryResult.riskResult.appliedRisk * 0.1).toFixed(4)) || 0.01;
+    // REAL: size off the live equity already read for Layer 0 (reuse `equity`;
+    // no extra connector call). Tier/bootstrap already saw the same value via
+    // this.state.balance set above before evaluateEntry.
+    const sizing = deps.computeSyntheticRawLotSize({
+      effectiveBalance: equity,
+      appliedRisk: entryResult.riskResult.appliedRisk,
+      entryPrice: quoteEntry,
+      stopPrice,
+      contractSize: spec.trade_contract_size,
+    });
+    if (sizing.rawLotSize == null) {
+      console.warn('[synthetic-bot-runtime] real open skipped: lot sizing failed', {
+        symbol,
+        reason: sizing.reason,
+        equity,
+        appliedRisk: entryResult.riskResult.appliedRisk,
+      });
+      await deps.insertDecision({
+        botInstanceId: this.botInstanceId,
+        decisionType: 'trade_rejected',
+        triggeringCondition: `lot_sizing_${sizing.reason || 'failed'}`,
+        details: { symbol, sizing, equity, entryPrice: quoteEntry, stopPrice },
+        assetClass: ASSET_CLASS,
+      });
+      return { state: this.state, entryResult, trade: null, lotSkipped: true };
+    }
+    const calculatedSize = sizing.rawLotSize;
     const clamped = deps.clampLotSize(calculatedSize, symbolInfo);
     if (clamped.skipped) {
       console.warn(
         `[synthetic-bot-runtime] real open skipped: lot clamp ${clamped.reason}`,
-        { symbol, calculatedSize, volume_min: symbolInfo.volume_min }
+        {
+          symbol,
+          calculatedSize,
+          volume_min: symbolInfo.volume_min,
+          stopDistance: sizing.stopDistance,
+          dollarRisk: sizing.dollarRisk,
+        }
       );
       await deps.insertDecision({
         botInstanceId: this.botInstanceId,
         decisionType: 'trade_rejected',
         triggeringCondition: `lot_clamp_${clamped.reason}`,
-        details: { symbol, calculatedSize, clamped, symbolInfo },
+        details: { symbol, calculatedSize, sizing, clamped, symbolInfo },
         assetClass: ASSET_CLASS,
       });
       return { state: this.state, entryResult, trade: null, lotSkipped: true };
