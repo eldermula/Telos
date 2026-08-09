@@ -14,6 +14,14 @@ router.get('/session', rateLimit.read(), controller.getSession);
 // modal. Read-class limiter; hits the local connector once per call
 // (no cache — the whole point is a fresh number before arming).
 router.get('/account-info', rateLimit.read(), controller.getAccountInfo);
+// Broker onboarding live preview — attached terminal only (no login-match,
+// no broker_connections required). Distinct from /account-info which
+// gates on the linked credentials.
+router.get(
+  '/attached-account-info',
+  rateLimit.read(),
+  controller.getAttachedAccountInfo
+);
 // Tightened well below the general 10/min state-changing default —
 // legitimate use is a human pressing Start/Stop a handful of times a
 // day, never more than once every few seconds. Each call does real
