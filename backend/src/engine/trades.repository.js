@@ -141,6 +141,7 @@ async function insertOpenRealTrade({
   brokerTicket,
   conditions = null,
   openedAt = new Date(),
+  assetClass = 'forex_gold',
 }) {
   if (brokerTicket == null) {
     throw new Error('insertOpenRealTrade requires brokerTicket');
@@ -149,8 +150,8 @@ async function insertOpenRealTrade({
     `INSERT INTO trades
        (bot_instance_id, origin, symbol, direction, entry_price, stop_price, target_price,
         lot_size, final_applied_position_risk, status, opened_at, conditions,
-        execution_mode, broker_ticket)
-     VALUES ($1, 'bot', $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10::jsonb, 'real', $11)
+        execution_mode, broker_ticket, asset_class)
+     VALUES ($1, 'bot', $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10::jsonb, 'real', $11, $12)
      RETURNING ${TRADE_RETURNING}`,
     [
       botInstanceId,
@@ -164,6 +165,7 @@ async function insertOpenRealTrade({
       openedAt,
       conditions === null ? null : JSON.stringify(conditions),
       brokerTicket,
+      assetClass,
     ]
   );
   return mapTrade(result.rows[0]);
@@ -242,15 +244,51 @@ async function listOpenSyntheticTradesForResume(botInstanceId) {
 }
 
 /**
- * Same rows as `listOpenTrades`, plus `conditions` for resume.
- * Includes execution_mode / broker_ticket so E.7 can reconcile real
- * tickets against the broker on Start.
+ * Open synthetic trades for this bot instance (paper or real).
+ * NOT the system-wide one-open guard — use listOpenTradesForUser for that
+ * (docs/11 §0.2 / DB `one_open_trade_per_user`). Kept for synthetic-scoped
+ * listing / diagnostics only.
+ */
+async function listOpenSyntheticTrades(botInstanceId) {
+  const result = await pool.query(
+    `SELECT ${TRADE_RETURNING}
+     FROM trades
+     WHERE bot_instance_id = $1 AND status = 'open' AND asset_class = 'synthetic'
+     ORDER BY opened_at DESC`,
+    [botInstanceId]
+  );
+  return result.rows.map(mapTrade);
+}
+
+/**
+ * Open real synthetic trades (for close-reconciliation comparison).
+ */
+async function listOpenSyntheticRealTrades(botInstanceId) {
+  const result = await pool.query(
+    `SELECT ${TRADE_RETURNING}, conditions
+     FROM trades
+     WHERE bot_instance_id = $1
+       AND status = 'open'
+       AND asset_class = 'synthetic'
+       AND execution_mode = 'real'
+     ORDER BY opened_at DESC`,
+    [botInstanceId]
+  );
+  return result.rows.map((row) => ({ ...mapTrade(row), conditions: row.conditions ?? null }));
+}
+
+/**
+ * Forex/gold resume only (asset_class = 'forex_gold'). Plus `conditions`
+ * for resume. Includes execution_mode / broker_ticket so E.7 can
+ * reconcile real tickets against the broker on Start.
+ * Crypto/synthetic use their own scoped resume loaders — do not widen
+ * this query or forex bot-runtime will rehydrate foreign open trades.
  */
 async function listOpenTradesForResume(botInstanceId) {
   const result = await pool.query(
     `SELECT ${TRADE_RETURNING}, conditions
      FROM trades
-     WHERE bot_instance_id = $1 AND status = 'open'
+     WHERE bot_instance_id = $1 AND status = 'open' AND asset_class = 'forex_gold'
      ORDER BY opened_at DESC`,
     [botInstanceId]
   );
@@ -304,6 +342,8 @@ module.exports = {
   listOpenTradesForResume,
   listOpenCryptoTradesForResume,
   listOpenSyntheticTradesForResume,
+  listOpenSyntheticTrades,
+  listOpenSyntheticRealTrades,
   listClosedTradesPaginated,
   loadTradeHistoryForLearning,
 };
