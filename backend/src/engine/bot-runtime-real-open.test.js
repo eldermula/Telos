@@ -94,7 +94,7 @@ function createRuntime(overrides = {}) {
     publishBotEvent: async () => {},
     getTierRows: async () => undefined,
     now: () => new Date(),
-    maxLot: overrides.maxLot ?? 0.01,
+    maxLot: overrides.maxLot ?? 1,
     maxAgeHours: overrides.maxAgeHours ?? 24,
     strategySelection: overrides.strategySelection || makeFakeStrategySelection(),
   };
@@ -134,7 +134,7 @@ describe('E.5 _maybeOpenPositionReal', () => {
     assert.notEqual(placeCalls[0].expectedAccountType, 'real');
     assert.ok(placeCalls[0].sl != null);
     assert.ok(placeCalls[0].tp != null);
-    assert.equal(placeCalls[0].volume, 0.01); // REAL_MAX_LOT cap
+    assert.equal(placeCalls[0].volume, 1); // REAL_MAX_LOT default ceiling
 
     assert.equal(insertedTrades[0].brokerTicket, 9001);
     assert.ok(statusUpdates.some((u) => u.active_trading_balance === 10000));

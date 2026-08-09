@@ -86,9 +86,10 @@ const REAL_TRADING_ALLOW_DEMO = process.env.REAL_TRADING_ALLOW_DEMO === 'true';
 
 /**
  * Option 2 E.3 — hard lot-size ceiling for real orders, independent of
- * APIRS risk-%. Approved default 0.01 (one micro lot) for first proofs.
+ * APIRS risk-%. Approved default 1.00 (raised from 0.01 after Deriv
+ * re-verification — still below broker volume_max of 20 FX / 10 XAU).
  */
-const REAL_MAX_LOT = Number(process.env.REAL_MAX_LOT) || 0.01;
+const REAL_MAX_LOT = Number(process.env.REAL_MAX_LOT) || 1;
 
 /**
  * Option 2 E.3 — max age of broker_connections.last_validated_at before
