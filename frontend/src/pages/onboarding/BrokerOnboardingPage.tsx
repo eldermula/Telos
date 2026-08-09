@@ -6,23 +6,36 @@ import {
   listBrokerConnections,
   updateBrokerConnection,
 } from '../../lib/api/broker';
+import {
+  getAttachedAccountInfo,
+  type AttachedAccountInfo,
+} from '../../lib/api/trading';
 import { ApiError, type BrokerConnection } from '../../types/api';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
+import { Select } from '../../components/ui/Select';
 import { StatusPill, brokerStatusTone } from '../../components/ui/StatusPill';
+
+const BROKER_OPTIONS = [{ value: 'deriv', label: 'Deriv' }] as const;
+const PREVIEW_DEBOUNCE_MS = 500;
 
 export function BrokerOnboardingPage() {
   const [connection, setConnection] = useState<BrokerConnection | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [broker, setBroker] = useState('deriv');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [server, setServer] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
+
+  const [attached, setAttached] = useState<AttachedAccountInfo | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -51,6 +64,46 @@ export function BrokerOnboardingPage() {
       cancelled = true;
     };
   }, [refresh]);
+
+  // Live attach preview: debounce Login typing → read-only connector
+  // account-info (never authenticates with typed credentials).
+  useEffect(() => {
+    const trimmed = login.trim();
+    if (!trimmed) {
+      setAttached(null);
+      setPreviewError(null);
+      setPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setPreviewLoading(true);
+      setPreviewError(null);
+      void (async () => {
+        try {
+          const info = await getAttachedAccountInfo();
+          if (cancelled) return;
+          setAttached(info);
+        } catch (err) {
+          if (cancelled) return;
+          setAttached(null);
+          setPreviewError(
+            err instanceof ApiError
+              ? err.message
+              : 'Could not read the attached MT5 terminal.',
+          );
+        } finally {
+          if (!cancelled) setPreviewLoading(false);
+        }
+      })();
+    }, PREVIEW_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [login]);
 
   async function onLink(event: FormEvent) {
     event.preventDefault();
@@ -103,6 +156,13 @@ export function BrokerOnboardingPage() {
     }
   }
 
+  const loginMatchesAttached =
+    attached != null &&
+    login.trim() !== '' &&
+    String(attached.login) === login.trim();
+
+  const currency = attached?.currency ? ` ${attached.currency}` : '';
+
   if (loading) {
     return <p className="text-text-secondary">Loading broker connection…</p>;
   }
@@ -112,7 +172,7 @@ export function BrokerOnboardingPage() {
       <header>
         <h1 className="type-display-sm">Broker connection</h1>
         <p className="mt-1 text-text-secondary">
-          Link your existing MT5 account. Telos never takes custody of trading
+          Link your Deriv MT5 account. Telos never takes custody of trading
           funds.
         </p>
       </header>
@@ -158,7 +218,19 @@ export function BrokerOnboardingPage() {
           <h2 className="type-heading">
             {updating ? 'Update MT5 credentials' : 'Link MT5 account'}
           </h2>
+          <p className="mt-2 text-text-secondary">
+            Log into this account in your MT5 desktop terminal first, then enter
+            its account number below to link it. Telos detects the account type
+            automatically.
+          </p>
           <form className="mt-4 flex flex-col gap-4" onSubmit={onLink} autoComplete="off">
+            <Select
+              label="Broker"
+              name="mt5-broker"
+              value={broker}
+              onChange={(e) => setBroker(e.target.value)}
+              options={[...BROKER_OPTIONS]}
+            />
             <Input
               label="Login"
               name="mt5-login"
@@ -167,6 +239,55 @@ export function BrokerOnboardingPage() {
               value={login}
               onChange={(e) => setLogin(e.target.value)}
             />
+
+            {login.trim() ? (
+              <div className="flex flex-col gap-2">
+                {previewLoading ? (
+                  <p className="type-caption text-text-secondary">
+                    Reading attached MT5 terminal…
+                  </p>
+                ) : null}
+                {previewError ? (
+                  <p className="type-caption text-text-secondary">{previewError}</p>
+                ) : null}
+                {attached && !previewLoading ? (
+                  <>
+                    <dl className="grid grid-cols-2 gap-3 rounded-[12px] border border-border-subtle bg-bg-surface p-3">
+                      <div>
+                        <dt className="type-caption">Login</dt>
+                        <dd className="type-data-base mt-0.5 text-text-primary">
+                          {attached.login}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="type-caption">Account type</dt>
+                        <dd className="type-data-base mt-0.5 capitalize text-text-primary">
+                          {attached.account_type}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="type-caption">Balance</dt>
+                        <dd className="type-data-base mt-0.5 text-text-primary">
+                          {attached.balance.toFixed(2)}
+                          {currency}
+                        </dd>
+                      </div>
+                    </dl>
+                    {loginMatchesAttached ? (
+                      <p className="type-caption text-success">
+                        Matches your MT5 terminal
+                      </p>
+                    ) : (
+                      <p className="type-caption text-text-secondary">
+                        MT5 desktop is currently logged into a different account.
+                        Log into the account you want to link, then try again.
+                      </p>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
             <Input
               label="Password"
               name="mt5-password"
@@ -181,7 +302,7 @@ export function BrokerOnboardingPage() {
               name="mt5-server"
               autoComplete="off"
               required
-              placeholder="MetaQuotes-Demo"
+              placeholder="Deriv-Demo"
               value={server}
               onChange={(e) => setServer(e.target.value)}
             />
