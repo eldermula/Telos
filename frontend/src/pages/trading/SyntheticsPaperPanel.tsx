@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Button } from '../../components/ui/Button';
@@ -18,6 +18,13 @@ import type { BotEventMessage } from '../../lib/ws';
 import { ConfirmSyntheticsLiveTradingModal } from './ConfirmSyntheticsLiveTradingModal';
 
 /**
+ * Match synthetic/forex runtime tick cadence (SYNTHETIC_PAPER_TICK_MS /
+ * PAPER_TICK_MS default 2000). No other live-data poll exists in the
+ * frontend — the app is otherwise WebSocket-driven.
+ */
+const LIVE_ACCOUNT_POLL_MS = 2000;
+
+/**
  * Trading — Synthetics panel (paper + real arming).
  * Visual/interaction from telos_synthetics_prototype TradingView;
  * data from Batch 1 session fields + GET /trading/account-info.
@@ -32,6 +39,17 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
   const [confirmLivePending, setConfirmLivePending] = useState(false);
   const [liveAccount, setLiveAccount] = useState<LiveAccountInfo | null>(null);
   const [liveAccountError, setLiveAccountError] = useState<string | null>(null);
+
+  // Mode pill: trust the session field as already TTL-filtered by the
+  // backend (bot-status.cache → isConfirmationActive). Never re-parse
+  // or independently age-check a raw timestamp on the client.
+  const mode: 'paper' | 'real' =
+    session != null && session.synthetic_live_trading_confirmed_at != null
+      ? 'real'
+      : 'paper';
+  const running = session?.synthetic_status === 'running';
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   const reload = useCallback(async () => {
     setError(null);
@@ -54,80 +72,92 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
     void reload();
   }, [reload, refreshKey]);
 
-  const onBotEvent = useCallback((message: BotEventMessage) => {
-    const payload = (message.payload ?? {}) as Record<string, unknown>;
-    if (message.event === 'bot.status_changed') {
-      if (typeof payload.synthetic_status === 'string') {
-        setSession((prev) =>
-          prev
-            ? {
-                ...prev,
-                synthetic_status: payload.synthetic_status as SyntheticSession['synthetic_status'],
-              }
-            : prev,
-        );
-      }
-      return;
-    }
-    if (message.event === 'equity.updated') {
-      const bal = payload.synthetic_active_trading_balance;
-      const peak = payload.synthetic_peak_equity;
-      if (typeof bal === 'number' || typeof peak === 'number') {
-        setSession((prev) =>
-          prev
-            ? {
-                ...prev,
-                synthetic_active_trading_balance:
-                  typeof bal === 'number' ? bal : prev.synthetic_active_trading_balance,
-                synthetic_peak_equity:
-                  typeof peak === 'number' ? peak : prev.synthetic_peak_equity,
-              }
-            : prev,
-        );
-      }
+  /**
+   * REAL-mode balances always come from GET /trading/account-info.
+   * Keep last-good values on transient failure so we never flash the
+   * paper ledger mid-REAL session.
+   */
+  const refreshLiveAccount = useCallback(async () => {
+    try {
+      const info = await getLiveAccountInfo();
+      setLiveAccount(info);
+      setLiveAccountError(null);
+    } catch (err) {
+      setLiveAccountError(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not load live MT5 account info.',
+      );
     }
   }, []);
 
-  useBotEvents(onBotEvent);
-
-  // Mode pill: trust the session field as already TTL-filtered by the
-  // backend (bot-status.cache → isConfirmationActive). Never re-parse
-  // or independently age-check a raw timestamp on the client.
-  const mode: 'paper' | 'real' =
-    session != null && session.synthetic_live_trading_confirmed_at != null
-      ? 'real'
-      : 'paper';
-
-  // Real-mode balance grid: live connector read (same endpoint as Confirm Live).
+  // Immediate fetch whenever REAL mode is active; poll while running
+  // at the same cadence as the synthetics runtime tick.
   useEffect(() => {
-    if (!session || mode !== 'real') {
+    if (mode !== 'real') {
       setLiveAccount(null);
       setLiveAccountError(null);
       return;
     }
 
-    let cancelled = false;
-    void (async () => {
-      try {
-        const info = await getLiveAccountInfo();
-        if (cancelled) return;
-        setLiveAccount(info);
-        setLiveAccountError(null);
-      } catch (err) {
-        if (cancelled) return;
-        setLiveAccount(null);
-        setLiveAccountError(
-          err instanceof ApiError
-            ? err.message
-            : 'Could not load live MT5 account info.',
-        );
-      }
-    })();
+    void refreshLiveAccount();
+    if (!running) return;
 
-    return () => {
-      cancelled = true;
-    };
-  }, [session, mode, refreshKey]);
+    const id = window.setInterval(() => {
+      void refreshLiveAccount();
+    }, LIVE_ACCOUNT_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [mode, running, refreshKey, refreshLiveAccount]);
+
+  const onBotEvent = useCallback(
+    (message: BotEventMessage) => {
+      const payload = (message.payload ?? {}) as Record<string, unknown>;
+      if (message.event === 'bot.status_changed') {
+        if (typeof payload.synthetic_status === 'string') {
+          setSession((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  synthetic_status: payload.synthetic_status as SyntheticSession['synthetic_status'],
+                }
+              : prev,
+          );
+        }
+        return;
+      }
+      if (
+        message.event === 'trade.opened' ||
+        message.event === 'trade.closed' ||
+        message.event === 'equity.updated'
+      ) {
+        // PAPER path: merge synthetic ledger from equity.updated.
+        if (message.event === 'equity.updated') {
+          const bal = payload.synthetic_active_trading_balance;
+          const peak = payload.synthetic_peak_equity;
+          if (typeof bal === 'number' || typeof peak === 'number') {
+            setSession((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    synthetic_active_trading_balance:
+                      typeof bal === 'number' ? bal : prev.synthetic_active_trading_balance,
+                    synthetic_peak_equity:
+                      typeof peak === 'number' ? peak : prev.synthetic_peak_equity,
+                  }
+                : prev,
+            );
+          }
+        }
+        // REAL path: re-read live MT5 account-info (paper ledger is not display).
+        if (modeRef.current === 'real') {
+          void refreshLiveAccount();
+        }
+      }
+    },
+    [refreshLiveAccount],
+  );
+
+  useBotEvents(onBotEvent);
 
   async function onConfirmAction() {
     setPending(true);
@@ -169,7 +199,6 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
     return null;
   }
 
-  const running = session.synthetic_status === 'running';
   const realAvailable = Boolean(session.synthetic_real_trading_available);
   const paperBalance = session.synthetic_active_trading_balance ?? 0;
   const paperPeak = session.synthetic_peak_equity ?? 0;
