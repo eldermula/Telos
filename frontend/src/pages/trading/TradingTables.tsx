@@ -5,6 +5,15 @@ import { DataTable, type DataTableColumn } from '../../components/ui/DataTable';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { ApiError } from '../../types/api';
 
+/** Up to 4 dp; trim trailing zeros. Nonzero lots must never render as "0.00". */
+function formatLotSize(lotSize: number): string {
+  if (!Number.isFinite(lotSize)) return '—';
+  if (lotSize === 0) return '0';
+  const fixed = lotSize.toFixed(4);
+  if (Number(fixed) === 0) return String(lotSize);
+  return fixed.replace(/\.?0+$/, '');
+}
+
 const historyColumns: DataTableColumn<Trade>[] = [
   { key: 'opened_at', header: 'Opened', render: (t) => new Date(t.opened_at).toLocaleString() },
   { key: 'direction', header: 'Direction', render: (t) => t.direction },
@@ -13,7 +22,7 @@ const historyColumns: DataTableColumn<Trade>[] = [
     header: 'Lot size',
     align: 'right',
     numeric: true,
-    render: (t) => t.lot_size.toFixed(2),
+    render: (t) => formatLotSize(t.lot_size),
   },
   {
     key: 'pnl',
@@ -39,7 +48,7 @@ const positionColumns: DataTableColumn<Trade>[] = [
     header: 'Lot size',
     align: 'right',
     numeric: true,
-    render: (t) => t.lot_size.toFixed(2),
+    render: (t) => formatLotSize(t.lot_size),
   },
 ];
 
