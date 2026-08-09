@@ -1,0 +1,172 @@
+import { useEffect, useState } from 'react';
+import { Modal } from '../../components/ui/Modal';
+import { Input } from '../../components/ui/Input';
+import { LIVE_TRADING_CONFIRMATION_PHRASE } from '../../lib/liveTradingConfirmation';
+import { getLiveAccountInfo, type LiveAccountInfo } from '../../lib/api/trading';
+import { ApiError } from '../../types/api';
+
+type Props = {
+  open: boolean;
+  confirming: boolean;
+  onClose: () => void;
+  onConfirm: (phrase: string) => Promise<void>;
+};
+
+/**
+ * Synthetics Layer 2 — deliberate-typing gate before a real-mode
+ * synthetics Start. Mirrors ConfirmLiveTradingModal: live
+ * GET /trading/account-info must load successfully, account_type must
+ * be `real`, and the phrase must match exactly. Confirm posts to
+ * POST /bot/synthetic/confirm-live (not forex confirm-live).
+ */
+export function ConfirmSyntheticsLiveTradingModal({
+  open,
+  confirming,
+  onClose,
+  onConfirm,
+}: Props) {
+  const [phrase, setPhrase] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [accountInfo, setAccountInfo] = useState<LiveAccountInfo | null>(null);
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setPhrase('');
+      setLocalError(null);
+      setAccountInfo(null);
+      setAccountError(null);
+      setAccountLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAccountLoading(true);
+    setAccountError(null);
+    setAccountInfo(null);
+
+    void (async () => {
+      try {
+        const info = await getLiveAccountInfo();
+        if (cancelled) return;
+        setAccountInfo(info);
+        if (info.account_type !== 'real') {
+          setAccountError(
+            `Attached MT5 account is ${info.account_type}, not real. Live trading cannot be confirmed.`,
+          );
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setAccountError(
+          err instanceof ApiError
+            ? err.message
+            : 'Could not load live MT5 account info. Confirmation is blocked until this succeeds.',
+        );
+      } finally {
+        if (!cancelled) setAccountLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const matches = phrase === LIVE_TRADING_CONFIRMATION_PHRASE;
+  const liveContextReady =
+    accountInfo !== null && accountInfo.account_type === 'real' && !accountError;
+
+  async function handleConfirm() {
+    if (!matches || !liveContextReady) return;
+    setLocalError(null);
+    try {
+      await onConfirm(phrase);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : 'Confirmation failed.');
+    }
+  }
+
+  const currency = accountInfo?.currency ? ` ${accountInfo.currency}` : '';
+
+  return (
+    <Modal
+      open={open}
+      title="Confirm live trading — Synthetics"
+      confirmLabel="Confirm live trading"
+      confirmVariant="destructive"
+      confirming={confirming}
+      confirmDisabled={!matches || !liveContextReady || accountLoading}
+      onClose={onClose}
+      onConfirm={() => void handleConfirm()}
+    >
+      <div className="flex flex-col gap-4">
+        <p className="text-danger">
+          You are about to authorize real-money order placement on Volatility Indices
+          (synthetics) via your linked Deriv MT5 account. This is not a paper
+          simulation.
+        </p>
+
+        {accountLoading ? (
+          <p className="type-caption">Loading live MT5 account info…</p>
+        ) : null}
+
+        {accountError ? (
+          <p className="type-caption text-danger">{accountError}</p>
+        ) : null}
+
+        {accountInfo && !accountLoading ? (
+          <dl className="grid grid-cols-2 gap-3 rounded-[12px] border border-border-subtle bg-bg-surface p-3">
+            <div>
+              <dt className="type-caption">Account</dt>
+              <dd className="type-data-base mt-0.5 text-text-primary">
+                {accountInfo.login}{' '}
+                <span className="capitalize">({accountInfo.account_type})</span>
+              </dd>
+            </div>
+            <div>
+              <dt className="type-caption">Broker</dt>
+              <dd className="type-data-base mt-0.5 uppercase text-text-primary">
+                {accountInfo.broker_name}
+              </dd>
+            </div>
+            <div>
+              <dt className="type-caption">Live equity</dt>
+              <dd className="type-data-base mt-0.5 text-accent-gold">
+                {accountInfo.equity.toFixed(2)}
+                {currency}
+              </dd>
+            </div>
+            <div>
+              <dt className="type-caption">Live balance</dt>
+              <dd className="type-data-base mt-0.5 text-text-primary">
+                {accountInfo.balance.toFixed(2)}
+                {currency}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
+
+        <p>
+          Confirmation expires in 15 minutes if you don&apos;t Start, and is cleared on
+          every Stop. Type the phrase below exactly to continue.
+        </p>
+
+        <p className="rounded-[8px] border border-border-subtle bg-bg-surface px-3 py-2 font-mono text-[0.875rem] text-text-primary">
+          {LIVE_TRADING_CONFIRMATION_PHRASE}
+        </p>
+
+        <Input
+          label="Confirmation phrase"
+          value={phrase}
+          onChange={(event) => setPhrase(event.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="Type the phrase exactly"
+          error={localError ?? undefined}
+          disabled={!liveContextReady}
+        />
+      </div>
+    </Modal>
+  );
+}
