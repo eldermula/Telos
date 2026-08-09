@@ -44,6 +44,11 @@ export type Trade = {
   opened_at: string;
   closed_at: string | null;
   pnl: number | null;
+  symbol?: string;
+  execution_mode?: 'paper' | 'real';
+  asset_class?: 'forex_gold' | 'crypto' | 'synthetic';
+  broker_ticket?: number | null;
+  origin?: 'bot' | 'manual';
 };
 
 export type DecisionType =

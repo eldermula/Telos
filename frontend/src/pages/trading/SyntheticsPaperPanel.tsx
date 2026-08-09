@@ -11,7 +11,7 @@ import {
   stopSyntheticSession,
   type SyntheticSession,
 } from '../../lib/api/syntheticBot';
-import { getLiveAccountInfo, type LiveAccountInfo } from '../../lib/api/trading';
+import { getLiveAccountInfo, getPositions, type LiveAccountInfo } from '../../lib/api/trading';
 import { ApiError } from '../../types/api';
 import { useBotEvents } from '../../hooks/useBotEvents';
 import type { BotEventMessage } from '../../lib/ws';
@@ -23,6 +23,17 @@ import { ConfirmSyntheticsLiveTradingModal } from './ConfirmSyntheticsLiveTradin
  * frontend — the app is otherwise WebSocket-driven.
  */
 const LIVE_ACCOUNT_POLL_MS = 2000;
+
+function hasOpenRealSyntheticTrade(
+  positions: { execution_mode?: string; asset_class?: string; status?: string }[],
+): boolean {
+  return positions.some(
+    (p) =>
+      p.status === 'open' &&
+      p.execution_mode === 'real' &&
+      p.asset_class === 'synthetic',
+  );
+}
 
 /**
  * Trading — Synthetics panel (paper + real arming).
@@ -39,23 +50,35 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
   const [confirmLivePending, setConfirmLivePending] = useState(false);
   const [liveAccount, setLiveAccount] = useState<LiveAccountInfo | null>(null);
   const [liveAccountError, setLiveAccountError] = useState<string | null>(null);
+  const [openRealSynthetic, setOpenRealSynthetic] = useState(false);
 
-  // Mode pill: trust the session field as already TTL-filtered by the
-  // backend (bot-status.cache → isConfirmationActive). Never re-parse
-  // or independently age-check a raw timestamp on the client.
+  // Mode pill: REAL while confirm-TTL is active OR an open real synthetic
+  // trade still exists — so Stop/TTL expiry cannot flip the panel to PAPER
+  // while a broker position remains open. Confirmation alone is insufficient.
+  const confirmationActive =
+    session != null && session.synthetic_live_trading_confirmed_at != null;
   const mode: 'paper' | 'real' =
-    session != null && session.synthetic_live_trading_confirmed_at != null
-      ? 'real'
-      : 'paper';
+    confirmationActive || openRealSynthetic ? 'real' : 'paper';
   const running = session?.synthetic_status === 'running';
   const modeRef = useRef(mode);
   modeRef.current = mode;
+
+  const refreshOpenRealSynthetic = useCallback(async () => {
+    try {
+      const positions = await getPositions();
+      setOpenRealSynthetic(hasOpenRealSyntheticTrade(positions));
+    } catch {
+      // Keep last-known openRealSynthetic on transient failures so we
+      // don't flash PAPER mid-open-real.
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     setError(null);
     try {
       const data = await getSyntheticSession();
       setSession(data);
+      await refreshOpenRealSynthetic();
     } catch (err) {
       if (err instanceof ApiError && err.code === 'NO_BROKER_CONNECTION') {
         setSession(null);
@@ -66,7 +89,7 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshOpenRealSynthetic]);
 
   useEffect(() => {
     void reload();
@@ -91,8 +114,9 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
     }
   }, []);
 
-  // Immediate fetch whenever REAL mode is active; poll while running
-  // at the same cadence as the synthetics runtime tick.
+  // Immediate fetch + poll whenever display mode is REAL — including when
+  // synthetic_status is stopped but an open real trade still exists.
+  // (Previously gated on running, so Stop froze the equity display.)
   useEffect(() => {
     if (mode !== 'real') {
       setLiveAccount(null);
@@ -101,13 +125,12 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
     }
 
     void refreshLiveAccount();
-    if (!running) return;
-
     const id = window.setInterval(() => {
       void refreshLiveAccount();
+      void refreshOpenRealSynthetic();
     }, LIVE_ACCOUNT_POLL_MS);
     return () => window.clearInterval(id);
-  }, [mode, running, refreshKey, refreshLiveAccount]);
+  }, [mode, refreshKey, refreshLiveAccount, refreshOpenRealSynthetic]);
 
   const onBotEvent = useCallback(
     (message: BotEventMessage) => {
@@ -123,6 +146,8 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
               : prev,
           );
         }
+        // Stop clears confirmation in the session response; re-check open real.
+        void refreshOpenRealSynthetic();
         return;
       }
       if (
@@ -148,13 +173,14 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
             );
           }
         }
+        void refreshOpenRealSynthetic();
         // REAL path: re-read live MT5 account-info (paper ledger is not display).
         if (modeRef.current === 'real') {
           void refreshLiveAccount();
         }
       }
     },
-    [refreshLiveAccount],
+    [refreshLiveAccount, refreshOpenRealSynthetic],
   );
 
   useBotEvents(onBotEvent);
