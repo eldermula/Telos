@@ -9,6 +9,7 @@ const tradingEngine = require('../engine/trading-engine');
 const tradesRepository = require('../engine/trades.repository');
 const decisionLogRepository = require('../engine/decision-log.repository');
 const brokerAccountService = require('../engine/broker-account.service');
+const mt5Connector = require('./mt5-connector.client');
 const { toMeta } = require('../utils/pagination');
 
 async function getSession(userId) {
@@ -84,12 +85,30 @@ async function getLiveAccountInfo(userId) {
   };
 }
 
+/**
+ * Broker onboarding preview — whatever is currently attached to the
+ * desktop MT5 terminal. No broker_connections row required, no
+ * login-match gate (unlike getLiveAccountInfo). Read-only; never
+ * authenticates with typed credentials.
+ */
+async function getAttachedAccountInfo() {
+  const info = await mt5Connector.getAccountInfo();
+  return {
+    login: info.login,
+    account_type: info.account_type,
+    balance: info.balance,
+    equity: info.equity,
+    currency: info.currency ?? null,
+  };
+}
+
 module.exports = {
   getSession,
   startSession,
   stopSession,
   confirmLive,
   getLiveAccountInfo,
+  getAttachedAccountInfo,
   getPositions,
   getOrders,
   getHistory,
