@@ -7,7 +7,7 @@ export type SyntheticSession = TradingSession & {
   synthetic_real_trading_available: boolean;
   /** Backend TTL-filtered; null means not confirmed / expired. */
   synthetic_live_trading_confirmed_at: string | null;
-  /** Testing-only surface of SYNTHETIC_ALLOW_DEMO_CONFIRM (server is the gate). */
+  /** Testing-only surface of the admin Layer-2 demo-confirm toggle (server is the gate). */
   synthetic_allow_demo_confirm: boolean;
   synthetic_active_trading_balance: number | null;
   synthetic_peak_equity: number | null;

@@ -6,9 +6,12 @@ import { DataTable } from '../../components/ui/DataTable';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Input } from '../../components/ui/Input';
 import {
+  disableSyntheticDemoConfirm,
   disableSyntheticDemoDispatch,
+  enableSyntheticDemoConfirm,
   enableSyntheticDemoDispatch,
   getAdminUser,
+  getSyntheticDemoConfirmStatus,
   getSyntheticDemoDispatchStatus,
   getSystemHealth,
   listAdminUsers,
@@ -20,6 +23,7 @@ import {
   type AdminUserDetail,
   type CandidateStrategy,
   type RiskTier,
+  type SyntheticDemoConfirmStatus,
   type SyntheticDemoDispatchStatus,
   type SystemHealth,
 } from '../../lib/api/admin';
@@ -45,7 +49,9 @@ export function AdminPage() {
   const [tiers, setTiers] = useState<RiskTier[]>([]);
   const [strategies, setStrategies] = useState<CandidateStrategy[]>([]);
   const [demoDispatch, setDemoDispatch] = useState<SyntheticDemoDispatchStatus | null>(null);
-  const [demoMinutes, setDemoMinutes] = useState('15');
+  const [demoConfirm, setDemoConfirm] = useState<SyntheticDemoConfirmStatus | null>(null);
+  const [demoDispatchMinutes, setDemoDispatchMinutes] = useState('15');
+  const [demoConfirmMinutes, setDemoConfirmMinutes] = useState('15');
   const [editTier, setEditTier] = useState<RiskTier | null>(null);
   const [ceilingDraft, setCeilingDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -53,18 +59,20 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [h, u, t, s, d] = await Promise.all([
+    const [h, u, t, s, d, c] = await Promise.all([
       getSystemHealth(),
       listAdminUsers({ page: 1, limit: 50 }),
       listRiskTiers(),
       listCandidateStrategies(),
       getSyntheticDemoDispatchStatus(),
+      getSyntheticDemoConfirmStatus(),
     ]);
     setHealth(h);
     setUsers(u.data);
     setTiers(t.data);
     setStrategies(s.data);
     setDemoDispatch(d);
+    setDemoConfirm(c);
   }, []);
 
   useEffect(() => {
@@ -138,15 +146,15 @@ export function AdminPage() {
   }
 
   async function onEnableDemoDispatch() {
-    const minutes = Number.parseInt(demoMinutes, 10);
+    const minutes = Number.parseInt(demoDispatchMinutes, 10);
     if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30) {
-      setError('Duration must be an integer from 1 to 30 minutes.');
+      setError('Dispatch duration must be an integer from 1 to 30 minutes.');
       return;
     }
     if (
       !window.confirm(
-        `Enable synthetics DEMO real-dispatch bypass for ${minutes} minute(s)? ` +
-          'This is dangerous testing-only infrastructure — demo accounts may place real MT5 orders.',
+        `Enable synthetics DEMO real-dispatch bypass (Layer 3) for ${minutes} minute(s)? ` +
+          'Confirmed demo sessions may place real MT5 orders.',
       )
     ) {
       return;
@@ -156,7 +164,7 @@ export function AdminPage() {
     try {
       const status = await enableSyntheticDemoDispatch(minutes);
       setDemoDispatch(status);
-      setMessage(`Demo-dispatch bypass enabled until ${status.enabled_until ?? '—'}.`);
+      setMessage(`Layer 3 demo-dispatch enabled until ${status.enabled_until ?? '—'}.`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Enable failed.');
     }
@@ -168,7 +176,44 @@ export function AdminPage() {
     try {
       const status = await disableSyntheticDemoDispatch();
       setDemoDispatch(status);
-      setMessage('Demo-dispatch bypass disabled.');
+      setMessage('Layer 3 demo-dispatch disabled.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Disable failed.');
+    }
+  }
+
+  async function onEnableDemoConfirm() {
+    const minutes = Number.parseInt(demoConfirmMinutes, 10);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30) {
+      setError('Confirm duration must be an integer from 1 to 30 minutes.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Enable synthetics DEMO confirm-live bypass (Layer 2) for ${minutes} minute(s)? ` +
+          'Demo accounts may pass the confirm-live step. Layer 3 is still required to dispatch orders.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await enableSyntheticDemoConfirm(minutes);
+      setDemoConfirm(status);
+      setMessage(`Layer 2 demo-confirm enabled until ${status.enabled_until ?? '—'}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Enable failed.');
+    }
+  }
+
+  async function onDisableDemoConfirm() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await disableSyntheticDemoConfirm();
+      setDemoConfirm(status);
+      setMessage('Layer 2 demo-confirm disabled.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Disable failed.');
     }
@@ -382,56 +427,114 @@ export function AdminPage() {
       ) : null}
 
       {tab === 'demo' ? (
-        <GlassCard>
-          <h2 className="type-heading mb-2">Synthetics demo-dispatch bypass</h2>
-          <p className="mb-4 type-caption text-state-danger">
-            Dangerous testing-only infrastructure. When enabled, synthetics may place and
-            monitor real MT5 orders against demo broker accounts (Layer 3). Auto-expires;
-            max 30 minutes. Not for real-account trading.
+        <div className="flex flex-col gap-6">
+          <p className="type-caption text-state-danger">
+            Dangerous testing-only infrastructure. Both layers are needed for end-to-end
+            demo real-dispatch: Layer 2 lets a demo account pass confirm-live; Layer 3 lets
+            a confirmed session place real MT5 orders. Each auto-expires (max 30 minutes).
+            Not for real-account trading.
           </p>
-          {demoDispatch ? (
-            <div className="mb-4 space-y-1 type-caption text-text-secondary">
-              <p>
-                Status:{' '}
-                <span className="text-text-primary">
-                  {demoDispatch.enabled ? 'ENABLED' : 'disabled'}
-                </span>
-              </p>
-              {demoDispatch.enabled ? (
-                <>
-                  <p>Until: {demoDispatch.enabled_until ?? '—'}</p>
-                  <p>Remaining: {formatRemaining(demoDispatch.remaining_seconds)}</p>
-                </>
-              ) : null}
-            </div>
-          ) : (
-            <p className="mb-4 text-text-secondary">Status unavailable.</p>
-          )}
-          <div className="flex max-w-md flex-col gap-3">
-            <Input
-              label="Duration (minutes, 1–30)"
-              type="number"
-              min={1}
-              max={30}
-              step={1}
-              value={demoMinutes}
-              onChange={(e) => setDemoMinutes(e.target.value)}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button variant="destructive" onClick={() => void onEnableDemoDispatch()}>
-                Enable bypass
-              </Button>
-              {demoDispatch?.enabled ? (
-                <Button variant="ghost" onClick={() => void onDisableDemoDispatch()}>
-                  Disable now
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Demo confirm bypass (Layer 2)</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Controls whether a demo account can get through the confirm-live step. Does
+              not by itself allow order placement — enable Layer 3 as well for dispatch.
+            </p>
+            {demoConfirm ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {demoConfirm.enabled ? 'ENABLED' : 'disabled'}
+                  </span>
+                </p>
+                {demoConfirm.enabled ? (
+                  <>
+                    <p>Until: {demoConfirm.enabled_until ?? '—'}</p>
+                    <p>Remaining: {formatRemaining(demoConfirm.remaining_seconds)}</p>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex max-w-md flex-col gap-3">
+              <Input
+                label="Duration (minutes, 1–30)"
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                value={demoConfirmMinutes}
+                onChange={(e) => setDemoConfirmMinutes(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="destructive" onClick={() => void onEnableDemoConfirm()}>
+                  Enable confirm bypass
                 </Button>
-              ) : null}
-              <Button variant="ghost" onClick={() => void refresh()}>
-                Refresh status
-              </Button>
+                {demoConfirm?.enabled ? (
+                  <Button variant="ghost" onClick={() => void onDisableDemoConfirm()}>
+                    Disable now
+                  </Button>
+                ) : null}
+                <Button variant="ghost" onClick={() => void refresh()}>
+                  Refresh status
+                </Button>
+              </div>
             </div>
-          </div>
-        </GlassCard>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Demo dispatch bypass (Layer 3)</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Controls whether a confirmed session can actually dispatch real orders on a
+              demo account. Requires Layer 2 (confirm) to have succeeded first.
+            </p>
+            {demoDispatch ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {demoDispatch.enabled ? 'ENABLED' : 'disabled'}
+                  </span>
+                </p>
+                {demoDispatch.enabled ? (
+                  <>
+                    <p>Until: {demoDispatch.enabled_until ?? '—'}</p>
+                    <p>Remaining: {formatRemaining(demoDispatch.remaining_seconds)}</p>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex max-w-md flex-col gap-3">
+              <Input
+                label="Duration (minutes, 1–30)"
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                value={demoDispatchMinutes}
+                onChange={(e) => setDemoDispatchMinutes(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="destructive" onClick={() => void onEnableDemoDispatch()}>
+                  Enable dispatch bypass
+                </Button>
+                {demoDispatch?.enabled ? (
+                  <Button variant="ghost" onClick={() => void onDisableDemoDispatch()}>
+                    Disable now
+                  </Button>
+                ) : null}
+                <Button variant="ghost" onClick={() => void refresh()}>
+                  Refresh status
+                </Button>
+              </div>
+            </div>
+          </GlassCard>
+        </div>
       ) : null}
     </div>
   );

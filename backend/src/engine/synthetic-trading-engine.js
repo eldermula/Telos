@@ -24,10 +24,8 @@ const {
 const { resolveExecutionMode } = require('./execution-mode');
 const {
   NODE_ENV,
-  SYNTHETIC_ALLOW_DEMO_CONFIRM,
   SYNTHETIC_REAL_TRADING_ENABLED,
   SYNTHETIC_ALLOW_MANUAL_TEST_TRADE,
-  assertSyntheticDemoConfirmBypassAllowed,
   assertSyntheticManualTestTradeBypassAllowed,
 } = require('../config/env');
 const syntheticDemoDispatchService = require('./synthetic-demo-dispatch.service');
@@ -51,8 +49,9 @@ async function ensureBotInstance(userId) {
 
 async function getSyntheticSessionForUser(userId) {
   const instance = await ensureBotInstance(userId);
-  const cached = await botStatusCache.getStatus(instance.id);
-  return cached || botStatusCache.setStatus(instance);
+  // Always rebuild so synthetic_allow_demo_confirm reflects the live
+  // admin Layer-2 toggle (not a stale Redis session payload).
+  return botStatusCache.setStatus(instance);
 }
 
 async function startSyntheticSession(userId, runtimeOptions = {}) {
@@ -125,23 +124,10 @@ async function stopSyntheticSession(userId) {
 
 /**
  * Synthetics Layer 2 confirm-live — writes synthetic_live_trading_confirmed_at
- * and gates on synthetic_status. Demo accounts require
- * SYNTHETIC_ALLOW_DEMO_CONFIRM===true (logged when used).
+ * and gates on synthetic_status. Demo accounts require the admin
+ * time-limited demo-confirm toggle (logged when used).
  */
 async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
-  try {
-    assertSyntheticDemoConfirmBypassAllowed({
-      nodeEnv: NODE_ENV,
-      allowDemoEnvPresent: process.env.SYNTHETIC_ALLOW_DEMO_CONFIRM !== undefined,
-    });
-  } catch (err) {
-    throw new AppError(
-      500,
-      'SYNTHETIC_DEMO_CONFIRM_BYPASS_IN_PRODUCTION',
-      err.message
-    );
-  }
-
   const instance = await ensureBotInstance(userId);
 
   if (instance.synthetic_status !== 'stopped') {
@@ -152,8 +138,7 @@ async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
     );
   }
 
-  const demoBypassActive =
-    SYNTHETIC_ALLOW_DEMO_CONFIRM === true && NODE_ENV !== 'production';
+  const demoBypassActive = await syntheticDemoDispatchService.isDemoConfirmEnabled();
   const isReal = instance.account_type === 'real';
   const isDemo = instance.account_type === 'demo';
   const accountQualifies = isReal || (demoBypassActive && isDemo);
@@ -176,8 +161,8 @@ async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
   const usedDemoBypass = isDemo && demoBypassActive;
   if (usedDemoBypass) {
     console.warn(
-      '[synthetic-trading-engine] confirm-live SUCCEEDED VIA SYNTHETIC_ALLOW_DEMO_CONFIRM ' +
-        `(testing-only demo bypass) user_id=${userId} account_type=demo ` +
+      '[synthetic-trading-engine] confirm-live SUCCEEDED VIA admin demo-confirm toggle ' +
+        `(testing-only Layer-2 bypass) user_id=${userId} account_type=demo ` +
         `login_broker_connection_id=${instance.broker_connection_id}`
     );
   } else {
@@ -195,7 +180,7 @@ async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
     userId,
     'live_trading_confirmed',
     usedDemoBypass
-      ? 'Synthetics live trading confirmed (DEMO BYPASS — SYNTHETIC_ALLOW_DEMO_CONFIRM). Testing only.'
+      ? 'Synthetics live trading confirmed (DEMO BYPASS — admin demo-confirm toggle). Testing only.'
       : 'Synthetics live trading confirmed — real synthetics orders may be placed starting from the next Start.'
   );
   return cached;

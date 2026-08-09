@@ -44,4 +44,21 @@ router.post(
   controller.disableSyntheticDemoDispatch
 );
 
+// Synthetics Layer-2 demo confirm-live bypass — independently toggleable.
+router.get(
+  '/synthetic/demo-confirm-status',
+  rateLimit.read({ max: 20 }),
+  controller.getSyntheticDemoConfirmStatus
+);
+router.post(
+  '/synthetic/demo-confirm-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableSyntheticDemoConfirm
+);
+router.post(
+  '/synthetic/demo-confirm-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableSyntheticDemoConfirm
+);
+
 module.exports = router;

@@ -149,6 +149,37 @@ async function disableSyntheticDemoDispatch(req, res, next) {
   }
 }
 
+async function getSyntheticDemoConfirmStatus(req, res, next) {
+  try {
+    const data = await adminService.getSyntheticDemoConfirmStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableSyntheticDemoConfirm(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableSyntheticDemoConfirm(
+      req.user.id,
+      body.minutes
+    );
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableSyntheticDemoConfirm(req, res, next) {
+  try {
+    const data = await adminService.disableSyntheticDemoConfirm(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -160,4 +191,7 @@ module.exports = {
   getSyntheticDemoDispatchStatus,
   enableSyntheticDemoDispatch,
   disableSyntheticDemoDispatch,
+  getSyntheticDemoConfirmStatus,
+  enableSyntheticDemoConfirm,
+  disableSyntheticDemoConfirm,
 };

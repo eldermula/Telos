@@ -11,9 +11,11 @@ $env:CORS_ORIGIN = 'https://www.telostrust.com'
 # still present (uncommented) in backend/.env — keep them absent there for
 # production boots or assertRealTradingDemoBypassAtStartup will refuse.
 Remove-Item Env:\REAL_TRADING_ALLOW_DEMO -ErrorAction SilentlyContinue
+Remove-Item Env:\SYNTHETIC_ALLOW_MANUAL_TEST_TRADE -ErrorAction SilentlyContinue
+# Retired env bypasses (now admin DB toggles) — clear leftovers so they
+# cannot linger in a shell that still exports them.
 Remove-Item Env:\SYNTHETIC_ALLOW_DEMO_CONFIRM -ErrorAction SilentlyContinue
 Remove-Item Env:\SYNTHETIC_REAL_TRADING_ALLOW_DEMO -ErrorAction SilentlyContinue
-Remove-Item Env:\SYNTHETIC_ALLOW_MANUAL_TEST_TRADE -ErrorAction SilentlyContinue
 
 Set-Location $BackendDir
 & node src/index.js

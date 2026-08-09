@@ -13,7 +13,7 @@ type Props = {
   /**
    * When true (session.synthetic_allow_demo_confirm), UI accepts a live
    * demo account_type so Deriv-Demo walkthroughs can type the phrase.
-   * Server still enforces SYNTHETIC_ALLOW_DEMO_CONFIRM on POST.
+   * Server still enforces the admin demo-confirm toggle on POST.
    */
   allowDemoConfirm?: boolean;
 };

@@ -125,3 +125,21 @@ export function enableSyntheticDemoDispatch(minutes: number): Promise<SyntheticD
 export function disableSyntheticDemoDispatch(): Promise<SyntheticDemoDispatchStatus> {
   return apiRequest('/admin/synthetic/demo-dispatch-disable', { method: 'POST' });
 }
+
+/** Same shape as dispatch status — Layer 2 confirm-live bypass. */
+export type SyntheticDemoConfirmStatus = SyntheticDemoDispatchStatus;
+
+export function getSyntheticDemoConfirmStatus(): Promise<SyntheticDemoConfirmStatus> {
+  return apiRequest('/admin/synthetic/demo-confirm-status');
+}
+
+export function enableSyntheticDemoConfirm(minutes: number): Promise<SyntheticDemoConfirmStatus> {
+  return apiRequest('/admin/synthetic/demo-confirm-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableSyntheticDemoConfirm(): Promise<SyntheticDemoConfirmStatus> {
+  return apiRequest('/admin/synthetic/demo-confirm-disable', { method: 'POST' });
+}

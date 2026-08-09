@@ -311,11 +311,11 @@ async function patchCandidateStrategy(adminUserId, strategyId, patch) {
 }
 
 async function getSyntheticDemoDispatchStatus() {
-  return syntheticDemoDispatchService.getStatus();
+  return syntheticDemoDispatchService.getDispatchStatus();
 }
 
 async function enableSyntheticDemoDispatch(adminUserId, minutes) {
-  const status = await syntheticDemoDispatchService.enable(adminUserId, minutes);
+  const status = await syntheticDemoDispatchService.enableDispatch(adminUserId, minutes);
   await writeAudit({
     adminUserId,
     action: 'synthetic_demo_dispatch.enable',
@@ -325,10 +325,33 @@ async function enableSyntheticDemoDispatch(adminUserId, minutes) {
 }
 
 async function disableSyntheticDemoDispatch(adminUserId) {
-  const status = await syntheticDemoDispatchService.disable(adminUserId);
+  const status = await syntheticDemoDispatchService.disableDispatch(adminUserId);
   await writeAudit({
     adminUserId,
     action: 'synthetic_demo_dispatch.disable',
+  });
+  return status;
+}
+
+async function getSyntheticDemoConfirmStatus() {
+  return syntheticDemoDispatchService.getConfirmStatus();
+}
+
+async function enableSyntheticDemoConfirm(adminUserId, minutes) {
+  const status = await syntheticDemoDispatchService.enableConfirm(adminUserId, minutes);
+  await writeAudit({
+    adminUserId,
+    action: 'synthetic_demo_confirm.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableSyntheticDemoConfirm(adminUserId) {
+  const status = await syntheticDemoDispatchService.disableConfirm(adminUserId);
+  await writeAudit({
+    adminUserId,
+    action: 'synthetic_demo_confirm.disable',
   });
   return status;
 }
@@ -344,5 +367,8 @@ module.exports = {
   getSyntheticDemoDispatchStatus,
   enableSyntheticDemoDispatch,
   disableSyntheticDemoDispatch,
+  getSyntheticDemoConfirmStatus,
+  enableSyntheticDemoConfirm,
+  disableSyntheticDemoConfirm,
   writeAudit,
 };
