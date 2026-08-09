@@ -63,6 +63,13 @@ const ACCESS_GATE_COOKIE_NAME = process.env.ACCESS_GATE_COOKIE_NAME || 'telos_ga
 const REAL_TRADING_ENABLED = process.env.REAL_TRADING_ENABLED === 'true';
 
 /**
+ * Synthetics real-dispatch Layer 1 — independent kill switch from
+ * forex REAL_TRADING_ENABLED. Exact-string 'true' only; default off.
+ */
+const SYNTHETIC_REAL_TRADING_ENABLED =
+  process.env.SYNTHETIC_REAL_TRADING_ENABLED === 'true';
+
+/**
  * Option 2 Increment E (E1 verification strategy) — non-production
  * dispatch bypass so the real-mode *methods* can be exercised against
  * a MetaQuotes-Demo account without real capital. Strict exact-string
@@ -159,6 +166,7 @@ module.exports = {
   ACCESS_GATE_TTL_DAYS,
   ACCESS_GATE_COOKIE_NAME,
   REAL_TRADING_ENABLED,
+  SYNTHETIC_REAL_TRADING_ENABLED,
   REAL_TRADING_ALLOW_DEMO,
   REAL_MAX_LOT,
   REAL_CONNECTION_MAX_AGE_HOURS,

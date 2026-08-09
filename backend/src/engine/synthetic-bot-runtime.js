@@ -4,7 +4,8 @@
  * Synthetics paper-mode dispatcher — Volatility Indices watchlist.
  *
  * Own tick loop. Never imports bot-runtime.js or crypto-bot-runtime.js.
- * Never calls MT5 order placement. No live-trading env / confirm-phrase.
+ * Never calls MT5 order placement (Batch 2). Batch 1: Layer 3 resolver
+ * is invoked per tick for logging only.
  *
  * Shared writers: trades / decision-log / WS with asset_class='synthetic'.
  * System-wide one-open guard via listOpenTradesForUser + DB unique index.
@@ -26,6 +27,11 @@ const {
   nextDailyDrawdownMarkers,
   shrinkDailyDrawdownMarkersForProfitLock,
 } = require('./daily-drawdown');
+const {
+  SYNTHETIC_REAL_TRADING_ENABLED,
+  REAL_TRADING_ALLOW_DEMO,
+} = require('../config/env');
+const { resolveExecutionMode } = require('./execution-mode');
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
 const { evaluateEntry, resolveExit } = require(path.join(apirsPath, 'paperTradingHarness.js'));
@@ -267,6 +273,14 @@ class SyntheticBotRuntime {
     if (this._tickInFlight) return null;
     this._tickInFlight = true;
     try {
+      // Batch 1 Layer 3 — resolve mode for observability only. Do not
+      // dispatch real opens/closes here (Batch 2).
+      const resolvedMode = await this._resolveExecutionModeForTick();
+      console.log(
+        `[synthetic-bot-runtime] resolved execution_mode=${resolvedMode} ` +
+          `bot=${this.botInstanceId} (log-only; paper path continues)`
+      );
+
       if (this.openPosition) {
         return await this._monitorOpenPositionPaper();
       }
@@ -278,6 +292,25 @@ class SyntheticBotRuntime {
     } finally {
       this._tickInFlight = false;
     }
+  }
+
+  /**
+   * Layer 3 — per-tick freshness. Uses SYNTHETIC_REAL_TRADING_ENABLED and
+   * synthetic_live_trading_confirmed_at (not the forex counterparts).
+   * account_type comes from the linked broker_connections row (joined in
+   * bot-instance.repository), same pattern as forex BotRuntime.
+   */
+  async _resolveExecutionModeForTick() {
+    const instance = await botInstanceRepository.findById(this.botInstanceId);
+    if (!instance) {
+      return 'paper';
+    }
+    return resolveExecutionMode({
+      realTradingEnabled: SYNTHETIC_REAL_TRADING_ENABLED,
+      accountType: instance.account_type,
+      liveTradingConfirmedAt: instance.synthetic_live_trading_confirmed_at,
+      allowDemoRealExecution: REAL_TRADING_ALLOW_DEMO,
+    });
   }
 
   async _maybeOpenPositionPaper() {

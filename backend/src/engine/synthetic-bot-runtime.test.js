@@ -13,11 +13,18 @@ describe('synthetic-bot-runtime paper', () => {
     assert.equal(/require\(['"]\.\/crypto-bot-runtime/.test(runtimeSource), false);
   });
 
-  it('never references MT5 order APIs or live-trading gates', () => {
+  it('Batch 1: may resolve execution mode for logging, but never place/close orders', () => {
     assert.equal(/\bplaceOrder\b/.test(runtimeSource), false);
     assert.equal(/\bcloseOrder\b/.test(runtimeSource), false);
-    assert.equal(/REAL_TRADING_/.test(runtimeSource), false);
-    assert.equal(/confirmLive|confirm-live|live_trading_confirmed/.test(runtimeSource), false);
+    assert.equal(/_maybeOpenPositionReal/.test(runtimeSource), false);
+    // Forex Layer 1 flag must not drive synthetics.
+    assert.equal(
+      /realTradingEnabled:\s*REAL_TRADING_ENABLED\b/.test(runtimeSource),
+      false
+    );
+    assert.match(runtimeSource, /SYNTHETIC_REAL_TRADING_ENABLED/);
+    assert.match(runtimeSource, /resolveExecutionMode/);
+    assert.match(runtimeSource, /synthetic_live_trading_confirmed_at/);
   });
 
   it('computes paper P&L as riskedAmount × realRMultiple', () => {

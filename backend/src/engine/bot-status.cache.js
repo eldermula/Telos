@@ -2,7 +2,7 @@
 
 const path = require('path');
 const { redis } = require('../db/redis');
-const { REAL_TRADING_ENABLED } = require('../config/env');
+const { REAL_TRADING_ENABLED, SYNTHETIC_REAL_TRADING_ENABLED } = require('../config/env');
 const { isConfirmationActive } = require('./live-trading-confirmation');
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
@@ -35,6 +35,9 @@ function toCachePayload(instance, updatedAt = new Date()) {
   // not-yet-Stop-cleared confirmation must never be reported as active
   // here, since the Frontend would otherwise show a stale "Live" state.
   const confirmationActive = isConfirmationActive(instance.live_trading_confirmed_at);
+  const syntheticConfirmationActive = isConfirmationActive(
+    instance.synthetic_live_trading_confirmed_at
+  );
 
   return {
     bot_instance_id: instance.id,
@@ -56,6 +59,12 @@ function toCachePayload(instance, updatedAt = new Date()) {
     real_trading_available: REAL_TRADING_ENABLED && instance.account_type === 'real',
     live_trading_confirmed_at: confirmationActive
       ? instance.live_trading_confirmed_at
+      : null,
+    // Synthetics Layer 1/2 — independent of forex real_trading_* fields.
+    synthetic_real_trading_available:
+      SYNTHETIC_REAL_TRADING_ENABLED && instance.account_type === 'real',
+    synthetic_live_trading_confirmed_at: syntheticConfirmationActive
+      ? instance.synthetic_live_trading_confirmed_at
       : null,
     updated_at:
       updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt),

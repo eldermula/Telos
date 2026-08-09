@@ -51,6 +51,21 @@ function mapBotInstance(row) {
     active_trading_balance: toNumber(row.active_trading_balance),
     peak_equity: toNumber(row.peak_equity),
     current_tier: row.current_tier,
+    // Synthetics independent ledger (migration 016).
+    synthetic_initial_balance:
+      row.synthetic_initial_balance == null
+        ? INITIAL_BALANCE
+        : toNumber(row.synthetic_initial_balance),
+    synthetic_active_trading_balance:
+      row.synthetic_active_trading_balance == null
+        ? INITIAL_BALANCE
+        : toNumber(row.synthetic_active_trading_balance),
+    synthetic_peak_equity:
+      row.synthetic_peak_equity == null
+        ? INITIAL_BALANCE
+        : toNumber(row.synthetic_peak_equity),
+    synthetic_current_tier:
+      row.synthetic_current_tier == null ? 0 : row.synthetic_current_tier,
     // Option 2 — read live off broker_connections via a join/subquery in
     // every query below, never cached on bot_instances itself: this is
     // the same trusted, revalidate-on-credential-update column Increment
@@ -62,6 +77,8 @@ function mapBotInstance(row) {
     // of this; this repository stays a plain data-access layer and
     // doesn't itself decide what's "still valid".
     live_trading_confirmed_at: row.live_trading_confirmed_at,
+    // Synthetics Layer 2 — independent of forex live_trading_confirmed_at.
+    synthetic_live_trading_confirmed_at: row.synthetic_live_trading_confirmed_at,
     // Daily drawdown markers (micro breaker §7) — nullable until first tick.
     daily_drawdown_day: toDateOnly(row.daily_drawdown_day),
     daily_start_equity: toNullableNumber(row.daily_start_equity),
@@ -74,6 +91,8 @@ function mapBotInstance(row) {
 const SELECT_COLUMNS = `
   bi.id, bi.user_id, bi.broker_connection_id, bi.status, bi.crypto_status, bi.synthetic_status, bi.active_strategy_mode,
   bi.initial_balance, bi.active_trading_balance, bi.peak_equity, bi.current_tier,
+  bi.synthetic_initial_balance, bi.synthetic_active_trading_balance, bi.synthetic_peak_equity,
+  bi.synthetic_current_tier, bi.synthetic_live_trading_confirmed_at,
   bc.account_type, bi.live_trading_confirmed_at,
   bi.daily_drawdown_day, bi.daily_start_equity, bi.daily_peak_equity,
   bi.created_at, bi.updated_at
@@ -82,6 +101,8 @@ const SELECT_COLUMNS = `
 const RETURNING_COLUMNS = `
   id, user_id, broker_connection_id, status, crypto_status, synthetic_status, active_strategy_mode,
   initial_balance, active_trading_balance, peak_equity, current_tier,
+  synthetic_initial_balance, synthetic_active_trading_balance, synthetic_peak_equity,
+  synthetic_current_tier, synthetic_live_trading_confirmed_at,
   (SELECT account_type FROM broker_connections WHERE id = bot_instances.broker_connection_id) AS account_type,
   live_trading_confirmed_at,
   daily_drawdown_day, daily_start_equity, daily_peak_equity,
@@ -214,6 +235,11 @@ async function updateStatusFields(botInstanceId, fields) {
     // share this one: every write to bot_instances goes through a single
     // allowlisted path.
     'live_trading_confirmed_at',
+    // Synthetics independent ledger + Layer 2 confirm column (016).
+    'synthetic_active_trading_balance',
+    'synthetic_peak_equity',
+    'synthetic_current_tier',
+    'synthetic_live_trading_confirmed_at',
     // Daily drawdown markers — bot-runtime only; null-safe until first tick.
     'daily_drawdown_day',
     'daily_start_equity',
