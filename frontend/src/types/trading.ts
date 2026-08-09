@@ -10,6 +10,13 @@ export type TradingSession = {
   crypto_status?: BotStatus;
   /** Synthetics paper runtime — independent of forex/crypto status. */
   synthetic_status?: BotStatus;
+  /**
+   * Soft-halt: bot stays running and monitors open positions, but will
+   * not open new ones. Distinct from status=stopped (full Stop).
+   */
+  halt_new_opens?: boolean;
+  /** Synthetics soft-halt — independent of forex halt_new_opens. */
+  synthetic_halt_new_opens?: boolean;
   active_strategy_mode: StrategyMode;
   current_tier: number;
   active_trading_balance: number;

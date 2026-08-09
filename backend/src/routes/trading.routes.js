@@ -32,6 +32,17 @@ router.get(
 // other state-changing endpoints don't share.
 router.post('/session/start', rateLimit.write({ max: 5 }), controller.startSession);
 router.post('/session/stop', rateLimit.write({ max: 5 }), controller.stopSession);
+// Soft-halt — block new opens while monitoring continues (distinct from Stop).
+router.post(
+  '/session/halt-new-opens',
+  rateLimit.write({ max: 5 }),
+  controller.haltNewOpens
+);
+router.post(
+  '/session/resume-new-opens',
+  rateLimit.write({ max: 5 }),
+  controller.resumeNewOpens
+);
 // Option 2 Increment D — same tightened class as start/stop, same
 // reasoning: legitimate use is a human confirming once before a Start,
 // never a rapid-fire loop.

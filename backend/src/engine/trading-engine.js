@@ -66,6 +66,8 @@ async function startSession(userId, runtimeOptions = {}) {
 
   const updated = await botInstanceRepository.updateStatusFields(instance.id, {
     status: 'running',
+    // Fresh Start always clears soft-halt (Resume is the mid-run control).
+    halt_new_opens: false,
   });
   const runtime = await startRuntime(updated, runtimeOptions);
   // Option 2 E.7 — resume reconcile may have halted to status='error'
@@ -108,9 +110,10 @@ async function stopSession(userId) {
   await stopRuntime(instance.id);
 
   if (instance.status === 'stopped') {
-    if (instance.live_trading_confirmed_at) {
+    if (instance.live_trading_confirmed_at || instance.halt_new_opens) {
       const cleared = await botInstanceRepository.updateStatusFields(instance.id, {
         live_trading_confirmed_at: null,
+        halt_new_opens: false,
       });
       return botStatusCache.setStatus(cleared);
     }
@@ -120,14 +123,72 @@ async function stopSession(userId) {
   const updated = await botInstanceRepository.updateStatusFields(instance.id, {
     status: 'stopped',
     live_trading_confirmed_at: null,
+    halt_new_opens: false,
   });
   const cached = await botStatusCache.setStatus(updated);
   await publishBotEvent(updated.id, 'bot.status_changed', {
     status: 'stopped',
+    halt_new_opens: false,
     timestamp: cached.updated_at,
   });
   // FR-NOTIF-1 — preference-gated; must not block Stop if notify fails.
   await notificationsService.maybeNotifyUser(userId, 'bot_stop', 'Trading bot stopped.');
+  return cached;
+}
+
+/**
+ * Soft-halt: keep the tick loop running (monitor open positions) but
+ * block openReal/openPaper. Distinct from Stop (full timer halt).
+ * Requires status=running.
+ */
+async function haltNewOpens(userId) {
+  const instance = await ensureBotInstance(userId);
+  if (instance.status !== 'running') {
+    throw new AppError(
+      409,
+      'HALT_REQUIRES_RUNNING',
+      'Halt new trades only applies while the bot is running — use Start first'
+    );
+  }
+  if (instance.halt_new_opens === true) {
+    return botStatusCache.setStatus(instance);
+  }
+  const updated = await botInstanceRepository.updateStatusFields(instance.id, {
+    halt_new_opens: true,
+  });
+  const cached = await botStatusCache.setStatus(updated);
+  await publishBotEvent(updated.id, 'bot.status_changed', {
+    status: updated.status,
+    halt_new_opens: true,
+    timestamp: cached.updated_at,
+  });
+  return cached;
+}
+
+/**
+ * Clear soft-halt while leaving the bot running. Requires status=running.
+ */
+async function resumeNewOpens(userId) {
+  const instance = await ensureBotInstance(userId);
+  if (instance.status !== 'running') {
+    throw new AppError(
+      409,
+      'RESUME_REQUIRES_RUNNING',
+      'Resume new trades only applies while the bot is running'
+    );
+  }
+  if (instance.halt_new_opens !== true) {
+    return botStatusCache.setStatus(instance);
+  }
+  const updated = await botInstanceRepository.updateStatusFields(instance.id, {
+    halt_new_opens: false,
+  });
+  const cached = await botStatusCache.setStatus(updated);
+  await publishBotEvent(updated.id, 'bot.status_changed', {
+    status: updated.status,
+    halt_new_opens: false,
+    timestamp: cached.updated_at,
+  });
   return cached;
 }
 
@@ -265,6 +326,8 @@ module.exports = {
   getBotInstanceForUser,
   startSession,
   stopSession,
+  haltNewOpens,
+  resumeNewOpens,
   confirmLiveTrading,
   rehydrateRunningRuntimes,
 };

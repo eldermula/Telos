@@ -39,7 +39,48 @@ test('open position without executionMode defaults to paper monitor', () => {
   );
 });
 
-test('full matrix covers all four dispatch targets', () => {
+test('haltNewOpens with no position → skipOpen (both modes)', () => {
+  assert.equal(
+    resolveTickDispatch({
+      resolvedMode: 'paper',
+      openPosition: null,
+      haltNewOpens: true,
+    }),
+    'skipOpen'
+  );
+  assert.equal(
+    resolveTickDispatch({
+      resolvedMode: 'real',
+      openPosition: null,
+      haltNewOpens: true,
+    }),
+    'skipOpen'
+  );
+});
+
+test('haltNewOpens with open real position → still monitorReal', () => {
+  assert.equal(
+    resolveTickDispatch({
+      resolvedMode: 'real',
+      openPosition: { executionMode: 'real' },
+      haltNewOpens: true,
+    }),
+    'monitorReal'
+  );
+});
+
+test('haltNewOpens with open paper position → still monitorPaper', () => {
+  assert.equal(
+    resolveTickDispatch({
+      resolvedMode: 'paper',
+      openPosition: { executionMode: 'paper' },
+      haltNewOpens: true,
+    }),
+    'monitorPaper'
+  );
+});
+
+test('full matrix covers open/monitor targets plus skipOpen', () => {
   const seen = new Set();
   for (const mode of ['paper', 'real']) {
     seen.add(resolveTickDispatch({ resolvedMode: mode, openPosition: null }));
@@ -55,9 +96,16 @@ test('full matrix covers all four dispatch targets', () => {
         openPosition: { executionMode: 'real' },
       })
     );
+    seen.add(
+      resolveTickDispatch({
+        resolvedMode: mode,
+        openPosition: null,
+        haltNewOpens: true,
+      })
+    );
   }
   assert.deepEqual(
     [...seen].sort(),
-    ['monitorPaper', 'monitorReal', 'openPaper', 'openReal'].sort()
+    ['monitorPaper', 'monitorReal', 'openPaper', 'openReal', 'skipOpen'].sort()
   );
 });

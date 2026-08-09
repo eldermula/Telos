@@ -7,6 +7,8 @@ import { StatusPill, botStatusTone } from '../../components/ui/StatusPill';
 import {
   confirmSyntheticLiveSession,
   getSyntheticSession,
+  haltSyntheticNewOpensSession,
+  resumeSyntheticNewOpensSession,
   startSyntheticSession,
   stopSyntheticSession,
   type SyntheticSession,
@@ -45,7 +47,9 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<'start' | 'stop' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<
+    'start' | 'stop' | 'halt' | 'resume' | null
+  >(null);
   const [confirmLiveOpen, setConfirmLiveOpen] = useState(false);
   const [confirmLivePending, setConfirmLivePending] = useState(false);
   const [liveAccount, setLiveAccount] = useState<LiveAccountInfo | null>(null);
@@ -136,16 +140,18 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
     (message: BotEventMessage) => {
       const payload = (message.payload ?? {}) as Record<string, unknown>;
       if (message.event === 'bot.status_changed') {
-        if (typeof payload.synthetic_status === 'string') {
-          setSession((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  synthetic_status: payload.synthetic_status as SyntheticSession['synthetic_status'],
-                }
-              : prev,
-          );
-        }
+        setSession((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev };
+          if (typeof payload.synthetic_status === 'string') {
+            next.synthetic_status =
+              payload.synthetic_status as SyntheticSession['synthetic_status'];
+          }
+          if (typeof payload.synthetic_halt_new_opens === 'boolean') {
+            next.synthetic_halt_new_opens = payload.synthetic_halt_new_opens;
+          }
+          return next;
+        });
         // Stop clears confirmation in the session response; re-check open real.
         void refreshOpenRealSynthetic();
         return;
@@ -193,6 +199,10 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
         setSession(await startSyntheticSession());
       } else if (confirmAction === 'stop') {
         setSession(await stopSyntheticSession());
+      } else if (confirmAction === 'halt') {
+        setSession(await haltSyntheticNewOpensSession());
+      } else if (confirmAction === 'resume') {
+        setSession(await resumeSyntheticNewOpensSession());
       }
       setConfirmAction(null);
     } catch (err) {
@@ -226,9 +236,33 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
   }
 
   const realAvailable = Boolean(session.synthetic_real_trading_available);
+  const haltNewOpensActive = Boolean(session.synthetic_halt_new_opens);
   const paperBalance = session.synthetic_active_trading_balance ?? 0;
   const paperPeak = session.synthetic_peak_equity ?? 0;
   const paperBootstrap = (session.synthetic_current_tier ?? 0) === 0;
+
+  const modalTitle =
+    confirmAction === 'start'
+      ? 'Start synthetics bot'
+      : confirmAction === 'stop'
+        ? 'Stop synthetics bot'
+        : confirmAction === 'halt'
+          ? 'Halt new trades'
+          : confirmAction === 'resume'
+            ? 'Resume new trades'
+            : '';
+  const modalConfirmLabel =
+    confirmAction === 'start'
+      ? 'Start synthetics'
+      : confirmAction === 'stop'
+        ? 'Stop synthetics'
+        : confirmAction === 'halt'
+          ? 'Halt new trades'
+          : confirmAction === 'resume'
+            ? 'Resume new trades'
+            : '';
+  const modalConfirmVariant =
+    confirmAction === 'stop' || confirmAction === 'halt' ? 'destructive' : 'primary';
 
   const displayBalance =
     mode === 'real' && liveAccount
@@ -261,9 +295,20 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
 
           <div className="flex flex-wrap gap-2.5">
             {running ? (
-              <Button variant="destructive" onClick={() => setConfirmAction('stop')}>
-                Stop synthetics
-              </Button>
+              <>
+                {haltNewOpensActive ? (
+                  <Button variant="secondary" onClick={() => setConfirmAction('resume')}>
+                    Resume new trades
+                  </Button>
+                ) : (
+                  <Button variant="secondary" onClick={() => setConfirmAction('halt')}>
+                    Halt new trades
+                  </Button>
+                )}
+                <Button variant="destructive" onClick={() => setConfirmAction('stop')}>
+                  Stop synthetics
+                </Button>
+              </>
             ) : (
               <>
                 <Button onClick={() => setConfirmAction('start')}>Start synthetics</Button>
@@ -323,12 +368,15 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
           <p className="type-caption mt-3 text-text-secondary">{liveAccountError}</p>
         ) : null}
 
-        <div className="mt-5">
+        <div className="mt-5 flex flex-wrap items-center gap-2.5">
           <StatusPill
             label={`synthetics: ${session.synthetic_status}`}
             tone={botStatusTone(session.synthetic_status)}
             pulse={running}
           />
+          {haltNewOpensActive ? (
+            <StatusPill label="New trades halted" tone="warning" />
+          ) : null}
         </div>
 
         {error ? <p className="type-caption mt-3 text-danger">{error}</p> : null}
@@ -343,11 +391,9 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
 
       <Modal
         open={confirmAction !== null}
-        title={
-          confirmAction === 'start' ? 'Start synthetics bot' : 'Stop synthetics bot'
-        }
-        confirmLabel={confirmAction === 'start' ? 'Start synthetics' : 'Stop synthetics'}
-        confirmVariant={confirmAction === 'start' ? 'primary' : 'destructive'}
+        title={modalTitle}
+        confirmLabel={modalConfirmLabel}
+        confirmVariant={modalConfirmVariant}
         confirming={pending}
         onClose={() => setConfirmAction(null)}
         onConfirm={() => void onConfirmAction()}
@@ -358,15 +404,35 @@ export function SyntheticsPaperPanel({ refreshKey = 0 }: { refreshKey?: number }
               ? 'Starts the synthetics bot. Live trading is confirmed — real orders may be placed on Volatility Indices against your linked Deriv MT5 account.'
               : 'Starts the synthetics paper bot on Volatility Indices. No real MT5 orders are placed while confirmation is inactive. Forex and crypto runtimes are separate.'}
           </p>
-        ) : (
+        ) : null}
+        {confirmAction === 'stop' ? (
           <p>
-            Stops the synthetics bot from opening new positions. Any open position stays
-            until it resolves.
+            This fully stops the synthetics bot — the tick loop ends, so Telos will no
+            longer monitor or reconcile an already-open position (broker SL/TP still
+            apply at the broker). Live-trading confirmation is cleared
             {mode === 'real'
-              ? ' Live-trading confirmation will be cleared and must be retyped before the next real-mode Start.'
+              ? ' and must be retyped before the next real-mode Start'
               : ''}
+            . To keep monitoring an open position while blocking new opens, use Halt
+            new trades instead.
           </p>
-        )}
+        ) : null}
+        {confirmAction === 'halt' ? (
+          <p>
+            Halt new trades keeps the synthetics bot running so it can still monitor
+            and reconcile an already-open position, but it will not open any new ones.
+            This is different from Stop synthetics, which ends the tick loop entirely
+            (including monitoring). You can Resume new trades later without
+            restarting.
+          </p>
+        ) : null}
+        {confirmAction === 'resume' ? (
+          <p>
+            Resume new trades clears the soft-halt. The synthetics bot stays running
+            and may open new positions again on the next eligible tick. Open positions
+            were already being monitored while halted.
+          </p>
+        ) : null}
       </Modal>
 
       <ConfirmSyntheticsLiveTradingModal

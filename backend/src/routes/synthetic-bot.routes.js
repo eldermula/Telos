@@ -12,6 +12,16 @@ router.use(authenticate);
 router.get('/session', rateLimit.read(), controller.getSyntheticSession);
 router.post('/start', rateLimit.write({ max: 5 }), controller.startSynthetic);
 router.post('/stop', rateLimit.write({ max: 5 }), controller.stopSynthetic);
+router.post(
+  '/halt-new-opens',
+  rateLimit.write({ max: 5 }),
+  controller.haltSyntheticNewOpens
+);
+router.post(
+  '/resume-new-opens',
+  rateLimit.write({ max: 5 }),
+  controller.resumeSyntheticNewOpens
+);
 router.post('/confirm-live', rateLimit.write({ max: 5 }), controller.confirmSyntheticLive);
 router.post(
   '/test-dispatch-real',

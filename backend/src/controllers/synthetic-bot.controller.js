@@ -49,6 +49,24 @@ async function stopSynthetic(req, res, next) {
   }
 }
 
+async function haltSyntheticNewOpens(req, res, next) {
+  try {
+    const data = await syntheticTradingEngine.haltSyntheticNewOpens(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function resumeSyntheticNewOpens(req, res, next) {
+  try {
+    const data = await syntheticTradingEngine.resumeSyntheticNewOpens(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function confirmSyntheticLive(req, res, next) {
   try {
     const body = parseBody(confirmLiveTradingSchema, req.body);
@@ -107,6 +125,8 @@ module.exports = {
   getSyntheticSession,
   startSynthetic,
   stopSynthetic,
+  haltSyntheticNewOpens,
+  resumeSyntheticNewOpens,
   confirmSyntheticLive,
   testDispatchSyntheticReal,
   testCloseSyntheticReal,

@@ -2,6 +2,12 @@
 
 ## Phase 5 — Core Frontend (in progress)
 
+**2026-08-10**
+
+- **XAUUSD contract-size fallback safety:** `real-lot-sizing.js` still prefers live `symbolInfo.trade_contract_size` (Deriv gold = 100). When that field is missing/zero, fallback is now symbol-aware — gold-family (`XAU*`) → 100, FX → 100000 — and logs a loud safety-net warning. Prevents a 1000× gold sizing error if the connector omits the field. Unit coverage for the missing/`0` XAUUSD cases.
+- **Halt new trades (soft-halt), forex + synthetics:** Migration `022` adds `halt_new_opens` / `synthetic_halt_new_opens`. Distinct from Stop: tick loop keeps running so `monitorReal`/`monitorPaper` continue for an already-open position, while `openReal`/`openPaper` return `skipOpen`. APIs: `POST /trading/session/halt-new-opens|resume-new-opens` and `POST /bot/synthetic/halt-new-opens|resume-new-opens`. UI: “Halt new trades” / “Resume new trades” with confirmation modals that spell out the difference from Stop; Stop copy corrected to say monitoring also ends. Start/Stop clear the soft-halt flag. Unit tests for tick-dispatch `skipOpen` and both runtimes.
+- **`REAL_MAX_LOT` unchanged (deliberate product decision still pending):** left at default `0.01`, well below Deriv broker max (20 FX / 10 XAU). Safety ceiling, not a bug — no change in this task.
+
 **2026-08-09**
 
 - **Synthetics manual test-dispatch: admin time-limited toggle (retires env):** Fully retires `SYNTHETIC_ALLOW_MANUAL_TEST_TRADE` (removed from `env.js` and its production boot tripwire — leftover env no longer blocks a production restart). Migration `021` adds `synthetic_demo_dispatch_config.manual_test_trade_enabled_until`. Admin routes `GET/POST /admin/synthetic/demo-manual-trade-status|enable|disable` (same 30-minute max / JWT gate as Layers 2/3). `POST /bot/synthetic/test-dispatch-real` and `test-close-real` read `isManualTestTradeEnabled()` from DB/cache. Admin UI: third “Manual test-dispatch / close” section on `/admin` → Demo dispatch.

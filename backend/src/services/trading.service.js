@@ -62,6 +62,14 @@ async function stopSession(userId) {
   return tradingEngine.stopSession(userId);
 }
 
+async function haltNewOpens(userId) {
+  return tradingEngine.haltNewOpens(userId);
+}
+
+async function resumeNewOpens(userId) {
+  return tradingEngine.resumeNewOpens(userId);
+}
+
 async function confirmLive(userId, confirmationPhrase) {
   return tradingEngine.confirmLiveTrading(userId, confirmationPhrase);
 }
@@ -106,6 +114,8 @@ module.exports = {
   getSession,
   startSession,
   stopSession,
+  haltNewOpens,
+  resumeNewOpens,
   confirmLive,
   getLiveAccountInfo,
   getAttachedAccountInfo,

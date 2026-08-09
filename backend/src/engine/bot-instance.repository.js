@@ -46,6 +46,9 @@ function mapBotInstance(row) {
     status: row.status,
     crypto_status: row.crypto_status || 'stopped',
     synthetic_status: row.synthetic_status || 'stopped',
+    // Soft-halt flags — block new opens while tick loop / monitoring continues.
+    halt_new_opens: row.halt_new_opens === true,
+    synthetic_halt_new_opens: row.synthetic_halt_new_opens === true,
     active_strategy_mode: row.active_strategy_mode,
     initial_balance: toNumber(row.initial_balance),
     active_trading_balance: toNumber(row.active_trading_balance),
@@ -89,7 +92,8 @@ function mapBotInstance(row) {
 }
 
 const SELECT_COLUMNS = `
-  bi.id, bi.user_id, bi.broker_connection_id, bi.status, bi.crypto_status, bi.synthetic_status, bi.active_strategy_mode,
+  bi.id, bi.user_id, bi.broker_connection_id, bi.status, bi.crypto_status, bi.synthetic_status,
+  bi.halt_new_opens, bi.synthetic_halt_new_opens, bi.active_strategy_mode,
   bi.initial_balance, bi.active_trading_balance, bi.peak_equity, bi.current_tier,
   bi.synthetic_initial_balance, bi.synthetic_active_trading_balance, bi.synthetic_peak_equity,
   bi.synthetic_current_tier, bi.synthetic_live_trading_confirmed_at,
@@ -99,7 +103,8 @@ const SELECT_COLUMNS = `
 `;
 
 const RETURNING_COLUMNS = `
-  id, user_id, broker_connection_id, status, crypto_status, synthetic_status, active_strategy_mode,
+  id, user_id, broker_connection_id, status, crypto_status, synthetic_status,
+  halt_new_opens, synthetic_halt_new_opens, active_strategy_mode,
   initial_balance, active_trading_balance, peak_equity, current_tier,
   synthetic_initial_balance, synthetic_active_trading_balance, synthetic_peak_equity,
   synthetic_current_tier, synthetic_live_trading_confirmed_at,
@@ -225,6 +230,8 @@ async function updateStatusFields(botInstanceId, fields) {
     'status',
     'crypto_status',
     'synthetic_status',
+    'halt_new_opens',
+    'synthetic_halt_new_opens',
     'active_strategy_mode',
     'active_trading_balance',
     'peak_equity',

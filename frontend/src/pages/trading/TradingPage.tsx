@@ -24,11 +24,15 @@ export function TradingPage() {
     actionPending,
     start,
     stop,
+    haltNewOpens,
+    resumeNewOpens,
     confirmLive,
     reload,
     applySessionPatch,
   } = useTradingSession();
-  const [confirmAction, setConfirmAction] = useState<'start' | 'stop' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<
+    'start' | 'stop' | 'halt' | 'resume' | null
+  >(null);
   const [confirmLiveOpen, setConfirmLiveOpen] = useState(false);
   const [tradeRefreshKey, setTradeRefreshKey] = useState(0);
   const { connectionState } = useBotEventsContext();
@@ -42,12 +46,20 @@ export function TradingPage() {
           if (typeof payload.status === 'string') {
             applySessionPatch({ status: payload.status as 'running' | 'stopped' | 'error' });
           }
+          if (typeof payload.halt_new_opens === 'boolean') {
+            applySessionPatch({ halt_new_opens: payload.halt_new_opens });
+          }
           if (typeof payload.synthetic_status === 'string') {
             applySessionPatch({
               synthetic_status: payload.synthetic_status as
                 | 'running'
                 | 'stopped'
                 | 'error',
+            });
+          }
+          if (typeof payload.synthetic_halt_new_opens === 'boolean') {
+            applySessionPatch({
+              synthetic_halt_new_opens: payload.synthetic_halt_new_opens,
             });
           }
           break;
@@ -153,20 +165,48 @@ export function TradingPage() {
   async function onConfirm() {
     if (confirmAction === 'start') await start();
     if (confirmAction === 'stop') await stop();
+    if (confirmAction === 'halt') await haltNewOpens();
+    if (confirmAction === 'resume') await resumeNewOpens();
     setConfirmAction(null);
   }
 
   const isRunning = session?.status === 'running';
+  const haltNewOpensActive = Boolean(session?.halt_new_opens);
   const liveConfirmed = Boolean(session?.live_trading_confirmed_at);
+
+  const modalTitle =
+    confirmAction === 'start'
+      ? 'Start Trading'
+      : confirmAction === 'stop'
+        ? 'Stop Trading'
+        : confirmAction === 'halt'
+          ? 'Halt new trades'
+          : confirmAction === 'resume'
+            ? 'Resume new trades'
+            : '';
+  const modalConfirmLabel = modalTitle;
+  const modalConfirmVariant =
+    confirmAction === 'stop' || confirmAction === 'halt' ? 'destructive' : 'primary';
 
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="type-display-sm">Trading</h1>
         {isRunning ? (
-          <Button variant="destructive" onClick={() => setConfirmAction('stop')}>
-            Stop Trading
-          </Button>
+          <div className="flex flex-wrap gap-2.5">
+            {haltNewOpensActive ? (
+              <Button variant="secondary" onClick={() => setConfirmAction('resume')}>
+                Resume new trades
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={() => setConfirmAction('halt')}>
+                Halt new trades
+              </Button>
+            )}
+            <Button variant="destructive" onClick={() => setConfirmAction('stop')}>
+              Stop Trading
+            </Button>
+          </div>
         ) : (
           <Button onClick={onStartClick}>Start Trading</Button>
         )}
@@ -186,6 +226,9 @@ export function TradingPage() {
               label={session.active_strategy_mode}
               tone={strategyModeTone(session.active_strategy_mode)}
             />
+            {haltNewOpensActive ? (
+              <StatusPill label="New trades halted" tone="warning" />
+            ) : null}
             {session.real_trading_available ? (
               <StatusPill
                 label={liveConfirmed ? 'Live confirmed' : 'Live available'}
@@ -240,10 +283,15 @@ export function TradingPage() {
 
       <Modal
         open={confirmAction !== null}
-        title={confirmAction === 'start' ? 'Start Trading' : 'Stop Trading'}
-        confirmLabel={confirmAction === 'start' ? 'Start Trading' : 'Stop Trading'}
-        confirmVariant={confirmAction === 'start' ? 'primary' : 'destructive'}
-        confirming={actionPending === 'start' || actionPending === 'stop'}
+        title={modalTitle}
+        confirmLabel={modalConfirmLabel}
+        confirmVariant={modalConfirmVariant}
+        confirming={
+          actionPending === 'start' ||
+          actionPending === 'stop' ||
+          actionPending === 'halt' ||
+          actionPending === 'resume'
+        }
         onClose={() => setConfirmAction(null)}
         onConfirm={() => void onConfirm()}
       >
@@ -253,14 +301,33 @@ export function TradingPage() {
               ? 'Live trading is confirmed for this session. Starting the bot may place real orders against your MT5 account.'
               : 'This starts the automated trading bot on your linked broker account. New trades may be placed according to the active strategy.'}
           </p>
-        ) : (
+        ) : null}
+        {confirmAction === 'stop' ? (
           <p>
-            This stops the bot from placing new trades. Open positions stay open.
-            {liveConfirmed
-              ? ' Live-trading confirmation will be cleared and must be retyped before the next real-mode Start.'
-              : ''}
+            This fully stops the bot — the tick loop ends, so Telos will no longer
+            monitor or reconcile an already-open position (broker SL/TP still apply
+            at the broker). Live-trading confirmation is cleared
+            {liveConfirmed ? ' and must be retyped before the next real-mode Start' : ''}
+            . To keep monitoring an open position while blocking new opens, use Halt
+            new trades instead.
           </p>
-        )}
+        ) : null}
+        {confirmAction === 'halt' ? (
+          <p>
+            Halt new trades keeps the bot running so it can still monitor and
+            reconcile an already-open position, but it will not open any new ones.
+            This is different from Stop Trading, which ends the tick loop entirely
+            (including monitoring). You can Resume new trades later without
+            restarting.
+          </p>
+        ) : null}
+        {confirmAction === 'resume' ? (
+          <p>
+            Resume new trades clears the soft-halt. The bot stays running and may
+            open new positions again on the next eligible tick. Open positions were
+            already being monitored while halted.
+          </p>
+        ) : null}
       </Modal>
 
       <ConfirmLiveTradingModal

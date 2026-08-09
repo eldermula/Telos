@@ -18,6 +18,20 @@ export function stopSession() {
   return apiRequest<TradingSession>('/trading/session/stop', { method: 'POST' });
 }
 
+/** Soft-halt: keep monitoring open positions; block new opens. */
+export function haltNewOpensSession() {
+  return apiRequest<TradingSession>('/trading/session/halt-new-opens', {
+    method: 'POST',
+  });
+}
+
+/** Clear soft-halt while leaving the bot running. */
+export function resumeNewOpensSession() {
+  return apiRequest<TradingSession>('/trading/session/resume-new-opens', {
+    method: 'POST',
+  });
+}
+
 /**
  * Option 2 Layer 2 opt-in. Phrase must match the server-side constant
  * exactly (case-sensitive). Server rejects if the instance isn't

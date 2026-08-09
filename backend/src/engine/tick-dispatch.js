@@ -10,12 +10,20 @@
  * frozen-at-entry principle as appliedRisk. Missing executionMode on
  * a legacy in-memory shape defaults to 'paper'.
  *
- * Returns one of: 'openPaper' | 'openReal' | 'monitorPaper' | 'monitorReal'
+ * `haltNewOpens` (soft-halt): when true and there is no open position,
+ * returns 'skipOpen' so the tick loop stays alive for monitoring but
+ * does not call openReal/openPaper. Distinct from Stop (timer cleared).
+ *
+ * Returns one of:
+ *   'openPaper' | 'openReal' | 'monitorPaper' | 'monitorReal' | 'skipOpen'
  */
-function resolveTickDispatch({ resolvedMode, openPosition }) {
+function resolveTickDispatch({ resolvedMode, openPosition, haltNewOpens = false }) {
   if (openPosition) {
     const frozen = openPosition.executionMode === 'real' ? 'real' : 'paper';
     return frozen === 'real' ? 'monitorReal' : 'monitorPaper';
+  }
+  if (haltNewOpens === true) {
+    return 'skipOpen';
   }
   return resolvedMode === 'real' ? 'openReal' : 'openPaper';
 }

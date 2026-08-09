@@ -66,6 +66,7 @@ async function startSyntheticSession(userId, runtimeOptions = {}) {
 
   const updated = await botInstanceRepository.updateStatusFields(instance.id, {
     synthetic_status: 'running',
+    synthetic_halt_new_opens: false,
   });
   await startSyntheticRuntime(updated, runtimeOptions);
   const afterStart = await botInstanceRepository.findById(instance.id);
@@ -75,6 +76,7 @@ async function startSyntheticSession(userId, runtimeOptions = {}) {
     status: sessionRow.status,
     crypto_status: sessionRow.crypto_status,
     synthetic_status: 'running',
+    synthetic_halt_new_opens: false,
     timestamp: cached.updated_at,
   });
   await notificationsService.maybeNotifyUser(
@@ -98,6 +100,7 @@ async function stopSyntheticSession(userId) {
   const updated = await botInstanceRepository.updateStatusFields(instance.id, {
     ...(wasRunning ? { synthetic_status: 'stopped' } : {}),
     synthetic_live_trading_confirmed_at: null,
+    synthetic_halt_new_opens: false,
   });
   const cached = await botStatusCache.setStatus(updated);
 
@@ -106,6 +109,7 @@ async function stopSyntheticSession(userId) {
       status: updated.status,
       crypto_status: updated.crypto_status,
       synthetic_status: 'stopped',
+      synthetic_halt_new_opens: false,
       timestamp: cached.updated_at,
     });
     await notificationsService.maybeNotifyUser(
@@ -114,6 +118,61 @@ async function stopSyntheticSession(userId) {
       'Synthetics paper bot stopped.'
     );
   }
+  return cached;
+}
+
+/**
+ * Soft-halt for synthetics — tick loop + monitoring continue; new opens blocked.
+ */
+async function haltSyntheticNewOpens(userId) {
+  const instance = await ensureBotInstance(userId);
+  if (instance.synthetic_status !== 'running') {
+    throw new AppError(
+      409,
+      'HALT_REQUIRES_RUNNING',
+      'Halt new trades only applies while the synthetics bot is running — use Start first'
+    );
+  }
+  if (instance.synthetic_halt_new_opens === true) {
+    return botStatusCache.setStatus(instance);
+  }
+  const updated = await botInstanceRepository.updateStatusFields(instance.id, {
+    synthetic_halt_new_opens: true,
+  });
+  const cached = await botStatusCache.setStatus(updated);
+  await publishBotEvent(updated.id, 'bot.status_changed', {
+    status: updated.status,
+    crypto_status: updated.crypto_status,
+    synthetic_status: updated.synthetic_status,
+    synthetic_halt_new_opens: true,
+    timestamp: cached.updated_at,
+  });
+  return cached;
+}
+
+async function resumeSyntheticNewOpens(userId) {
+  const instance = await ensureBotInstance(userId);
+  if (instance.synthetic_status !== 'running') {
+    throw new AppError(
+      409,
+      'RESUME_REQUIRES_RUNNING',
+      'Resume new trades only applies while the synthetics bot is running'
+    );
+  }
+  if (instance.synthetic_halt_new_opens !== true) {
+    return botStatusCache.setStatus(instance);
+  }
+  const updated = await botInstanceRepository.updateStatusFields(instance.id, {
+    synthetic_halt_new_opens: false,
+  });
+  const cached = await botStatusCache.setStatus(updated);
+  await publishBotEvent(updated.id, 'bot.status_changed', {
+    status: updated.status,
+    crypto_status: updated.crypto_status,
+    synthetic_status: updated.synthetic_status,
+    synthetic_halt_new_opens: false,
+    timestamp: cached.updated_at,
+  });
   return cached;
 }
 
@@ -511,6 +570,8 @@ module.exports = {
   getSyntheticSessionForUser,
   startSyntheticSession,
   stopSyntheticSession,
+  haltSyntheticNewOpens,
+  resumeSyntheticNewOpens,
   confirmSyntheticLiveTrading,
   testDispatchSyntheticReal,
   testCloseSyntheticReal,

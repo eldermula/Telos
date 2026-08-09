@@ -4,6 +4,8 @@ import type { TradingSession } from '../../types/trading';
 /** Session shape from bot-status cache — includes Batch 1 synthetic ledger/confirm fields. */
 export type SyntheticSession = TradingSession & {
   synthetic_status: 'running' | 'stopped' | 'error';
+  /** Soft-halt for synthetics — monitoring continues; new opens blocked. */
+  synthetic_halt_new_opens?: boolean;
   synthetic_real_trading_available: boolean;
   /** Backend TTL-filtered; null means not confirmed / expired. */
   synthetic_live_trading_confirmed_at: string | null;
@@ -24,6 +26,18 @@ export function startSyntheticSession() {
 
 export function stopSyntheticSession() {
   return apiRequest<SyntheticSession>('/bot/synthetic/stop', { method: 'POST' });
+}
+
+export function haltSyntheticNewOpensSession() {
+  return apiRequest<SyntheticSession>('/bot/synthetic/halt-new-opens', {
+    method: 'POST',
+  });
+}
+
+export function resumeSyntheticNewOpensSession() {
+  return apiRequest<SyntheticSession>('/bot/synthetic/resume-new-opens', {
+    method: 'POST',
+  });
 }
 
 /**

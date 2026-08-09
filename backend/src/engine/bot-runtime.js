@@ -539,16 +539,20 @@ class BotRuntime {
     }
     this._tickInFlight = true;
     try {
-      const resolvedMode = await this._resolveExecutionModeForTick();
+      const { resolvedMode, haltNewOpens } = await this._resolveTickContext();
       const dispatch = resolveTickDispatch({
         resolvedMode,
         openPosition: this.openPosition,
+        haltNewOpens,
       });
       switch (dispatch) {
         case 'monitorPaper':
           return await this._monitorOpenPositionPaper();
         case 'monitorReal':
           return await this._monitorOpenPositionReal();
+        case 'skipOpen':
+          // Soft-halt: keep the loop (and any later monitor ticks) alive.
+          return null;
         case 'openReal':
           return await this._maybeOpenPositionReal();
         case 'openPaper':
@@ -562,20 +566,29 @@ class BotRuntime {
 
   /**
    * Layer 3 — per-tick freshness. Reads account_type +
-   * live_trading_confirmed_at from Postgres every tick (not cached at
-   * Start), plus the two env flags.
+   * live_trading_confirmed_at + halt_new_opens from Postgres every tick
+   * (not cached at Start), plus the two env flags.
    */
-  async _resolveExecutionModeForTick() {
-    const instance = await botInstanceRepository.findById(this.botInstanceId);
+  async _resolveTickContext() {
+    const instance = await this._realOpen.findInstanceById(this.botInstanceId);
     if (!instance) {
-      return 'paper';
+      return { resolvedMode: 'paper', haltNewOpens: false };
     }
-    return resolveExecutionMode({
-      realTradingEnabled: REAL_TRADING_ENABLED,
-      accountType: instance.account_type,
-      liveTradingConfirmedAt: instance.live_trading_confirmed_at,
-      allowDemoRealExecution: REAL_TRADING_ALLOW_DEMO,
-    });
+    return {
+      resolvedMode: resolveExecutionMode({
+        realTradingEnabled: REAL_TRADING_ENABLED,
+        accountType: instance.account_type,
+        liveTradingConfirmedAt: instance.live_trading_confirmed_at,
+        allowDemoRealExecution: REAL_TRADING_ALLOW_DEMO,
+      }),
+      haltNewOpens: instance.halt_new_opens === true,
+    };
+  }
+
+  /** @deprecated use _resolveTickContext — kept for any external callers/tests */
+  async _resolveExecutionModeForTick() {
+    const { resolvedMode } = await this._resolveTickContext();
+    return resolvedMode;
   }
 
   /**
@@ -697,6 +710,7 @@ class BotRuntime {
         appliedRisk: entryResult.riskResult.appliedRisk,
         entryPrice: quoteEntry,
         stopPrice,
+        symbol,
         symbolInfo,
         maxLot: deps.maxLot,
       });

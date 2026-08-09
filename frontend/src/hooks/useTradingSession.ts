@@ -11,9 +11,9 @@ export function useTradingSession() {
   const [brokerGate, setBrokerGate] = useState<BrokerGate>('checking');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionPending, setActionPending] = useState<'start' | 'stop' | 'confirm-live' | null>(
-    null,
-  );
+  const [actionPending, setActionPending] = useState<
+    'start' | 'stop' | 'halt' | 'resume' | 'confirm-live' | null
+  >(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -84,6 +84,40 @@ export function useTradingSession() {
     }
   }, []);
 
+  const haltNewOpens = useCallback(async () => {
+    setActionPending('halt');
+    setError(null);
+    try {
+      const updated = await tradingApi.haltNewOpensSession();
+      setSession(updated);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : 'Could not halt new trades. Try again.',
+      );
+      throw err;
+    } finally {
+      setActionPending(null);
+    }
+  }, []);
+
+  const resumeNewOpens = useCallback(async () => {
+    setActionPending('resume');
+    setError(null);
+    try {
+      const updated = await tradingApi.resumeNewOpensSession();
+      setSession(updated);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not resume new trades. Try again.',
+      );
+      throw err;
+    } finally {
+      setActionPending(null);
+    }
+  }, []);
+
   const confirmLive = useCallback(async (confirmationPhrase: string) => {
     setActionPending('confirm-live');
     setError(null);
@@ -119,6 +153,8 @@ export function useTradingSession() {
     actionPending,
     start,
     stop,
+    haltNewOpens,
+    resumeNewOpens,
     confirmLive,
     reload: load,
     applySessionPatch,

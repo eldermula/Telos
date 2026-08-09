@@ -45,6 +45,24 @@ async function stopSession(req, res, next) {
   }
 }
 
+async function haltNewOpens(req, res, next) {
+  try {
+    const data = await tradingService.haltNewOpens(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function resumeNewOpens(req, res, next) {
+  try {
+    const data = await tradingService.resumeNewOpens(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function confirmLive(req, res, next) {
   try {
     const body = parseBody(confirmLiveTradingSchema, req.body);
@@ -115,6 +133,8 @@ module.exports = {
   getSession,
   startSession,
   stopSession,
+  haltNewOpens,
+  resumeNewOpens,
   confirmLive,
   getAccountInfo,
   getAttachedAccountInfo,

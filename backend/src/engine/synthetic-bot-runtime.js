@@ -472,7 +472,7 @@ class SyntheticBotRuntime {
     if (this._tickInFlight) return null;
     this._tickInFlight = true;
     try {
-      const resolvedMode = await this._resolveExecutionModeForTick();
+      const { resolvedMode, haltNewOpens } = await this._resolveTickContext();
       // Each tick: reconcile orphaned DB real opens / anomalous broker positions
       // (E.6-style + defensive orphan scan). Cheap when no open real rows.
       await this._reconcileSyntheticRealAgainstBroker();
@@ -480,12 +480,16 @@ class SyntheticBotRuntime {
       const dispatch = resolveTickDispatch({
         resolvedMode,
         openPosition: this.openPosition,
+        haltNewOpens,
       });
       switch (dispatch) {
         case 'monitorPaper':
           return await this._monitorOpenPositionPaper();
         case 'monitorReal':
           return await this._monitorOpenPositionReal();
+        case 'skipOpen':
+          // Soft-halt: keep the loop (and any later monitor ticks) alive.
+          return null;
         case 'openReal':
           return await this._maybeOpenPositionReal();
         case 'openPaper':
@@ -497,7 +501,7 @@ class SyntheticBotRuntime {
     }
   }
 
-  async _resolveExecutionModeForTick() {
+  async _resolveTickContext() {
     const instance = await this._real.findInstanceById(this.botInstanceId);
     if (!instance) {
       if (NODE_ENV !== 'production') {
@@ -507,7 +511,7 @@ class SyntheticBotRuntime {
           bot_instance_id: this.botInstanceId,
         });
       }
-      return 'paper';
+      return { resolvedMode: 'paper', haltNewOpens: false };
     }
 
     const confirmationActive = isConfirmationActive(
@@ -537,6 +541,7 @@ class SyntheticBotRuntime {
     if (NODE_ENV !== 'production') {
       console.info('[synthetic-bot-runtime] tick', {
         resolvedMode,
+        haltNewOpens: instance.synthetic_halt_new_opens === true,
         account_type: instance.account_type,
         synthetic_real_trading_enabled: SYNTHETIC_REAL_TRADING_ENABLED === true,
         synthetic_demo_dispatch_enabled: allowDemoRealExecution,
@@ -546,6 +551,15 @@ class SyntheticBotRuntime {
       });
     }
 
+    return {
+      resolvedMode,
+      haltNewOpens: instance.synthetic_halt_new_opens === true,
+    };
+  }
+
+  /** @deprecated use _resolveTickContext */
+  async _resolveExecutionModeForTick() {
+    const { resolvedMode } = await this._resolveTickContext();
     return resolvedMode;
   }
 
