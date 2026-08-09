@@ -29,14 +29,16 @@ const {
   shrinkDailyDrawdownMarkersForProfitLock,
 } = require('./daily-drawdown');
 const {
+  NODE_ENV,
   SYNTHETIC_REAL_TRADING_ENABLED,
-  REAL_TRADING_ALLOW_DEMO,
+  SYNTHETIC_REAL_TRADING_ALLOW_DEMO,
   REAL_CONNECTION_MAX_AGE_HOURS,
 } = require('../config/env');
 const {
   resolveExecutionMode,
   resolveExpectedAccountTypeForLayer0,
 } = require('./execution-mode');
+const { isConfirmationActive } = require('./live-trading-confirmation');
 const { resolveTickDispatch } = require('./tick-dispatch');
 const { getMatchedAccountInfoForBotInstance } = require('./broker-account.service');
 const { isConnectionFresh } = require('./connection-freshness');
@@ -479,14 +481,52 @@ class SyntheticBotRuntime {
   async _resolveExecutionModeForTick() {
     const instance = await this._real.findInstanceById(this.botInstanceId);
     if (!instance) {
+      if (NODE_ENV !== 'production') {
+        console.info('[synthetic-bot-runtime] tick', {
+          resolvedMode: 'paper',
+          reason: 'no_instance',
+          bot_instance_id: this.botInstanceId,
+        });
+      }
       return 'paper';
     }
-    return resolveExecutionMode({
+
+    const confirmationActive = isConfirmationActive(
+      instance.synthetic_live_trading_confirmed_at
+    );
+    const allowDemoRealExecution = SYNTHETIC_REAL_TRADING_ALLOW_DEMO === true;
+    const resolvedMode = resolveExecutionMode({
       realTradingEnabled: SYNTHETIC_REAL_TRADING_ENABLED,
       accountType: instance.account_type,
       liveTradingConfirmedAt: instance.synthetic_live_trading_confirmed_at,
-      allowDemoRealExecution: REAL_TRADING_ALLOW_DEMO,
+      allowDemoRealExecution,
     });
+
+    const usedDemoBypass =
+      resolvedMode === 'real' &&
+      instance.account_type === 'demo' &&
+      allowDemoRealExecution;
+    if (usedDemoBypass) {
+      console.warn(
+        '[synthetic-bot-runtime] real dispatch ENABLED VIA SYNTHETIC_REAL_TRADING_ALLOW_DEMO ' +
+          `(testing-only demo bypass) bot_instance_id=${this.botInstanceId} ` +
+          `user_id=${this.userId} account_type=demo`
+      );
+    }
+
+    if (NODE_ENV !== 'production') {
+      console.info('[synthetic-bot-runtime] tick', {
+        resolvedMode,
+        account_type: instance.account_type,
+        synthetic_real_trading_enabled: SYNTHETIC_REAL_TRADING_ENABLED === true,
+        synthetic_real_trading_allow_demo: allowDemoRealExecution,
+        confirmation_active: confirmationActive,
+        open_position: Boolean(this.openPosition),
+        bot_instance_id: this.botInstanceId,
+      });
+    }
+
+    return resolvedMode;
   }
 
   /**
