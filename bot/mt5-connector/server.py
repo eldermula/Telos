@@ -14,6 +14,8 @@ Internal-only — never expose this port through Cloudflare Tunnel.
 from __future__ import annotations
 
 import json
+import os
+import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -41,6 +43,20 @@ ACCOUNT_TRADE_MODES = (
     if mt5
     else {}
 )
+
+
+def _diag_on():
+    return os.environ.get("DIAG_TIMING") == "1"
+
+
+def _ms(t0):
+    return round((time.perf_counter() - t0) * 1000.0, 2)
+
+
+def _merge_diag(body: dict, diag: dict | None) -> dict:
+    if not diag:
+        return body
+    return {**body, "_diag_timing": dict(diag)}
 
 
 def validate(payload: dict) -> tuple[int, dict]:
@@ -131,28 +147,42 @@ def send_with_filling_retry(request: dict):
 
 
 def get_symbol_info(symbol: str | None) -> tuple[int, dict]:
+    handler_t0 = time.perf_counter() if _diag_on() else None
+    diag: dict | None = {} if _diag_on() else None
+
     if mt5 is None:
         return 500, {"ok": False, "message": "MetaTrader5 package is not installed."}
     if not symbol:
         return 400, {"ok": False, "message": "symbol query param is required"}
 
+    init_t0 = time.perf_counter()
     if not mt5.initialize():
         err = mt5.last_error()
         return 422, {"ok": False, "message": f"MT5 initialize failed: {err}"}
+    if diag is not None:
+        diag["initialize_ms"] = _ms(init_t0)
 
+    status = 422
+    body: dict = {"ok": False, "message": "symbol_info unavailable"}
     try:
+        work_t0 = time.perf_counter()
         if not mt5.symbol_select(symbol, True):
-            return 422, {"ok": False, "message": f"Unable to select symbol {symbol}"}
+            body = {"ok": False, "message": f"Unable to select symbol {symbol}"}
+            return status, body
         info = mt5.symbol_info(symbol)
         if info is None:
-            return 422, {"ok": False, "message": f"symbol_info unavailable for {symbol}"}
+            body = {"ok": False, "message": f"symbol_info unavailable for {symbol}"}
+            return status, body
         tick = mt5.symbol_info_tick(symbol)
         # trade_contract_size: required for honest Module 7 sizing on
         # non-FX CFDs (crypto Increment D; also fixes silent FX-default
         # for gold). Read-only; no order path. Attribute name matches
         # MetaTrader5's symbol_info.trade_contract_size.
         trade_contract_size = getattr(info, "trade_contract_size", None)
-        return 200, {
+        if diag is not None:
+            diag["work_ms"] = _ms(work_t0)
+        status = 200
+        body = {
             "ok": True,
             "symbol": symbol,
             "volume_min": info.volume_min,
@@ -170,7 +200,16 @@ def get_symbol_info(symbol: str | None) -> tuple[int, dict]:
             "tick_time": tick.time if tick else None,
         }
     finally:
+        shutdown_t0 = time.perf_counter()
         mt5.shutdown()
+        if diag is not None:
+            diag["shutdown_ms"] = _ms(shutdown_t0)
+            if handler_t0 is not None:
+                diag["total_handler_ms"] = _ms(handler_t0)
+
+    if body.get("ok"):
+        body = _merge_diag(body, diag)
+    return status, body
 
 
 # 08_Bot_Architecture.md Section 9.0/Module 2 — historical bars for
@@ -195,6 +234,9 @@ MAX_RATES_COUNT = 1000
 
 
 def get_rates(symbol: str | None, timeframe_raw: str | None, count_raw: str | None) -> tuple[int, dict]:
+    handler_t0 = time.perf_counter() if _diag_on() else None
+    diag: dict | None = {} if _diag_on() else None
+
     if mt5 is None:
         return 500, {"ok": False, "message": "MetaTrader5 package is not installed."}
     if not symbol:
@@ -215,19 +257,30 @@ def get_rates(symbol: str | None, timeframe_raw: str | None, count_raw: str | No
     if count <= 0 or count > MAX_RATES_COUNT:
         return 400, {"ok": False, "message": f"count must be between 1 and {MAX_RATES_COUNT}"}
 
+    init_t0 = time.perf_counter()
     if not mt5.initialize():
         err = mt5.last_error()
         return 422, {"ok": False, "message": f"MT5 initialize failed: {err}"}
+    if diag is not None:
+        diag["initialize_ms"] = _ms(init_t0)
 
+    status = 422
+    body: dict = {"ok": False, "message": "No rates available"}
     try:
+        work_t0 = time.perf_counter()
         if not mt5.symbol_select(symbol, True):
-            return 422, {"ok": False, "message": f"Unable to select symbol {symbol}"}
+            body = {"ok": False, "message": f"Unable to select symbol {symbol}"}
+            return status, body
         rates = mt5.copy_rates_from_pos(symbol, tf, 0, count)
         if rates is None or len(rates) == 0:
             err = mt5.last_error()
-            return 422, {"ok": False, "message": f"No rates available for {symbol}: {err}"}
+            body = {"ok": False, "message": f"No rates available for {symbol}: {err}"}
+            return status, body
 
-        return 200, {
+        if diag is not None:
+            diag["work_ms"] = _ms(work_t0)
+        status = 200
+        body = {
             "ok": True,
             "symbol": symbol,
             "timeframe": timeframe,
@@ -244,21 +297,41 @@ def get_rates(symbol: str | None, timeframe_raw: str | None, count_raw: str | No
             ],
         }
     finally:
+        shutdown_t0 = time.perf_counter()
         mt5.shutdown()
+        if diag is not None:
+            diag["shutdown_ms"] = _ms(shutdown_t0)
+            if handler_t0 is not None:
+                diag["total_handler_ms"] = _ms(handler_t0)
+
+    if body.get("ok"):
+        body = _merge_diag(body, diag)
+    return status, body
 
 
 def list_positions(symbol: str | None) -> tuple[int, dict]:
+    handler_t0 = time.perf_counter() if _diag_on() else None
+    diag: dict | None = {} if _diag_on() else None
+
     if mt5 is None:
         return 500, {"ok": False, "message": "MetaTrader5 package is not installed."}
 
+    init_t0 = time.perf_counter()
     if not mt5.initialize():
         err = mt5.last_error()
         return 422, {"ok": False, "message": f"MT5 initialize failed: {err}"}
+    if diag is not None:
+        diag["initialize_ms"] = _ms(init_t0)
 
+    status = 200
+    body: dict = {"ok": True, "positions": []}
     try:
+        work_t0 = time.perf_counter()
         positions = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
         positions = positions or []
-        return 200, {
+        if diag is not None:
+            diag["work_ms"] = _ms(work_t0)
+        body = {
             "ok": True,
             "positions": [
                 {
@@ -275,7 +348,16 @@ def list_positions(symbol: str | None) -> tuple[int, dict]:
             ],
         }
     finally:
+        shutdown_t0 = time.perf_counter()
         mt5.shutdown()
+        if diag is not None:
+            diag["shutdown_ms"] = _ms(shutdown_t0)
+            if handler_t0 is not None:
+                diag["total_handler_ms"] = _ms(handler_t0)
+
+    if body.get("ok"):
+        body = _merge_diag(body, diag)
+    return status, body
 
 
 def place_order(payload: dict) -> tuple[int, dict]:
