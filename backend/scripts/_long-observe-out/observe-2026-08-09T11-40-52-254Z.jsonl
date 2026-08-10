@@ -1,0 +1,2 @@
+{"t":"2026-08-09T11:40:52.256Z","event":"boot","watch_ms":480000,"snapshot_ms":1200000,"log_path":"C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\scripts\\_long-observe-out\\observe-2026-08-09T11-40-52-254Z.jsonl","predictedMode":"real","flags":{"SYNTHETIC_REAL_TRADING_ENABLED":true,"SYNTHETIC_REAL_TRADING_ALLOW_DEMO":true}}
+{"t":"2026-08-09T11:40:52.489Z","event":"connector_account","data":{"ok":true,"login":6255429,"account_type":"demo","balance":9984.65,"equity":9984.65,"currency":"USD"}}
