@@ -1,0 +1,6 @@
+◇ injected env (20) from .env // tip: ⌘ suppress logs { quiet: true }
+[boot] rehydrated 0/0 running bot runtime(s)
+[boot] rehydrated 0/0 crypto paper runtime(s)
+[boot] rehydrated 0/0 synthetic paper runtime(s)
+Telos backend listening on port 3000
+WebSocket available at /ws?token=<jwt>
