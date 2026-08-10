@@ -1,0 +1,6 @@
+◇ injected env (16) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+[boot] rehydrated 1/1 running bot runtime(s)
+[boot] rehydrated 0/0 crypto paper runtime(s)
+[boot] rehydrated 2/2 synthetic paper runtime(s)
+Telos backend listening on port 3000
+WebSocket available at /ws?token=<jwt>
