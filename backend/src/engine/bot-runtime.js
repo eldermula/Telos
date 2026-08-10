@@ -10,9 +10,10 @@ const mt5Connector = require('../services/mt5-connector.client');
 const strategySelectionService = require('./strategy-selection.service');
 const notificationsService = require('../services/notifications.service');
 const riskTierConfigService = require('./risk-tier-config.service');
+const forexDemoDispatchService = require('./forex-demo-dispatch.service');
+const marketIntelligenceService = require('./market-intelligence.service');
 const {
   REAL_TRADING_ENABLED,
-  REAL_TRADING_ALLOW_DEMO,
   REAL_MAX_LOT,
   REAL_CONNECTION_MAX_AGE_HOURS,
 } = require('../config/env');
@@ -39,8 +40,20 @@ const REAL_ORDER_LATENCY_WARN_MS = 200;
  * from positions_get before escalating to status='error'. Approved: 3.
  */
 const REAL_HISTORY_RETRY_TICKS = 3;
+const HISTORY_RETRY_DELAY_MS = 250;
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
+const { WATCHLIST } = require(path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'bot',
+  'news-intelligence',
+  'src',
+  'watchlist.js'
+));
+const WATCHLIST_SET = new Set(WATCHLIST);
 const { evaluateEntry, resolveExit } = require(path.join(apirsPath, 'paperTradingHarness.js'));
 const { computeLiveWinProbability, computeConsecutiveLosses } = require(
   path.join(apirsPath, 'learningEngine.js')
@@ -256,11 +269,16 @@ class BotRuntime {
       getOrderHistory:
         options.getOrderHistory || ((ticket) => mt5Connector.getOrderHistory(ticket)),
       placeOrder: options.placeOrder || ((args) => mt5Connector.placeOrder(args)),
+      closeOrder:
+        options.closeOrder || ((ticket, args) => mt5Connector.closeOrder(ticket, args)),
       insertOpenRealTrade:
         options.insertOpenRealTrade || ((args) => tradesRepository.insertOpenRealTrade(args)),
       closeRealTrade:
         options.closeRealTrade ||
         ((tradeId, args) => tradesRepository.closeRealTrade(tradeId, args)),
+      findTradeByIdForUser:
+        options.findTradeByIdForUser ||
+        ((tradeId, userId) => tradesRepository.findTradeByIdForUser(tradeId, userId)),
       insertDecision:
         options.insertDecision || ((args) => decisionLogRepository.insertDecision(args)),
       forceNotifyUser:
@@ -574,13 +592,28 @@ class BotRuntime {
     if (!instance) {
       return { resolvedMode: 'paper', haltNewOpens: false };
     }
+    const allowDemoRealExecution = await forexDemoDispatchService.isDemoDispatchEnabled();
+    const resolvedMode = resolveExecutionMode({
+      realTradingEnabled: REAL_TRADING_ENABLED,
+      accountType: instance.account_type,
+      liveTradingConfirmedAt: instance.live_trading_confirmed_at,
+      allowDemoRealExecution,
+    });
+
+    const usedDemoBypass =
+      resolvedMode === 'real' &&
+      instance.account_type === 'demo' &&
+      allowDemoRealExecution;
+    if (usedDemoBypass) {
+      console.warn(
+        '[bot-runtime] real dispatch ENABLED VIA admin demo-dispatch toggle ' +
+          `(testing-only Layer-3 bypass) bot_instance_id=${this.botInstanceId} ` +
+          `user_id=${this.userId} account_type=demo`
+      );
+    }
+
     return {
-      resolvedMode: resolveExecutionMode({
-        realTradingEnabled: REAL_TRADING_ENABLED,
-        accountType: instance.account_type,
-        liveTradingConfirmedAt: instance.live_trading_confirmed_at,
-        allowDemoRealExecution: REAL_TRADING_ALLOW_DEMO,
-      }),
+      resolvedMode,
       haltNewOpens: instance.halt_new_opens === true,
     };
   }
@@ -596,9 +629,16 @@ class BotRuntime {
    * places via the connector with Layer 0's *detected* account type
    * (never the dispatch-mode string), persists broker_ticket, and
    * fails loud to status='error' on place/precondition failure.
+   *
+   * @param {{
+   *   forcedSelection?: object|null,
+   *   manualTest?: boolean,
+   * }} [options]
    */
-  async _maybeOpenPositionReal() {
+  async _maybeOpenPositionReal(options = {}) {
     const deps = this._realOpen;
+    const forcedSelection = options.forcedSelection || null;
+    const manualTest = options.manualTest === true;
     let accountInfo;
     try {
       accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
@@ -649,7 +689,8 @@ class BotRuntime {
       accountInfo.account_type
     );
 
-    const selection = await this.strategySelection.selectTradeAcrossWatchlist();
+    const selection =
+      forcedSelection || (await this.strategySelection.selectTradeAcrossWatchlist());
     if (!selection) {
       return null;
     }
@@ -728,6 +769,12 @@ class BotRuntime {
       ...tradeInput,
       strategy_id: selection.strategy_id,
       strategy_name: selection.strategy_name,
+      ...(manualTest
+        ? {
+            dispatch_origin: 'manual_test',
+            manual_test: true,
+          }
+        : {}),
     };
 
     const placeStarted = Date.now();
@@ -743,6 +790,41 @@ class BotRuntime {
       });
     } catch (err) {
       const latencyMs = Date.now() - placeStarted;
+      if (manualTest) {
+        console.error(
+          '[bot-runtime] placeOrder rejected — manual test (no halt)',
+          {
+            message: err.message,
+            code: err.code || null,
+            details: err.details || null,
+            symbol,
+            direction,
+            volume: lotSizing.lotSize,
+            expected_account_type: expectedAccountType,
+            detected_account_type: accountInfo.account_type,
+            latency_ms: latencyMs,
+            manual_test: true,
+          }
+        );
+        await deps.insertDecision({
+          botInstanceId: this.botInstanceId,
+          decisionType: 'real_order_failed',
+          triggeringCondition: 'place_order_rejected_skip_tick',
+          details: {
+            message: err.message,
+            code: err.code || null,
+            details: err.details || null,
+            symbol,
+            direction,
+            volume: lotSizing.lotSize,
+            expected_account_type: expectedAccountType,
+            detected_account_type: accountInfo.account_type,
+            latency_ms: latencyMs,
+            manual_test: true,
+          },
+        });
+        return { state: this.state, entryResult, trade: null, placeRejected: true };
+      }
       await this._haltRealOpenFailure('place_order_failed', {
         message: err.message,
         code: err.code || null,
@@ -767,6 +849,8 @@ class BotRuntime {
       placeResult.volume != null && Number(placeResult.volume) > 0
         ? Number(placeResult.volume)
         : lotSizing.lotSize;
+    const calculatedSize = lotSizing.lotSize;
+    const clamped = { size: lotSize, ...lotSizing };
 
     const tradeRow = await deps.insertOpenRealTrade({
       botInstanceId: this.botInstanceId,
@@ -779,6 +863,7 @@ class BotRuntime {
       finalAppliedPositionRisk: entryResult.riskResult.appliedRisk,
       brokerTicket,
       conditions,
+      origin: manualTest ? 'manual' : 'bot',
     });
 
     this.openPosition = {
@@ -798,13 +883,18 @@ class BotRuntime {
     await deps.insertDecision({
       botInstanceId: this.botInstanceId,
       decisionType: 'real_order_placed',
-      triggeringCondition: `${direction} ${symbol} ticket=${brokerTicket} lots=${lotSize}`,
+      triggeringCondition: manualTest
+        ? `manual_test ${direction} ${symbol} ticket=${brokerTicket} lots=${lotSize}`
+        : `${direction} ${symbol} ticket=${brokerTicket} lots=${lotSize}`,
       details: {
         trade_id: tradeRow.id,
         broker_ticket: brokerTicket,
         symbol,
         direction,
         lot_size: lotSize,
+        calculated_size: calculatedSize,
+        sizing: lotSizing,
+        clamped,
         entry_price: entryPrice,
         stop_price: stopPrice,
         target_price: targetPrice,
@@ -813,6 +903,9 @@ class BotRuntime {
         lot_sizing: lotSizing,
         latency_ms: latencyMs,
         latency_flagged: latencyMs > REAL_ORDER_LATENCY_WARN_MS,
+        manual_test: manualTest,
+        dispatch_origin: manualTest ? 'manual_test' : 'bot',
+        place_order_raw: placeResult,
       },
     });
 
@@ -831,7 +924,205 @@ class BotRuntime {
 
     await deps.publishBotEvent(this.botInstanceId, 'trade.opened', tradeRow);
 
-    return { state: this.state, entryResult, trade: tradeRow };
+    let brokerPositions = null;
+    try {
+      brokerPositions = await deps.getPositions(symbol);
+    } catch (err) {
+      console.warn(
+        '[bot-runtime] post-place getPositions failed (evidence trail only):',
+        err.message
+      );
+    }
+
+    return {
+      state: this.state,
+      entryResult,
+      trade: tradeRow,
+      sizing: lotSizing,
+      calculatedSize,
+      clamped,
+      placeResult,
+      brokerPositions,
+      stopPrice,
+      targetPrice,
+      quoteEntry,
+      symbol,
+      direction,
+    };
+  }
+
+  /**
+   * Testing-only: force a real open for {symbol, direction} while reusing
+   * `_maybeOpenPositionReal` end-to-end. Stop/target use live ATR via the
+   * normal computeSelectionStopTarget path.
+   */
+  async dispatchManualTestReal({ symbol, direction }) {
+    const sym = String(symbol || '');
+    const dir = String(direction || '').toUpperCase();
+    if (!WATCHLIST_SET.has(sym)) {
+      throw new Error(`symbol not on forex watchlist: ${sym}`);
+    }
+    if (dir !== 'BUY' && dir !== 'SELL') {
+      throw new Error(`direction must be BUY or SELL, got ${dir}`);
+    }
+
+    const marketIntelligence = await marketIntelligenceService.getMarketIntelligence(sym);
+    if (
+      !marketIntelligence ||
+      marketIntelligence.stale ||
+      !(Number(marketIntelligence.diagnostics?.currentATR) > 0)
+    ) {
+      throw new Error(
+        `live ATR unavailable for ${sym} (stale=${Boolean(marketIntelligence?.stale)})`
+      );
+    }
+
+    const forcedSelection = {
+      chosen_instrument: sym,
+      direction: dir,
+      strategy_id: 'manual_test',
+      strategy_name: 'manual_test',
+      strategy_confidence: 0.99,
+      stopRule: { multiple: 1.5 },
+      targetRule: { ratio: 2 },
+      newsIntelligence: { market_quality: 0.5 },
+      marketIntelligence,
+    };
+
+    console.warn(
+      '[bot-runtime] MANUAL TEST DISPATCH VIA admin manual test-trade toggle ' +
+        `(testing-only) bot_instance_id=${this.botInstanceId} user_id=${this.userId} ` +
+        `symbol=${sym} direction=${dir}`
+    );
+
+    return this._maybeOpenPositionReal({
+      forcedSelection,
+      manualTest: true,
+    });
+  }
+
+  /**
+   * Testing-only: force-close an open real forex trade via connector
+   * /order/close, then reconcile with getOrderHistory →
+   * _applyRealCloseFromHistory.
+   */
+  async dispatchManualTestClose({ tradeId }) {
+    const deps = this._realOpen;
+    const row = await deps.findTradeByIdForUser(tradeId, this.userId);
+    if (!row) {
+      throw new Error(`trade not found for user: ${tradeId}`);
+    }
+    if (row.bot_instance_id !== this.botInstanceId) {
+      throw new Error(`trade ${tradeId} belongs to a different bot instance`);
+    }
+    if (row.status !== 'open') {
+      throw new Error(`trade ${tradeId} is not open (status=${row.status})`);
+    }
+    if (row.execution_mode !== 'real') {
+      throw new Error(`trade ${tradeId} is not execution_mode=real`);
+    }
+    if (row.asset_class !== 'forex_gold') {
+      throw new Error(`trade ${tradeId} is not asset_class=forex_gold`);
+    }
+
+    console.warn(
+      '[bot-runtime] MANUAL TEST CLOSE VIA admin manual test-trade toggle ' +
+        `(testing-only) bot_instance_id=${this.botInstanceId} user_id=${this.userId} ` +
+        `trade_id=${tradeId} ticket=${row.broker_ticket}`
+    );
+
+    return this._closeRealOpenTradeRow(row, { manualTest: true });
+  }
+
+  async _ensureStateLoaded() {
+    if (this.state) return;
+    const deps = this._realOpen;
+    const tradeHistory = await deps.loadTradeHistoryForLearning(this.botInstanceId);
+    const instance = await deps.findInstanceById(this.botInstanceId);
+    this.state = instanceToApirsState(instance, tradeHistory);
+    this.dailyDrawdownMarkers = markersFromInstance(instance);
+  }
+
+  async _ensureOpenPositionForRow(row) {
+    const ticket =
+      row.broker_ticket == null ? null : Number(row.broker_ticket);
+    if (
+      this.openPosition &&
+      this.openPosition.tradeRowId === row.id &&
+      (row.execution_mode !== 'real' ||
+        Number(this.openPosition.brokerTicket) === ticket)
+    ) {
+      return this.openPosition;
+    }
+    await this._ensureStateLoaded();
+    const tradeHistory = await this._realOpen.loadTradeHistoryForLearning(this.botInstanceId);
+    const pos = this._buildResumedOpenPosition(row, tradeHistory, {
+      executionMode: row.execution_mode === 'real' ? 'real' : 'paper',
+      brokerTicket: ticket,
+      historyRetryCount: 0,
+    });
+    this.openPosition = pos;
+    return pos;
+  }
+
+  /**
+   * Broker close + history reconcile — shared by manual test close and
+   * production close paths.
+   */
+  async _closeRealOpenTradeRow(row, { manualTest = false } = {}) {
+    const deps = this._realOpen;
+    if (row.broker_ticket == null) {
+      const err = new Error('Trade has no broker_ticket');
+      err.code = 'TRADE_MISSING_TICKET';
+      throw err;
+    }
+
+    const accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
+    const expectedAccountType = resolveExpectedAccountTypeForLayer0(accountInfo.account_type);
+
+    const closeOrderRaw = await deps.closeOrder(row.broker_ticket, {
+      expectedAccountType,
+    });
+
+    let history = null;
+    let lastHistErr = null;
+    const maxHistRetries = deps.historyRetryTicks;
+    for (let i = 0; i < maxHistRetries; i += 1) {
+      try {
+        history = await deps.getOrderHistory(row.broker_ticket);
+        lastHistErr = null;
+        break;
+      } catch (err) {
+        lastHistErr = err;
+        console.warn(
+          `[bot-runtime] real close history lag for ticket ${row.broker_ticket} ` +
+            `(${i + 1}/${maxHistRetries}): ${err.message}`
+        );
+        await new Promise((r) => setTimeout(r, HISTORY_RETRY_DELAY_MS));
+      }
+    }
+    if (!history) {
+      return {
+        error: true,
+        reason: 'order_history_unavailable',
+        closeOrderRaw,
+        trade: null,
+        history: null,
+        history_error: lastHistErr ? lastHistErr.message : null,
+      };
+    }
+
+    const pos = await this._ensureOpenPositionForRow(row);
+    const applied = await this._applyRealCloseFromHistory(pos, history, {
+      manualTest,
+      closeOrderRaw,
+    });
+    return {
+      ...applied,
+      closeOrderRaw,
+      history,
+      manual_test: manualTest,
+    };
   }
 
   /**
@@ -956,9 +1247,14 @@ class BotRuntime {
   /**
    * Shared real close-reconcile (E.6 monitor + E.7 resume-absent).
    * Broker PnL only — never invent exit/pnl.
+   *
+   * @param {object} pos
+   * @param {object} history
+   * @param {{ manualTest?: boolean, closeOrderRaw?: object|null }} [options]
    */
-  async _applyRealCloseFromHistory(pos, history) {
+  async _applyRealCloseFromHistory(pos, history, options = {}) {
     const deps = this._realOpen;
+    const manualTest = options.manualTest === true;
     const exitPrice = Number(history.close_price);
     const pnlAmount = Number(history.profit);
     if (!(exitPrice > 0) || !Number.isFinite(pnlAmount)) {
@@ -1005,7 +1301,9 @@ class BotRuntime {
     await deps.insertDecision({
       botInstanceId: this.botInstanceId,
       decisionType: 'real_order_closed',
-      triggeringCondition: `ticket=${pos.brokerTicket} pnl=${pnlAmount}`,
+      triggeringCondition: manualTest
+        ? `manual_test_close ticket=${pos.brokerTicket} pnl=${pnlAmount}`
+        : `ticket=${pos.brokerTicket} pnl=${pnlAmount}`,
       details: {
         trade_id: pos.tradeRowId,
         broker_ticket: pos.brokerTicket,
@@ -1015,6 +1313,9 @@ class BotRuntime {
         pnl: pnlAmount,
         was_win: wasWin,
         history,
+        manual_test: manualTest,
+        dispatch_origin: manualTest ? 'manual_test_close' : 'bot',
+        close_order_raw: options.closeOrderRaw || null,
       },
     });
 

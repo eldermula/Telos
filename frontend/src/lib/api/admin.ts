@@ -163,3 +163,59 @@ export function enableSyntheticDemoManualTrade(
 export function disableSyntheticDemoManualTrade(): Promise<SyntheticDemoManualTradeStatus> {
   return apiRequest('/admin/synthetic/demo-manual-trade-disable', { method: 'POST' });
 }
+
+/** Same shape as synthetic dispatch status — forex Layer 3 bypass. */
+export type ForexDemoDispatchStatus = SyntheticDemoDispatchStatus;
+
+export function getForexDemoDispatchStatus(): Promise<ForexDemoDispatchStatus> {
+  return apiRequest('/admin/forex/demo-dispatch-status');
+}
+
+export function enableForexDemoDispatch(minutes: number): Promise<ForexDemoDispatchStatus> {
+  return apiRequest('/admin/forex/demo-dispatch-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableForexDemoDispatch(): Promise<ForexDemoDispatchStatus> {
+  return apiRequest('/admin/forex/demo-dispatch-disable', { method: 'POST' });
+}
+
+/** Same shape — forex Layer 2 confirm-live bypass. */
+export type ForexDemoConfirmStatus = SyntheticDemoDispatchStatus;
+
+export function getForexDemoConfirmStatus(): Promise<ForexDemoConfirmStatus> {
+  return apiRequest('/admin/forex/demo-confirm-status');
+}
+
+export function enableForexDemoConfirm(minutes: number): Promise<ForexDemoConfirmStatus> {
+  return apiRequest('/admin/forex/demo-confirm-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableForexDemoConfirm(): Promise<ForexDemoConfirmStatus> {
+  return apiRequest('/admin/forex/demo-confirm-disable', { method: 'POST' });
+}
+
+/** Same shape — forex manual test-dispatch/close gate. */
+export type ForexDemoManualTradeStatus = SyntheticDemoDispatchStatus;
+
+export function getForexDemoManualTradeStatus(): Promise<ForexDemoManualTradeStatus> {
+  return apiRequest('/admin/forex/demo-manual-trade-status');
+}
+
+export function enableForexDemoManualTrade(
+  minutes: number,
+): Promise<ForexDemoManualTradeStatus> {
+  return apiRequest('/admin/forex/demo-manual-trade-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableForexDemoManualTrade(): Promise<ForexDemoManualTradeStatus> {
+  return apiRequest('/admin/forex/demo-manual-trade-disable', { method: 'POST' });
+}

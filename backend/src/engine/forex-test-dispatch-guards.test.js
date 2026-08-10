@@ -1,8 +1,7 @@
 'use strict';
 
 /**
- * Forex Layer-2 confirm-live demo acceptance now reads the admin
- * forex_demo_dispatch_config confirm toggle (not REAL_TRADING_ALLOW_DEMO).
+ * Guards for POST /trading/test-dispatch-real (no live orders).
  */
 
 const { test } = require('node:test');
@@ -14,17 +13,17 @@ const fs = require('fs');
 
 const BACKEND_SRC = path.join(__dirname, '..');
 const TRADING_ENGINE_JS = path.join(__dirname, 'trading-engine.js');
-const PHRASE = 'I CONFIRM LIVE TRADING WITH REAL MONEY';
 const USER_ID = '00000000-0000-4000-8000-000000000001';
 
 function runChild(body) {
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'telos-confirm-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'telos-fx-dispatch-'));
   return spawnSync(process.execPath, ['-e', body], {
     cwd,
     env: {
       PATH: process.env.PATH,
       SystemRoot: process.env.SystemRoot,
       NODE_ENV: 'test',
+      REAL_TRADING_ENABLED: 'true',
       DATABASE_URL: 'postgresql://u:p@127.0.0.1:1/db',
       REDIS_URL: 'redis://127.0.0.1:1',
       JWT_SECRET: 'child-test-secret',
@@ -34,38 +33,15 @@ function runChild(body) {
   });
 }
 
-function childScript({ demoConfirmEnabled, accountType, expectCode, expectOk }) {
+function childScript({ manualEnabled, expectCode }) {
   return `
     const Module = require('module');
     const path = require('path');
     const backendSrc = ${JSON.stringify(BACKEND_SRC)};
     const tradingEnginePath = ${JSON.stringify(TRADING_ENGINE_JS)};
-    const demoConfirmEnabled = ${JSON.stringify(demoConfirmEnabled)};
-    const accountType = ${JSON.stringify(accountType)};
-    const phrase = ${JSON.stringify(PHRASE)};
-    const userId = ${JSON.stringify(USER_ID)};
+    const manualEnabled = ${JSON.stringify(manualEnabled)};
     const expectCode = ${JSON.stringify(expectCode)};
-    const expectOk = ${JSON.stringify(expectOk)};
-
-    const instance = {
-      id: '11111111-1111-4111-8111-111111111111',
-      user_id: userId,
-      status: 'stopped',
-      account_type: accountType,
-      live_trading_confirmed_at: null,
-      active_strategy_mode: 'STRATEGY_A',
-      current_tier: 0,
-      active_trading_balance: 1000,
-      peak_equity: 1000,
-      halt_new_opens: false,
-      crypto_status: 'stopped',
-      synthetic_status: 'stopped',
-      synthetic_halt_new_opens: false,
-      synthetic_live_trading_confirmed_at: null,
-      synthetic_active_trading_balance: null,
-      synthetic_peak_equity: null,
-      synthetic_current_tier: 0,
-    };
+    const userId = ${JSON.stringify(USER_ID)};
 
     const stubs = new Map([
       [path.join(backendSrc, 'db', 'pool.js'), { pool: { query: async () => ({ rows: [] }) } }],
@@ -88,20 +64,17 @@ function childScript({ demoConfirmEnabled, accountType, expectCode, expectOk }) 
         BotRuntime: class {},
       }],
       [path.join(backendSrc, 'engine', 'bot-status.cache.js'), {
-        setStatus: async (row) => ({
-          bot_instance_id: row.id,
-          status: row.status,
-          account_type: row.account_type,
-          live_trading_confirmed_at: row.live_trading_confirmed_at,
-          allow_demo_confirm: demoConfirmEnabled,
-          real_trading_available: true,
-        }),
+        setStatus: async (x) => x,
         getStatus: async () => null,
       }],
       [path.join(backendSrc, 'engine', 'bot-instance.repository.js'), {
-        ensureForUser: async () => instance,
-        findById: async () => instance,
-        updateStatusFields: async (_id, fields) => ({ ...instance, ...fields }),
+        ensureForUser: async () => ({
+          id: '11111111-1111-4111-8111-111111111111',
+          user_id: userId,
+          status: 'running',
+          account_type: 'demo',
+          live_trading_confirmed_at: new Date().toISOString(),
+        }),
       }],
       [path.join(backendSrc, 'engine', 'event-publisher.js'), {
         publishBotEvent: async () => {},
@@ -111,9 +84,9 @@ function childScript({ demoConfirmEnabled, accountType, expectCode, expectOk }) 
         forceNotifyUser: async () => null,
       }],
       [path.join(backendSrc, 'engine', 'forex-demo-dispatch.service.js'), {
-        isDemoConfirmEnabled: async () => demoConfirmEnabled,
-        isDemoDispatchEnabled: async () => false,
-        isManualTestTradeEnabled: async () => false,
+        isDemoConfirmEnabled: async () => true,
+        isDemoDispatchEnabled: async () => true,
+        isManualTestTradeEnabled: async () => manualEnabled,
       }],
       [path.join(backendSrc, 'engine', 'trades.repository.js'), {
         listOpenTradesForUser: async () => [],
@@ -132,17 +105,13 @@ function childScript({ demoConfirmEnabled, accountType, expectCode, expectOk }) 
     };
 
     const te = require(tradingEnginePath);
-    te.confirmLiveTrading(userId, phrase)
-      .then((cached) => {
-        if (expectOk) {
-          console.log('CONFIRM_OK', cached && cached.live_trading_confirmed_at ? 'armed' : 'missing');
-          process.exit(0);
-        }
-        console.log('UNEXPECTED_RESOLVE');
+    te.testDispatchForexReal(userId, { symbol: 'EURUSD', direction: 'BUY' })
+      .then(() => {
+        console.log('UNEXPECTED_OK');
         process.exit(2);
       })
       .catch((err) => {
-        if (!expectOk && err && err.code === expectCode) {
+        if (err && err.code === expectCode) {
           console.log('REFUSED', err.code);
           process.exit(0);
         }
@@ -152,51 +121,26 @@ function childScript({ demoConfirmEnabled, accountType, expectCode, expectOk }) 
   `;
 }
 
-test('confirmLiveTrading refuses demo when admin confirm toggle is off', () => {
+test('testDispatchForexReal refuses when manual test-trade toggle is off', () => {
   const result = runChild(
-    childScript({
-      demoConfirmEnabled: false,
-      accountType: 'demo',
-      expectCode: 'NOT_A_REAL_ACCOUNT',
-      expectOk: false,
-    })
+    childScript({ manualEnabled: false, expectCode: 'MANUAL_TEST_TRADE_DISABLED' })
   );
   assert.equal(
     result.status,
     0,
     `status=${result.status} stdout=${result.stdout} stderr=${result.stderr}`
   );
-  assert.match(result.stdout, /REFUSED NOT_A_REAL_ACCOUNT/);
+  assert.match(result.stdout, /REFUSED MANUAL_TEST_TRADE_DISABLED/);
 });
 
-test('confirmLiveTrading accepts demo when admin confirm toggle is on', () => {
+test('testDispatchForexReal refuses when runtime not loaded (toggle on)', () => {
   const result = runChild(
-    childScript({
-      demoConfirmEnabled: true,
-      accountType: 'demo',
-      expectOk: true,
-    })
+    childScript({ manualEnabled: true, expectCode: 'RUNTIME_NOT_LOADED' })
   );
   assert.equal(
     result.status,
     0,
     `status=${result.status} stdout=${result.stdout} stderr=${result.stderr}`
   );
-  assert.match(result.stdout, /CONFIRM_OK armed/);
-});
-
-test('confirmLiveTrading still accepts real account without confirm toggle', () => {
-  const result = runChild(
-    childScript({
-      demoConfirmEnabled: false,
-      accountType: 'real',
-      expectOk: true,
-    })
-  );
-  assert.equal(
-    result.status,
-    0,
-    `status=${result.status} stdout=${result.stdout} stderr=${result.stderr}`
-  );
-  assert.match(result.stdout, /CONFIRM_OK armed/);
+  assert.match(result.stdout, /REFUSED RUNTIME_NOT_LOADED/);
 });

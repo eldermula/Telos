@@ -1,6 +1,6 @@
 const http = require('http');
 const app = require('./app');
-const { PORT, assertRealTradingDemoBypassAtStartup } = require('./config/env');
+const { PORT } = require('./config/env');
 const { connectRedis } = require('./db/redis');
 const { attachWebSocketServer } = require('./ws/websocket-server');
 const { assertGateConfigAtStartup } = require('./services/access-gate.service');
@@ -10,9 +10,6 @@ const syntheticTradingEngine = require('./engine/synthetic-trading-engine');
 
 async function start() {
   assertGateConfigAtStartup();
-  // Option 2 E.0 — refuse to boot a production stack if the E1
-  // demo-dispatch bypass env var is present at all (any value).
-  assertRealTradingDemoBypassAtStartup();
   await connectRedis();
 
   // Rehydrate any bots still marked running from before this process

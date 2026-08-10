@@ -211,6 +211,99 @@ async function disableSyntheticDemoManualTrade(req, res, next) {
   }
 }
 
+async function getForexDemoDispatchStatus(req, res, next) {
+  try {
+    const data = await adminService.getForexDemoDispatchStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableForexDemoDispatch(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableForexDemoDispatch(
+      req.user.id,
+      body.minutes
+    );
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableForexDemoDispatch(req, res, next) {
+  try {
+    const data = await adminService.disableForexDemoDispatch(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getForexDemoConfirmStatus(req, res, next) {
+  try {
+    const data = await adminService.getForexDemoConfirmStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableForexDemoConfirm(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableForexDemoConfirm(
+      req.user.id,
+      body.minutes
+    );
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableForexDemoConfirm(req, res, next) {
+  try {
+    const data = await adminService.disableForexDemoConfirm(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getForexDemoManualTradeStatus(req, res, next) {
+  try {
+    const data = await adminService.getForexDemoManualTradeStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableForexDemoManualTrade(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableForexDemoManualTrade(
+      req.user.id,
+      body.minutes
+    );
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableForexDemoManualTrade(req, res, next) {
+  try {
+    const data = await adminService.disableForexDemoManualTrade(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -228,4 +321,13 @@ module.exports = {
   getSyntheticDemoManualTradeStatus,
   enableSyntheticDemoManualTrade,
   disableSyntheticDemoManualTrade,
+  getForexDemoDispatchStatus,
+  enableForexDemoDispatch,
+  disableForexDemoDispatch,
+  getForexDemoConfirmStatus,
+  enableForexDemoConfirm,
+  disableForexDemoConfirm,
+  getForexDemoManualTradeStatus,
+  enableForexDemoManualTrade,
+  disableForexDemoManualTrade,
 };

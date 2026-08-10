@@ -5,6 +5,7 @@ const { redis } = require('../db/redis');
 const { REAL_TRADING_ENABLED, SYNTHETIC_REAL_TRADING_ENABLED } = require('../config/env');
 const { isConfirmationActive } = require('./live-trading-confirmation');
 const syntheticDemoDispatchService = require('./synthetic-demo-dispatch.service');
+const forexDemoDispatchService = require('./forex-demo-dispatch.service');
 
 const apirsPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src');
 const { bootstrapRiskPct, STANDARD_MATRIX_FLOOR_BALANCE } = require(
@@ -40,6 +41,7 @@ function toCachePayload(instance, updatedAt = new Date(), options = {}) {
     instance.synthetic_live_trading_confirmed_at
   );
   const allowDemoConfirm = options.allowDemoConfirm === true;
+  const syntheticAllowDemoConfirm = options.syntheticAllowDemoConfirm === true;
 
   return {
     bot_instance_id: instance.id,
@@ -60,23 +62,29 @@ function toCachePayload(instance, updatedAt = new Date(), options = {}) {
       ? bootstrapRiskPct(activeTradingBalance)
       : null,
     account_type: instance.account_type,
-    real_trading_available: REAL_TRADING_ENABLED && instance.account_type === 'real',
+    // Forex Layer 1/2 — demo accounts only surface when admin Layer-2 confirm is on.
+    real_trading_available:
+      REAL_TRADING_ENABLED &&
+      (instance.account_type === 'real' ||
+        (allowDemoConfirm && instance.account_type === 'demo')),
     live_trading_confirmed_at: confirmationActive
       ? instance.live_trading_confirmed_at
       : null,
+    // Surfaces forex admin Layer-2 toggle so Confirm Live modal can accept demo.
+    allow_demo_confirm: allowDemoConfirm,
     // Synthetics Layer 1/2 — independent of forex real_trading_* fields.
     // Demo accounts only surface when the admin Layer-2 confirm toggle is on.
     synthetic_real_trading_available:
       SYNTHETIC_REAL_TRADING_ENABLED &&
       (instance.account_type === 'real' ||
-        (allowDemoConfirm && instance.account_type === 'demo')),
+        (syntheticAllowDemoConfirm && instance.account_type === 'demo')),
     // Already TTL-filtered: null when expired — frontend must not re-check.
     synthetic_live_trading_confirmed_at: syntheticConfirmationActive
       ? instance.synthetic_live_trading_confirmed_at
       : null,
     // Surfaces the admin Layer-2 toggle so the confirm modal can accept demo
     // account_type in the UI; the POST route remains the real gate.
-    synthetic_allow_demo_confirm: allowDemoConfirm,
+    synthetic_allow_demo_confirm: syntheticAllowDemoConfirm,
     synthetic_active_trading_balance:
       instance.synthetic_active_trading_balance == null
         ? null
@@ -93,8 +101,14 @@ function toCachePayload(instance, updatedAt = new Date(), options = {}) {
 }
 
 async function setStatus(instance) {
-  const allowDemoConfirm = await syntheticDemoDispatchService.isDemoConfirmEnabled();
-  const payload = toCachePayload(instance, new Date(), { allowDemoConfirm });
+  const [allowDemoConfirm, syntheticAllowDemoConfirm] = await Promise.all([
+    forexDemoDispatchService.isDemoConfirmEnabled(),
+    syntheticDemoDispatchService.isDemoConfirmEnabled(),
+  ]);
+  const payload = toCachePayload(instance, new Date(), {
+    allowDemoConfirm,
+    syntheticAllowDemoConfirm,
+  });
   await redis.set(statusKey(instance.id), JSON.stringify(payload), 'EX', CACHE_TTL_SECONDS);
   return payload;
 }

@@ -6,6 +6,7 @@ const { AppError } = require('../utils/app-error');
 const { toMeta } = require('../utils/pagination');
 const riskTierConfigService = require('../engine/risk-tier-config.service');
 const syntheticDemoDispatchService = require('../engine/synthetic-demo-dispatch.service');
+const forexDemoDispatchService = require('../engine/forex-demo-dispatch.service');
 const { getNewsLlmUsage } = require('./news-llm-usage');
 const { NEWS_LLM_ENABLED } = require('../config/env');
 
@@ -382,6 +383,78 @@ async function disableSyntheticDemoManualTrade(adminUserId) {
   return status;
 }
 
+async function getForexDemoDispatchStatus() {
+  return forexDemoDispatchService.getDispatchStatus();
+}
+
+async function enableForexDemoDispatch(adminUserId, minutes) {
+  const status = await forexDemoDispatchService.enableDispatch(adminUserId, minutes);
+  await writeAudit({
+    adminUserId,
+    action: 'forex_demo_dispatch.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableForexDemoDispatch(adminUserId) {
+  const status = await forexDemoDispatchService.disableDispatch(adminUserId);
+  await writeAudit({
+    adminUserId,
+    action: 'forex_demo_dispatch.disable',
+  });
+  return status;
+}
+
+async function getForexDemoConfirmStatus() {
+  return forexDemoDispatchService.getConfirmStatus();
+}
+
+async function enableForexDemoConfirm(adminUserId, minutes) {
+  const status = await forexDemoDispatchService.enableConfirm(adminUserId, minutes);
+  await writeAudit({
+    adminUserId,
+    action: 'forex_demo_confirm.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableForexDemoConfirm(adminUserId) {
+  const status = await forexDemoDispatchService.disableConfirm(adminUserId);
+  await writeAudit({
+    adminUserId,
+    action: 'forex_demo_confirm.disable',
+  });
+  return status;
+}
+
+async function getForexDemoManualTradeStatus() {
+  return forexDemoDispatchService.getManualTestTradeStatus();
+}
+
+async function enableForexDemoManualTrade(adminUserId, minutes) {
+  const status = await forexDemoDispatchService.enableManualTestTrade(
+    adminUserId,
+    minutes
+  );
+  await writeAudit({
+    adminUserId,
+    action: 'forex_demo_manual_trade.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableForexDemoManualTrade(adminUserId) {
+  const status = await forexDemoDispatchService.disableManualTestTrade(adminUserId);
+  await writeAudit({
+    adminUserId,
+    action: 'forex_demo_manual_trade.disable',
+  });
+  return status;
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -399,5 +472,14 @@ module.exports = {
   getSyntheticDemoManualTradeStatus,
   enableSyntheticDemoManualTrade,
   disableSyntheticDemoManualTrade,
+  getForexDemoDispatchStatus,
+  enableForexDemoDispatch,
+  disableForexDemoDispatch,
+  getForexDemoConfirmStatus,
+  enableForexDemoConfirm,
+  disableForexDemoConfirm,
+  getForexDemoManualTradeStatus,
+  enableForexDemoManualTrade,
+  disableForexDemoManualTrade,
   writeAudit,
 };

@@ -31,6 +31,8 @@ export type TradingSession = {
   // 15-minute TTL).
   account_type: BrokerAccountType;
   real_trading_available: boolean;
+  /** Forex Layer 2 surface — admin demo-confirm bypass active for this session. */
+  allow_demo_confirm?: boolean;
   live_trading_confirmed_at: string | null;
   updated_at: string;
 };

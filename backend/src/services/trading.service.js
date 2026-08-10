@@ -74,6 +74,14 @@ async function confirmLive(userId, confirmationPhrase) {
   return tradingEngine.confirmLiveTrading(userId, confirmationPhrase);
 }
 
+async function testDispatchForexReal(userId, body) {
+  return tradingEngine.testDispatchForexReal(userId, body);
+}
+
+async function testCloseForexReal(userId, body) {
+  return tradingEngine.testCloseForexReal(userId, body);
+}
+
 /**
  * Option 2 D follow-up / E.3 — frontend-facing proxy for live MT5
  * equity. Delegates to the shared login-matched helper so the modal
@@ -117,6 +125,8 @@ module.exports = {
   haltNewOpens,
   resumeNewOpens,
   confirmLive,
+  testDispatchForexReal,
+  testCloseForexReal,
   getLiveAccountInfo,
   getAttachedAccountInfo,
   getPositions,

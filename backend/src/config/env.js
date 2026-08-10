@@ -70,21 +70,6 @@ const SYNTHETIC_REAL_TRADING_ENABLED =
   process.env.SYNTHETIC_REAL_TRADING_ENABLED === 'true';
 
 /**
- * Option 2 Increment E (E1 verification strategy) — non-production
- * dispatch bypass so the real-mode *methods* can be exercised against
- * a MetaQuotes-Demo account without real capital. Strict exact-string
- * `'true'` only, same parsing as REAL_TRADING_ENABLED.
- *
- * This flag controls dispatch only (which BotRuntime methods run). It
- * must NEVER alter `expectedAccountType` passed to placeOrder/
- * closeOrder — Layer 0 always sees the true detected account type
- * (`demo` under E1 testing). Production refuses to boot if this env
- * var is present at all (any value); see
- * assertRealTradingDemoBypassAtStartup.
- */
-const REAL_TRADING_ALLOW_DEMO = process.env.REAL_TRADING_ALLOW_DEMO === 'true';
-
-/**
  * Option 2 E.3 — hard lot-size ceiling for real orders, independent of
  * APIRS risk-%. Approved default 1.00 (raised from 0.01 after Deriv
  * re-verification — still below broker volume_max of 20 FX / 10 XAU).
@@ -111,34 +96,6 @@ const NEWS_LLM_ENABLED = process.env.NEWS_LLM_ENABLED === 'true';
  * so forex soft-launch monitoring is never coupled to crypto LLM spend.
  */
 const CRYPTO_NEWS_LLM_ENABLED = process.env.CRYPTO_NEWS_LLM_ENABLED === 'true';
-
-/**
- * Pure check so unit tests can cover every combination without
- * reloading this module. `allowDemoEnvPresent` is true when the env
- * var exists in the process environment at all — including empty
- * string or `'false'` — not merely when the parsed boolean is true.
- */
-function assertRealTradingDemoBypassAllowed({ nodeEnv, allowDemoEnvPresent }) {
-  if (nodeEnv === 'production' && allowDemoEnvPresent) {
-    throw new Error(
-      'REAL_TRADING_ALLOW_DEMO must not be set when NODE_ENV=production ' +
-        '(E1 demo-dispatch bypass is non-production only; remove the ' +
-        'variable entirely from the production environment)'
-    );
-  }
-}
-
-/**
- * Production boot tripwire — mandatory *absence* of
- * REAL_TRADING_ALLOW_DEMO (inverse of ACCESS_GATE_*'s mandatory
- * presence). Called from index.js alongside assertGateConfigAtStartup.
- */
-function assertRealTradingDemoBypassAtStartup() {
-  assertRealTradingDemoBypassAllowed({
-    nodeEnv: NODE_ENV,
-    allowDemoEnvPresent: process.env.REAL_TRADING_ALLOW_DEMO !== undefined,
-  });
-}
 
 module.exports = {
   PORT,
@@ -168,12 +125,9 @@ module.exports = {
   ACCESS_GATE_COOKIE_NAME,
   REAL_TRADING_ENABLED,
   SYNTHETIC_REAL_TRADING_ENABLED,
-  REAL_TRADING_ALLOW_DEMO,
   REAL_MAX_LOT,
   REAL_CONNECTION_MAX_AGE_HOURS,
   NEWS_LLM_ENABLED,
   CRYPTO_NEWS_LLM_ENABLED,
-  assertRealTradingDemoBypassAllowed,
-  assertRealTradingDemoBypassAtStartup,
   isProduction: NODE_ENV === 'production',
 };

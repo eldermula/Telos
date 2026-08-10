@@ -10,6 +10,12 @@ type Props = {
   confirming: boolean;
   onClose: () => void;
   onConfirm: (phrase: string) => Promise<void>;
+  /**
+   * When true (session.allow_demo_confirm), UI accepts a live demo
+   * account_type so forex demo walkthroughs can type the phrase.
+   * Server still enforces the admin demo-confirm toggle on POST.
+   */
+  allowDemoConfirm?: boolean;
 };
 
 /**
@@ -27,6 +33,7 @@ export function ConfirmLiveTradingModal({
   confirming,
   onClose,
   onConfirm,
+  allowDemoConfirm = false,
 }: Props) {
   const [phrase, setPhrase] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -54,7 +61,10 @@ export function ConfirmLiveTradingModal({
         const info = await getLiveAccountInfo();
         if (cancelled) return;
         setAccountInfo(info);
-        if (info.account_type !== 'real') {
+        const accountOk =
+          info.account_type === 'real' ||
+          (allowDemoConfirm && info.account_type === 'demo');
+        if (!accountOk) {
           setAccountError(
             `Attached MT5 account is ${info.account_type}, not real. Live trading cannot be confirmed.`,
           );
@@ -74,11 +84,14 @@ export function ConfirmLiveTradingModal({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, allowDemoConfirm]);
 
   const matches = phrase === LIVE_TRADING_CONFIRMATION_PHRASE;
-  const liveContextReady =
-    accountInfo !== null && accountInfo.account_type === 'real' && !accountError;
+  const accountOk =
+    accountInfo != null &&
+    (accountInfo.account_type === 'real' ||
+      (allowDemoConfirm && accountInfo.account_type === 'demo'));
+  const liveContextReady = accountOk && !accountError;
 
   async function handleConfirm() {
     if (!matches || !liveContextReady) return;

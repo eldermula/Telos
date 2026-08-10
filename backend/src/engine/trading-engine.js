@@ -9,18 +9,32 @@
  * 4.3: In-process paper BotRuntime (APIRS via paperTradingHarness)
  */
 
+const path = require('path');
 const { AppError } = require('../utils/app-error');
 const botInstanceRepository = require('./bot-instance.repository');
 const botStatusCache = require('./bot-status.cache');
-const { startRuntime, stopRuntime } = require('./bot-runtime');
+const { startRuntime, stopRuntime, getRuntime, BotRuntime } = require('./bot-runtime');
 const { publishBotEvent } = require('./event-publisher');
 const notificationsService = require('../services/notifications.service');
-const { LIVE_TRADING_CONFIRMATION_PHRASE } = require('./live-trading-confirmation');
 const {
-  NODE_ENV,
-  REAL_TRADING_ALLOW_DEMO,
-  assertRealTradingDemoBypassAllowed,
-} = require('../config/env');
+  LIVE_TRADING_CONFIRMATION_PHRASE,
+  isConfirmationActive,
+} = require('./live-trading-confirmation');
+const { REAL_TRADING_ENABLED } = require('../config/env');
+const forexDemoDispatchService = require('./forex-demo-dispatch.service');
+const tradesRepository = require('./trades.repository');
+const { resolveExecutionMode } = require('./execution-mode');
+
+const newsIntelligencePath = path.join(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  'bot',
+  'news-intelligence',
+  'src'
+);
+const { WATCHLIST } = require(path.join(newsIntelligencePath, 'watchlist.js'));
 
 async function ensureBotInstance(userId) {
   const instance = await botInstanceRepository.ensureForUser(userId);
@@ -195,37 +209,17 @@ async function resumeNewOpens(userId) {
 /**
  * Option 2 Layer 2 opt-in (Option 2, Increment D). Preconditions,
  * checked in this order, each a distinct rejection:
- *   0. Production + REAL_TRADING_ALLOW_DEMO present at all → refuse
- *      (same property as E.0's boot tripwire, but enforced here so it
- *      holds for any caller — not only index.js). Checked before any
- *      I/O so a direct require() of this module cannot arm demo.
  *   1. instance must exist (ensureBotInstance's existing 404)
  *   2. instance must be stopped — confirmation only ever arms the
  *      *next* Start, never flips a running instance mid-flight
  *   3. the linked account must qualify:
  *        - always: account_type === 'real'
- *        - OR, when demoAcceptanceAllowed (ALLOW_DEMO===true AND
- *          NODE_ENV !== 'production'): account_type === 'demo'
+ *        - OR, when admin Layer-2 demo-confirm toggle is active:
+ *          account_type === 'demo' (DB-backed, max 30 min)
  *   4. the typed phrase must match exactly (case-sensitive)
  * Idempotent on success — reconfirming just refreshes the timestamp.
  */
 async function confirmLiveTrading(userId, confirmationPhrase) {
-  // Defense in depth vs E.0: same predicate as
-  // assertRealTradingDemoBypassAtStartup, enforced here so a direct
-  // require() of this module (no index.js) still cannot arm demo.
-  try {
-    assertRealTradingDemoBypassAllowed({
-      nodeEnv: NODE_ENV,
-      allowDemoEnvPresent: process.env.REAL_TRADING_ALLOW_DEMO !== undefined,
-    });
-  } catch (err) {
-    throw new AppError(
-      500,
-      'REAL_TRADING_DEMO_BYPASS_IN_PRODUCTION',
-      err.message
-    );
-  }
-
   const instance = await ensureBotInstance(userId);
 
   if (instance.status !== 'stopped') {
@@ -236,11 +230,7 @@ async function confirmLiveTrading(userId, confirmationPhrase) {
     );
   }
 
-  // Demo arm exists only when both the bypass boolean is on AND we are
-  // not in production — mutually exclusive with the throw above for any
-  // process that has the env var present under NODE_ENV=production.
-  const demoAcceptanceAllowed =
-    REAL_TRADING_ALLOW_DEMO === true && NODE_ENV !== 'production';
+  const demoAcceptanceAllowed = await forexDemoDispatchService.isDemoConfirmEnabled();
   const accountQualifies =
     instance.account_type === 'real' ||
     (demoAcceptanceAllowed && instance.account_type === 'demo');
@@ -271,6 +261,235 @@ async function confirmLiveTrading(userId, confirmationPhrase) {
     'Live trading confirmed for your real account — real orders may be placed starting from the next Start.'
   );
   return cached;
+}
+
+/**
+ * Testing-only: POST /trading/test-dispatch-real
+ * Mirrors synthetics test-dispatch-real. Bypasses strategy selection
+ * only; real open/monitor path unchanged. origin='manual'.
+ */
+async function testDispatchForexReal(userId, { symbol, direction }) {
+  const manualTestArmed = await forexDemoDispatchService.isManualTestTradeEnabled();
+  if (!manualTestArmed) {
+    throw new AppError(
+      403,
+      'MANUAL_TEST_TRADE_DISABLED',
+      'Admin manual test-trade toggle must be enabled to use test-dispatch-real'
+    );
+  }
+
+  if (REAL_TRADING_ENABLED !== true) {
+    throw new AppError(
+      403,
+      'REAL_TRADING_DISABLED',
+      'REAL_TRADING_ENABLED must be true for test-dispatch-real'
+    );
+  }
+
+  const sym = String(symbol || '');
+  const dir = String(direction || '').toUpperCase();
+  if (!WATCHLIST.includes(sym)) {
+    throw new AppError(
+      422,
+      'VALIDATION_ERROR',
+      `symbol must be one of: ${WATCHLIST.join(', ')}`
+    );
+  }
+  if (dir !== 'BUY' && dir !== 'SELL') {
+    throw new AppError(422, 'VALIDATION_ERROR', 'direction must be BUY or SELL');
+  }
+
+  const instance = await ensureBotInstance(userId);
+
+  if (instance.status !== 'running') {
+    throw new AppError(
+      409,
+      'BOT_NOT_RUNNING',
+      'Start the forex bot before test-dispatch-real (monitoring needs a running session)'
+    );
+  }
+
+  if (!isConfirmationActive(instance.live_trading_confirmed_at)) {
+    throw new AppError(
+      409,
+      'LIVE_CONFIRMATION_REQUIRED',
+      'live_trading_confirmed_at must be currently active (confirm-live within TTL)'
+    );
+  }
+
+  const allowDemoRealExecution = await forexDemoDispatchService.isDemoDispatchEnabled();
+  const resolvedMode = resolveExecutionMode({
+    realTradingEnabled: REAL_TRADING_ENABLED,
+    accountType: instance.account_type,
+    liveTradingConfirmedAt: instance.live_trading_confirmed_at,
+    allowDemoRealExecution,
+  });
+  if (resolvedMode !== 'real') {
+    throw new AppError(
+      409,
+      'REAL_DISPATCH_NOT_ARMED',
+      `resolveExecutionMode is '${resolvedMode}', not 'real' (enable admin demo-dispatch toggle if on demo)`
+    );
+  }
+
+  const openTrades = await tradesRepository.listOpenTradesForUser(userId);
+  if (openTrades.length > 0) {
+    throw new AppError(
+      409,
+      'ONE_OPEN_TRADE_PER_USER',
+      'An open trade already exists for this user (system-wide one_open_trade_per_user)'
+    );
+  }
+
+  const runtime = getRuntime(instance.id);
+  if (!runtime) {
+    throw new AppError(
+      409,
+      'RUNTIME_NOT_LOADED',
+      'Forex runtime is not loaded in-process; Stop then Start and retry'
+    );
+  }
+
+  console.warn(
+    '[trading-engine] test-dispatch-real INVOKED VIA admin manual test-trade toggle ' +
+      `(testing-only) user_id=${userId} bot_instance_id=${instance.id} ` +
+      `symbol=${sym} direction=${dir} account_type=${instance.account_type}`
+  );
+
+  const result = await runtime.dispatchManualTestReal({ symbol: sym, direction: dir });
+
+  if (result?.error) {
+    throw new AppError(
+      503,
+      'REAL_OPEN_HALTED',
+      'Real open path halted (account-info / connection failure) — see decision log'
+    );
+  }
+  if (result?.placeRejected) {
+    throw new AppError(
+      502,
+      'PLACE_ORDER_REJECTED',
+      'Broker placeOrder rejected — see decision log real_order_failed'
+    );
+  }
+  if (result?.lotSkipped) {
+    throw new AppError(
+      409,
+      'LOT_CLAMP_SKIPPED',
+      'Lot sizing/clamp skipped the open — see decision log trade_rejected'
+    );
+  }
+  if (!result?.trade) {
+    throw new AppError(
+      409,
+      'TRADE_NOT_OPENED',
+      'Real open path did not open a trade (entry rejected or no selection) — see decision log'
+    );
+  }
+
+  return {
+    trade: result.trade,
+    sizing: result.sizing || null,
+    calculated_size: result.calculatedSize ?? null,
+    clamped: result.clamped || null,
+    place_order: result.placeResult || null,
+    broker_positions: result.brokerPositions || null,
+    stop_price: result.stopPrice ?? null,
+    target_price: result.targetPrice ?? null,
+    quote_entry: result.quoteEntry ?? null,
+    symbol: result.symbol || sym,
+    direction: result.direction || dir,
+    dispatch_origin: 'manual_test',
+  };
+}
+
+/**
+ * Testing-only: POST /trading/test-close-real
+ * Mirrors synthetics test-close-real.
+ */
+async function testCloseForexReal(userId, { tradeId }) {
+  const manualTestArmed = await forexDemoDispatchService.isManualTestTradeEnabled();
+  if (!manualTestArmed) {
+    throw new AppError(
+      403,
+      'MANUAL_TEST_TRADE_DISABLED',
+      'Admin manual test-trade toggle must be enabled to use test-close-real'
+    );
+  }
+
+  const id = String(tradeId || '');
+  if (!id) {
+    throw new AppError(422, 'VALIDATION_ERROR', 'tradeId is required');
+  }
+
+  const instance = await ensureBotInstance(userId);
+  const row = await tradesRepository.findTradeByIdForUser(id, userId);
+  if (!row) {
+    throw new AppError(404, 'TRADE_NOT_FOUND', 'Trade not found for this user');
+  }
+  if (row.bot_instance_id !== instance.id) {
+    throw new AppError(404, 'TRADE_NOT_FOUND', 'Trade not found for this user');
+  }
+  if (row.status !== 'open') {
+    throw new AppError(409, 'TRADE_NOT_OPEN', `Trade status is '${row.status}', expected open`);
+  }
+  if (row.execution_mode !== 'real') {
+    throw new AppError(409, 'TRADE_NOT_REAL', 'Trade is not execution_mode=real');
+  }
+  if (row.asset_class !== 'forex_gold') {
+    throw new AppError(409, 'TRADE_NOT_FOREX', 'Trade is not asset_class=forex_gold');
+  }
+  if (row.broker_ticket == null) {
+    throw new AppError(409, 'TRADE_MISSING_TICKET', 'Trade has no broker_ticket');
+  }
+
+  let runtime = getRuntime(instance.id);
+  let ephemeral = false;
+  if (!runtime) {
+    runtime = new BotRuntime(instance, { autoTick: false });
+    await runtime.initialize();
+    ephemeral = true;
+  }
+
+  console.warn(
+    '[trading-engine] test-close-real INVOKED VIA admin manual test-trade toggle ' +
+      `(testing-only) user_id=${userId} bot_instance_id=${instance.id} ` +
+      `trade_id=${id} ticket=${row.broker_ticket} ephemeral_runtime=${ephemeral}`
+  );
+
+  let result;
+  try {
+    result = await runtime.dispatchManualTestClose({ tradeId: id });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(502, 'MANUAL_TEST_CLOSE_FAILED', err.message || 'test-close-real failed');
+  }
+
+  if (result?.error) {
+    throw new AppError(
+      502,
+      'MANUAL_TEST_CLOSE_INCOMPLETE',
+      `Broker close may have succeeded but reconciliation failed (${result.reason || 'unknown'})`,
+      {
+        close_order: result.closeOrderRaw || null,
+        history_error: result.history_error || null,
+      }
+    );
+  }
+  if (!result?.trade) {
+    throw new AppError(
+      502,
+      'MANUAL_TEST_CLOSE_NO_TRADE',
+      'Close path did not return a closed trade row'
+    );
+  }
+
+  return {
+    trade: result.trade,
+    close_order: result.closeOrderRaw || null,
+    history: result.history || null,
+    dispatch_origin: 'manual_test_close',
+  };
 }
 
 /**
@@ -329,5 +548,7 @@ module.exports = {
   haltNewOpens,
   resumeNewOpens,
   confirmLiveTrading,
+  testDispatchForexReal,
+  testCloseForexReal,
   rehydrateRunningRuntimes,
 };

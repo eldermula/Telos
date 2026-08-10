@@ -47,6 +47,17 @@ router.post(
 // reasoning: legitimate use is a human confirming once before a Start,
 // never a rapid-fire loop.
 router.post('/session/confirm-live', rateLimit.write({ max: 5 }), controller.confirmLive);
+// Testing-only forex real open/close — gated by admin manual-trade toggle.
+router.post(
+  '/test-dispatch-real',
+  rateLimit.write({ max: 3 }),
+  controller.testDispatchForexReal
+);
+router.post(
+  '/test-close-real',
+  rateLimit.write({ max: 3 }),
+  controller.testCloseForexReal
+);
 router.get('/positions', rateLimit.read(), controller.getPositions);
 router.get('/orders', rateLimit.read(), controller.getOrders);
 router.get('/history', rateLimit.read(), controller.getHistory);

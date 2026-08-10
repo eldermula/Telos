@@ -3,7 +3,11 @@
 const tradingService = require('../services/trading.service');
 const { parsePagination } = require('../utils/pagination');
 const { AppError } = require('../utils/app-error');
-const { confirmLiveTradingSchema } = require('../validators/trading.schemas');
+const {
+  confirmLiveTradingSchema,
+  forexTestDispatchRealSchema,
+  forexTestCloseRealSchema,
+} = require('../validators/trading.schemas');
 
 function parseBody(schema, body) {
   const parsed = schema.safeParse(body);
@@ -73,6 +77,26 @@ async function confirmLive(req, res, next) {
   }
 }
 
+async function testDispatchForexReal(req, res, next) {
+  try {
+    const body = parseBody(forexTestDispatchRealSchema, req.body);
+    const data = await tradingService.testDispatchForexReal(req.user.id, body);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function testCloseForexReal(req, res, next) {
+  try {
+    const body = parseBody(forexTestCloseRealSchema, req.body);
+    const data = await tradingService.testCloseForexReal(req.user.id, body);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function getAccountInfo(req, res, next) {
   try {
     const data = await tradingService.getLiveAccountInfo(req.user.id);
@@ -136,6 +160,8 @@ module.exports = {
   haltNewOpens,
   resumeNewOpens,
   confirmLive,
+  testDispatchForexReal,
+  testCloseForexReal,
   getAccountInfo,
   getAttachedAccountInfo,
   getPositions,

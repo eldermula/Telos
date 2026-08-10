@@ -78,4 +78,55 @@ router.post(
   controller.disableSyntheticDemoManualTrade
 );
 
+// Forex Layer-3 demo-dispatch bypass — time-limited testing toggle.
+router.get(
+  '/forex/demo-dispatch-status',
+  rateLimit.read({ max: 20 }),
+  controller.getForexDemoDispatchStatus
+);
+router.post(
+  '/forex/demo-dispatch-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableForexDemoDispatch
+);
+router.post(
+  '/forex/demo-dispatch-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableForexDemoDispatch
+);
+
+// Forex Layer-2 demo confirm-live bypass — independently toggleable.
+router.get(
+  '/forex/demo-confirm-status',
+  rateLimit.read({ max: 20 }),
+  controller.getForexDemoConfirmStatus
+);
+router.post(
+  '/forex/demo-confirm-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableForexDemoConfirm
+);
+router.post(
+  '/forex/demo-confirm-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableForexDemoConfirm
+);
+
+// Forex manual test-dispatch/close gate — independently toggleable.
+router.get(
+  '/forex/demo-manual-trade-status',
+  rateLimit.read({ max: 20 }),
+  controller.getForexDemoManualTradeStatus
+);
+router.post(
+  '/forex/demo-manual-trade-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableForexDemoManualTrade
+);
+router.post(
+  '/forex/demo-manual-trade-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableForexDemoManualTrade
+);
+
 module.exports = router;

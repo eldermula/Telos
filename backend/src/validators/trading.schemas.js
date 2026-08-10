@@ -15,8 +15,13 @@ const syntheticTestCloseRealSchema = z.object({
   tradeId: z.string().uuid(),
 });
 
+const forexTestDispatchRealSchema = syntheticTestDispatchRealSchema;
+const forexTestCloseRealSchema = syntheticTestCloseRealSchema;
+
 module.exports = {
   confirmLiveTradingSchema,
   syntheticTestDispatchRealSchema,
   syntheticTestCloseRealSchema,
+  forexTestDispatchRealSchema,
+  forexTestCloseRealSchema,
 };
