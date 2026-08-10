@@ -39,6 +39,7 @@ const {
 } = require('./execution-mode');
 const { isConfirmationActive } = require('./live-trading-confirmation');
 const syntheticDemoDispatchService = require('./synthetic-demo-dispatch.service');
+const diagTiming = require('./diag-timing-context');
 const { resolveTickDispatch } = require('./tick-dispatch');
 const { getMatchedAccountInfoForBotInstance } = require('./broker-account.service');
 const { isConnectionFresh } = require('./connection-freshness');
@@ -74,6 +75,11 @@ const REAL_HISTORY_RETRY_TICKS = 3;
 const REAL_ORDER_LATENCY_WARN_MS = 200;
 /** Read-only account-info pre-check only — never used for placeOrder. */
 const ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS = 400;
+
+function withRuntimeTiming(obj) {
+  if (!diagTiming.isEnabled() || obj == null || typeof obj !== 'object') return obj;
+  return { ...obj, _runtime_timing: diagTiming.snapshot() };
+}
 
 function markersFromInstance(instance) {
   return {
@@ -744,6 +750,7 @@ class SyntheticBotRuntime {
     const deps = this._real;
     const forcedSelection = options.forcedSelection || null;
     const manualTest = options.manualTest === true;
+    const timingOn = manualTest || diagTiming.isEnabled();
 
     if (await this._hasAnyOpenTradeForUser()) {
       return null;
@@ -754,6 +761,7 @@ class SyntheticBotRuntime {
     // placeOrder — Batch 2 keeps "log, skip, no auto-retry" for real orders
     // to avoid double-fills.
     let accountInfo;
+    if (timingOn) diagTiming.mark('account_info_start');
     try {
       accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
     } catch (firstErr) {
@@ -772,16 +780,17 @@ class SyntheticBotRuntime {
           retried: true,
           first_error: firstErr.message,
         });
-        return { state: this.state, entryResult: null, trade: null, error: true };
+        return withRuntimeTiming({ state: this.state, entryResult: null, trade: null, error: true });
       }
     }
+    if (timingOn) diagTiming.mark('account_info_done');
 
     if (!isConnectionFresh(accountInfo.last_validated_at, deps.maxAgeHours, deps.now())) {
       await this._haltRealFailure('stale_broker_connection', {
         last_validated_at: accountInfo.last_validated_at,
         max_age_hours: deps.maxAgeHours,
       });
-      return { state: this.state, entryResult: null, trade: null, error: true };
+      return withRuntimeTiming({ state: this.state, entryResult: null, trade: null, error: true });
     }
 
     const equity = Number(accountInfo.equity);
@@ -789,7 +798,7 @@ class SyntheticBotRuntime {
       await this._haltRealFailure('invalid_live_equity', {
         equity: accountInfo.equity,
       });
-      return { state: this.state, entryResult: null, trade: null, error: true };
+      return withRuntimeTiming({ state: this.state, entryResult: null, trade: null, error: true });
     }
 
     this.state.balance = equity;
@@ -806,6 +815,7 @@ class SyntheticBotRuntime {
       synthetic_peak_equity: this.state.peakEquity,
       timestamp: new Date().toISOString(),
     });
+    if (timingOn) diagTiming.mark('status_sync_done');
 
     // Layer 0 — true detected type from the live connector read.
     // Must NEVER be derived from resolveExecutionMode()'s 'real' dispatch.
@@ -838,13 +848,15 @@ class SyntheticBotRuntime {
       selection,
       deps.insertDecision
     );
+    if (timingOn) diagTiming.mark('evaluate_entry_done');
 
     if (!entryResult.tradeApproved) {
-      return { state: this.state, entryResult, trade: null };
+      return withRuntimeTiming({ state: this.state, entryResult, trade: null });
     }
 
     const symbol = selection.chosen_instrument;
     let symbolInfo;
+    if (timingOn) diagTiming.mark('symbol_info_start');
     try {
       symbolInfo = await deps.getSymbolInfo(symbol);
     } catch (err) {
@@ -854,6 +866,7 @@ class SyntheticBotRuntime {
       );
       return null;
     }
+    if (timingOn) diagTiming.mark('symbol_info_done');
     if (
       symbolInfo.bid == null ||
       symbolInfo.ask == null ||
@@ -912,6 +925,7 @@ class SyntheticBotRuntime {
     }
     const calculatedSize = sizing.rawLotSize;
     const clamped = deps.clampLotSize(calculatedSize, symbolInfo);
+    if (timingOn) diagTiming.mark('clamp_done');
     if (clamped.skipped) {
       console.warn(
         `[synthetic-bot-runtime] real open skipped: lot clamp ${clamped.reason}`,
@@ -949,6 +963,7 @@ class SyntheticBotRuntime {
 
     const placeStarted = Date.now();
     let placeResult;
+    if (timingOn) diagTiming.mark('place_order_start');
     try {
       placeResult = await deps.placeOrder({
         symbol,
@@ -994,7 +1009,13 @@ class SyntheticBotRuntime {
         },
         assetClass: ASSET_CLASS,
       });
-      return { state: this.state, entryResult, trade: null, placeRejected: true };
+      return withRuntimeTiming({ state: this.state, entryResult, trade: null, placeRejected: true });
+    }
+
+    if (timingOn) {
+      diagTiming.mark('place_order_done', {
+        connector_diag: placeResult?._diag_timing || null,
+      });
     }
 
     const latencyMs = Date.now() - placeStarted;
@@ -1034,6 +1055,7 @@ class SyntheticBotRuntime {
       }
       throw err;
     }
+    if (timingOn) diagTiming.mark('db_insert_trade_done');
 
     this.openPosition = {
       tradeRowId: tradeRow.id,
@@ -1077,6 +1099,7 @@ class SyntheticBotRuntime {
       },
       assetClass: ASSET_CLASS,
     });
+    if (timingOn) diagTiming.mark('decision_log_placed_done');
 
     if (latencyMs > REAL_ORDER_LATENCY_WARN_MS) {
       console.warn(
@@ -1092,7 +1115,7 @@ class SyntheticBotRuntime {
     );
 
     await deps.publishBotEvent(this.botInstanceId, 'trade.opened', tradeRow);
-    return {
+    return withRuntimeTiming({
       state: this.state,
       entryResult,
       trade: tradeRow,
@@ -1105,7 +1128,7 @@ class SyntheticBotRuntime {
       quoteEntry,
       symbol,
       direction,
-    };
+    });
   }
 
   /**
@@ -1123,7 +1146,10 @@ class SyntheticBotRuntime {
       throw new Error(`direction must be BUY or SELL, got ${dir}`);
     }
 
+    const timingOn = diagTiming.isEnabled();
+    if (timingOn) diagTiming.mark('mi_fetch_start');
     const marketIntelligence = await getSyntheticMarketIntelligence(sym);
+    if (timingOn) diagTiming.mark('mi_fetch_done');
     if (
       !marketIntelligence ||
       marketIntelligence.stale ||
@@ -1382,6 +1408,7 @@ class SyntheticBotRuntime {
    */
   async _closeRealOpenTradeRow(row, { manualTest = false } = {}) {
     const deps = this._real;
+    const timingOn = manualTest || diagTiming.isEnabled();
     if (row.broker_ticket == null) {
       const err = new Error('Trade has no broker_ticket');
       err.code = 'TRADE_MISSING_TICKET';
@@ -1389,16 +1416,22 @@ class SyntheticBotRuntime {
     }
 
     const accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
+    if (timingOn) diagTiming.mark('close_account_info_done');
     const expectedAccountType = resolveExpectedAccountTypeForLayer0(accountInfo.account_type);
 
+    if (timingOn) diagTiming.mark('close_order_start');
     const closeOrderRaw = await deps.closeOrder(row.broker_ticket, {
       expectedAccountType,
     });
+    if (timingOn) diagTiming.mark('close_order_done');
 
     let history = null;
     let lastHistErr = null;
     const maxHistRetries = deps.historyRetryTicks;
+    let historyAttempts = 0;
+    if (timingOn) diagTiming.mark('history_start');
     for (let i = 0; i < maxHistRetries; i += 1) {
+      historyAttempts = i + 1;
       try {
         history = await deps.getOrderHistory(row.broker_ticket);
         lastHistErr = null;
@@ -1412,15 +1445,21 @@ class SyntheticBotRuntime {
         await new Promise((r) => setTimeout(r, ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS));
       }
     }
+    if (timingOn) {
+      diagTiming.mark('history_done', {
+        retries: historyAttempts,
+        retry_delay_ms: ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS,
+      });
+    }
     if (!history) {
-      return {
+      return withRuntimeTiming({
         error: true,
         reason: 'order_history_unavailable',
         closeOrderRaw,
         trade: null,
         history: null,
         history_error: lastHistErr ? lastHistErr.message : null,
-      };
+      });
     }
 
     const pos = await this._ensureOpenPositionForRow(row);
@@ -1428,12 +1467,13 @@ class SyntheticBotRuntime {
       manualTest,
       closeOrderRaw,
     });
-    return {
+    if (timingOn) diagTiming.mark('apply_close_db_done');
+    return withRuntimeTiming({
       ...applied,
       closeOrderRaw,
       history,
       manual_test: manualTest,
-    };
+    });
   }
 
   /**
