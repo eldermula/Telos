@@ -1,6 +1,7 @@
 'use strict';
 
 const syntheticTradingEngine = require('../engine/synthetic-trading-engine');
+const diagTiming = require('../engine/diag-timing-context');
 const { AppError } = require('../utils/app-error');
 const {
   confirmLiveTradingSchema,
@@ -82,11 +83,16 @@ async function confirmSyntheticLive(req, res, next) {
 
 async function testDispatchSyntheticReal(req, res, next) {
   try {
+    if (process.env.DIAG_TIMING === '1') diagTiming.begin('http_received');
     const body = parseBody(syntheticTestDispatchRealSchema, req.body);
     const data = await syntheticTradingEngine.testDispatchSyntheticReal(req.user.id, {
       symbol: body.symbol,
       direction: String(body.direction).toUpperCase(),
     });
+    if (process.env.DIAG_TIMING === '1') {
+      diagTiming.mark('engine_done');
+      data._stack_timing = diagTiming.snapshot();
+    }
     res.status(200).json(data);
   } catch (err) {
     next(err);
@@ -95,10 +101,15 @@ async function testDispatchSyntheticReal(req, res, next) {
 
 async function testCloseSyntheticReal(req, res, next) {
   try {
+    if (process.env.DIAG_TIMING === '1') diagTiming.begin('http_received');
     const body = parseBody(syntheticTestCloseRealSchema, req.body);
     const data = await syntheticTradingEngine.testCloseSyntheticReal(req.user.id, {
       tradeId: body.tradeId,
     });
+    if (process.env.DIAG_TIMING === '1') {
+      diagTiming.mark('engine_done');
+      data._stack_timing = diagTiming.snapshot();
+    }
     res.status(200).json(data);
   } catch (err) {
     next(err);
