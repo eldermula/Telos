@@ -24,6 +24,7 @@ const {
 const { resolveExecutionMode } = require('./execution-mode');
 const { SYNTHETIC_REAL_TRADING_ENABLED } = require('../config/env');
 const syntheticDemoDispatchService = require('./synthetic-demo-dispatch.service');
+const diagTiming = require('./diag-timing-context');
 const path = require('path');
 const { SYNTHETIC_WATCHLIST } = require(path.join(
   __dirname,
@@ -245,7 +246,10 @@ async function confirmSyntheticLiveTrading(userId, confirmationPhrase) {
  * Bypasses strategy selection only; real open/monitor path unchanged.
  */
 async function testDispatchSyntheticReal(userId, { symbol, direction }) {
+  const timingOn = diagTiming.isEnabled();
+
   const manualTestArmed = await syntheticDemoDispatchService.isManualTestTradeEnabled();
+  if (timingOn) diagTiming.mark('manual_toggle_done');
   if (!manualTestArmed) {
     throw new AppError(
       403,
@@ -274,8 +278,10 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
   if (dir !== 'BUY' && dir !== 'SELL') {
     throw new AppError(422, 'VALIDATION_ERROR', 'direction must be BUY or SELL');
   }
+  if (timingOn) diagTiming.mark('guards_done');
 
   const instance = await ensureBotInstance(userId);
+  if (timingOn) diagTiming.mark('ensure_bot_instance_done');
 
   if (instance.synthetic_status !== 'running') {
     throw new AppError(
@@ -310,6 +316,7 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
   }
 
   const openTrades = await tradesRepository.listOpenTradesForUser(userId);
+  if (timingOn) diagTiming.mark('list_open_done');
   if (openTrades.length > 0) {
     throw new AppError(
       409,
@@ -319,6 +326,7 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
   }
 
   const runtime = getSyntheticRuntime(instance.id);
+  if (timingOn) diagTiming.mark('runtime_loaded');
   if (!runtime) {
     throw new AppError(
       409,
@@ -333,7 +341,9 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
       `symbol=${sym} direction=${dir} account_type=${instance.account_type}`
   );
 
+  if (timingOn) diagTiming.mark('runtime_dispatch_start');
   const result = await runtime.dispatchManualTestReal({ symbol: sym, direction: dir });
+  if (timingOn) diagTiming.mark('runtime_dispatch_done');
 
   if (result?.error) {
     throw new AppError(
@@ -376,6 +386,7 @@ async function testDispatchSyntheticReal(userId, { symbol, direction }) {
     symbol: result.symbol || sym,
     direction: result.direction || dir,
     dispatch_origin: 'manual_test',
+    ...(result._runtime_timing ? { _runtime_timing: result._runtime_timing } : {}),
   };
 }
 
@@ -459,7 +470,10 @@ async function closeSyntheticPosition(userId, tradeId) {
  * path natural closes use. Does not change Start/Stop/tick-loop design.
  */
 async function testCloseSyntheticReal(userId, { tradeId }) {
+  const timingOn = diagTiming.isEnabled();
+
   const manualTestArmed = await syntheticDemoDispatchService.isManualTestTradeEnabled();
+  if (timingOn) diagTiming.mark('manual_toggle_done');
   if (!manualTestArmed) {
     throw new AppError(
       403,
@@ -472,9 +486,13 @@ async function testCloseSyntheticReal(userId, { tradeId }) {
   if (!id) {
     throw new AppError(422, 'VALIDATION_ERROR', 'tradeId is required');
   }
+  if (timingOn) diagTiming.mark('guards_done');
 
   const instance = await ensureBotInstance(userId);
+  if (timingOn) diagTiming.mark('ensure_bot_instance_done');
+
   const row = await tradesRepository.findTradeByIdForUser(id, userId);
+  if (timingOn) diagTiming.mark('list_open_done');
   if (!row) {
     throw new AppError(404, 'TRADE_NOT_FOUND', 'Trade not found for this user');
   }
@@ -503,6 +521,7 @@ async function testCloseSyntheticReal(userId, { tradeId }) {
     await runtime.initialize();
     ephemeral = true;
   }
+  if (timingOn) diagTiming.mark('runtime_loaded');
 
   console.warn(
     '[synthetic-trading-engine] test-close-real INVOKED VIA admin manual test-trade toggle ' +
@@ -512,7 +531,9 @@ async function testCloseSyntheticReal(userId, { tradeId }) {
 
   let result;
   try {
+    if (timingOn) diagTiming.mark('runtime_dispatch_start');
     result = await runtime.dispatchManualTestClose({ tradeId: id });
+    if (timingOn) diagTiming.mark('runtime_dispatch_done');
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new AppError(502, 'MANUAL_TEST_CLOSE_FAILED', err.message || 'test-close-real failed');
@@ -542,6 +563,7 @@ async function testCloseSyntheticReal(userId, { tradeId }) {
     close_order: result.closeOrderRaw || null,
     order_history: result.history || null,
     dispatch_origin: 'manual_test_close',
+    ...(result._runtime_timing ? { _runtime_timing: result._runtime_timing } : {}),
   };
 }
 
