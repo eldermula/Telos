@@ -37,7 +37,7 @@ The engine calculates the current tier by evaluating total completed profit bloc
 
 | Tier | Completed Blocks | Step Size | Base Risk | Max AI Risk Ceiling |
 |---|---|---|---|---|
-| 0 | 0 | $150.00 | 2% | 5% |
+| 0 | 0 | $150.00 | 2% | 30% |
 | 1 | 1 | $150.00 | 2% | 10% |
 | 2 | 2 | $150.00 | 3% | 15% |
 | 3 | 3 | $150.00 | 4% | 20% |
@@ -48,36 +48,36 @@ The engine calculates the current tier by evaluating total completed profit bloc
 
 *(Flag: Tier 7's 40% ceiling is a deliberately aggressive setting — confirm this is intended before enabling live trading at that tier.)*
 
-**Unchanged by this revision, per explicit instruction:** every dollar amount in this table (step sizes) and every percentage in this table (Base Risk / Max AI Risk Ceiling) stays exactly as originally specified for any balance at or above $50. This table only governs the account once it has grown past the bootstrap phase in Section 3a — it does not itself change shape based on how the account got there.
+**Tier 0's Max AI Risk Ceiling revised 5% → 30% (bootstrap-table revision):** it tracks the Section 3a curve's $50 anchor so the bootstrap → standard-matrix handoff stays continuous. Every other percentage and every dollar amount in this table stays exactly as originally specified for any balance at or above $50. This table only governs the account once it has grown past the bootstrap phase in Section 3a — it does not itself change shape based on how the account got there.
 
 ## 3a. Sub-$50 Micro-Balance Bootstrap Risk Scaling (Proposed — pending confirmation, this revision)
 
-**Why this exists:** the standard Tier 0–7 matrix (Section 3) was designed around dollar-amount step sizes ($150–$500) that only make sense relative to a starting balance in the same order of magnitude. At a $10 starting balance, those step sizes are 15–50x the account itself — the tier system would never realistically progress under the standard percentages (2–5% base/ceiling at Tier 0). This section defines a **separate, temporary risk regime** that applies only while `active_trading_balance < $50`, so the account has a defined (if aggressive) way to reach the point where the standard matrix in Section 3 becomes meaningful.
+**Why this exists:** the standard Tier 0–7 matrix (Section 3) was designed around dollar-amount step sizes ($150–$500) that only make sense relative to a starting balance in the same order of magnitude. At a $10 starting balance, those step sizes are 15–50x the account itself — the tier system would never realistically progress under the standard base risk (2% at Tier 0). This section defines a **separate, temporary risk regime** that applies only while `active_trading_balance < $50`, so the account has a defined (if aggressive) way to reach the point where the standard matrix in Section 3 becomes meaningful.
 
-**Rule — inverse linear scaling between two anchor points:**
-- At `active_trading_balance = $50`: risk = **5%** (matches Tier 0's Max AI Risk Ceiling exactly, so there's no discontinuity at the $50 handoff point).
-- At `active_trading_balance = $10`: risk = **70%**, per explicit instruction.
+**Rule — linear scaling between two anchor points:**
+- At `active_trading_balance = $50`: risk = **30%** (matches Tier 0's Max AI Risk Ceiling exactly, so there's no discontinuity at the $50 handoff point).
+- At `active_trading_balance = $10`: risk = **10%**, per explicit instruction.
 - For any balance strictly between $10 and $50, risk scales linearly between those two points:
 
 ```
-bootstrap_risk_pct(balance) = 0.05 + ((50 - balance) / 40) * 0.65
+bootstrap_risk_pct(balance) = 0.30 - ((50 - balance) / 40) * 0.20
 ```
 
-- For `active_trading_balance ≤ $10` (e.g. after an early loss shrinks the account further): risk is **capped flat at 70%** — the formula is not extrapolated below $10, since doing so would approach or exceed 100% risk per trade, which is not a valid position size.
+- For `active_trading_balance ≤ $10` (e.g. after an early loss shrinks the account further): risk is **capped flat at 10%** — the formula is not extrapolated below $10.
 - Once `active_trading_balance ≥ $50`, the account exits this section entirely and is governed by Section 3's Tier 0–7 matrix from that point forward, unchanged.
 
 **Worked reference table:**
 
 | Balance | Bootstrap Risk % |
 |---|---|
-| $50.00 | 5.00% |
-| $40.00 | 21.25% |
-| $30.00 | 37.50% |
-| $20.00 | 53.75% |
-| $10.00 | 70.00% |
-| ≤ $10.00 | 70.00% (flat cap) |
+| $50.00 | 30.00% |
+| $40.00 | 25.00% |
+| $30.00 | 20.00% |
+| $20.00 | 15.00% |
+| $10.00 | 10.00% |
+| $1.00 – $9.99 | 10.00% (flat cap) |
 
-**Flagged explicitly, not smoothed over:** this regime is dramatically more aggressive than anything else in this document, including the already-flagged Tier 7 ceiling. At the $10–$20 end of this scale, a single stop-loss hit consumes more than half the account; two consecutive losing trades in that range can reduce the account to a few dollars or less. This section does **not** currently interact with the Phase 5 macro circuit breaker (Section 6) or Phase 6 micro circuit breaker (Section 7) — both of those were designed around the standard matrix's risk levels, and whether they should override or coexist with this bootstrap phase is an open item (see Section 13). Until that's resolved, treat this section as high-risk-by-design and pending your explicit sign-off before any live (non-paper) use.
+**Flagged explicitly, not smoothed over:** the curve now scales *up* with balance rather than down — risk is smallest ($10 → 10%) where the account is smallest, and reaches its 30% maximum only at the $50 handoff. A single stop-loss hit at the $10 flat cap costs 10% of the account rather than 70%, but 10–30% per trade is still well above the standard matrix's 2–10% base risk, so the phase remains high-risk-by-design and pending your explicit sign-off before any live (non-paper) use.
 
 ## 4. Phase 3 — Position Sizing Engine
 
@@ -138,7 +138,7 @@ Tracks historical equity peaks and halts trading before catastrophic failure.
 
 **This resolves `FR-BOT-5` / `FR-BOT-7` from the SRS:** "equity decline trend" is defined as a 45% drawdown from peak equity, triggering an immediate strategy switch or halt.
 
-**Settled — Section 3a interaction:** confirmed intended. At bootstrap-phase risk levels (up to 70%), a single losing trade can exceed this 45% macro-drawdown threshold outright, meaning the macro breaker can fire after just one trade rather than acting as a longer-horizon safeguard. This is accepted as the tradeoff for allowing 70% risk at very small balances — see Section 13.
+**Settled — Section 3a interaction:** at the revised bootstrap risk levels (10–30%), a single losing trade stays under this 45% macro-drawdown threshold, so the macro breaker acts as the longer-horizon safeguard it was designed to be throughout the bootstrap phase. Single-loss escalation in that phase is owned by Section 7's bootstrap override instead — see Section 13.
 
 ### 6.1 Strategy B — Capital Preservation Mode (Proposed, pending confirmation)
 
@@ -160,7 +160,7 @@ Instantly decouples the risk engine from aggressive settings when immediate tech
 
 This is the short-horizon complement to the macro circuit breaker in Phase 5 — it reacts within a single trading day rather than waiting for a full drawdown from peak.
 
-**Settled — Section 3a-specific rule (this revision):** the standard two-strike rule above still applies throughout the bootstrap phase unchanged. In addition, a **single-loss override** applies specifically at the bootstrap phase's risk ceiling: if a trade taken at or near the 70% flat-cap risk level (i.e. `active_trading_balance ≤ $10`, per Section 3a) results in a loss, `active_strategy_mode` switches to `STRATEGY_B` immediately — after that one loss, not after two. This is tighter than the standard two-strike rule by design: a loss at the maximum bootstrap risk level is proportionally far more damaging than a loss at the standard matrix's maximum of 40%, so it doesn't wait for a second occurrence before stepping back into capital preservation.
+**Settled — Section 3a-specific rule (this revision):** the standard two-strike rule above still applies throughout the bootstrap phase unchanged. In addition, a **single-loss override** applies specifically at the bootstrap phase's risk ceiling: if a trade taken at or near the 10% flat-cap risk level (i.e. `active_trading_balance ≤ $10`, per Section 3a) results in a loss, `active_strategy_mode` switches to `STRATEGY_B` immediately — after that one loss, not after two. This is tighter than the standard two-strike rule by design: a loss at the maximum bootstrap risk level is proportionally far more damaging than a loss at the standard matrix's maximum of 40%, so it doesn't wait for a second occurrence before stepping back into capital preservation. It is now the only mechanism that escalates on a single bootstrap loss, since the revised curve keeps one loss under the macro breaker's threshold.
 
 ## 8. Phase 7 — Closed-Loop Self Learning
 
@@ -396,8 +396,8 @@ This pool grows over time via the Discovery process (Section 9.4) — new strate
 **Settled — all four Section 3a interaction questions, this revision:**
 
 - ~~Interaction with Phase 4 (Profit Lock)~~ → does not apply below $50. Begins only once the account crosses into the standard Tier 0–7 matrix (Section 5).
-- ~~Interaction with the macro circuit breaker~~ → confirmed intended. A single loss can trigger the 45% macro breaker outright at bootstrap risk levels — accepted as the deliberate tradeoff of allowing 70% risk at very small balances (Section 6).
-- ~~Interaction with the micro circuit breaker~~ → resolved with a new bootstrap-specific rule: a single loss at the 70% flat-cap risk level (balance ≤ $10) triggers an immediate switch to Strategy B, rather than waiting for the standard two-strike threshold (Section 7).
+- ~~Interaction with the macro circuit breaker~~ → at the revised 10–30% bootstrap risk levels a single loss stays under the 45% macro threshold, so the breaker keeps its longer-horizon role throughout the bootstrap phase (Section 6).
+- ~~Interaction with the micro circuit breaker~~ → resolved with a new bootstrap-specific rule: a single loss at the 10% flat-cap risk level (balance ≤ $10) triggers an immediate switch to Strategy B, rather than waiting for the standard two-strike threshold (Section 7).
 - ~~Permanent feature vs. one-time bootstrap~~ → **permanent by design, deliberately minimal.** Section 3a is intended to stay light-touch — few rules, maximum room for the account to grow from a very small starting balance — rather than accumulating the same constraint layers as the standard matrix. This is an intentional, accepted tension with Core Management Principle 1 (Section 12), not a gap to close later.
 
 **Resolved (post-Phase-6, before Option 2 — see `CHANGELOG.md`):**

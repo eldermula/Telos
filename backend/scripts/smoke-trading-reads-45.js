@@ -134,7 +134,7 @@ async function main() {
   const closedResults = [];
   closedResults.push(await tickUntilClosed(runtime));
   // Second tick legitimately may not open — a loss on cycle1 at the
-  // bootstrap 70%-ceiling correctly fires the Section 3a/7 single-loss
+  // bootstrap 10%-ceiling correctly fires the Section 3a/7 single-loss
   // override into STRATEGY_B, and STRATEGY_B's 0.90 confidence bar
   // (Section 6.1) then correctly rejects the stub's fixed 0.85
   // confidence (see smoke-bot-runtime-43.js for the full explanation).

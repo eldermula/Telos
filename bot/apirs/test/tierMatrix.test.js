@@ -22,7 +22,7 @@ test('Section 3 — matrix values match the seeded migration exactly', () => {
   assert.deepEqual(
     TIER_MATRIX.map((r) => [r.tier, r.completedBlocksMin, r.stepSize, r.baseRisk, r.maxRiskCeiling]),
     [
-      [0, 0, 150, 0.02, 0.05],
+      [0, 0, 150, 0.02, 0.30],
       [1, 1, 150, 0.02, 0.10],
       [2, 2, 150, 0.03, 0.15],
       [3, 3, 150, 0.04, 0.20],
@@ -62,22 +62,23 @@ test('getTierRow — direct validated lookup by tier number', () => {
 });
 
 test('Section 3a — worked reference table from the spec', () => {
-  assertClose(bootstrapRiskPct(40), 0.2125);
-  assertClose(bootstrapRiskPct(30), 0.375);
-  assertClose(bootstrapRiskPct(20), 0.5375);
-  assertClose(bootstrapRiskPct(10), 0.70);
+  assertClose(bootstrapRiskPct(40), 0.25);
+  assertClose(bootstrapRiskPct(30), 0.20);
+  assertClose(bootstrapRiskPct(20), 0.15);
+  assertClose(bootstrapRiskPct(10), 0.10);
 });
 
-test('Section 3a — flat 70% cap at and below $10, not just exactly at $10', () => {
-  assertClose(bootstrapRiskPct(10), 0.70);
-  assertClose(bootstrapRiskPct(5), 0.70);
-  assertClose(bootstrapRiskPct(1), 0.70);
-  assertClose(bootstrapRiskPct(0), 0.70);
-  assertClose(bootstrapRiskPct(-5), 0.70); // blown-past-zero edge case; still flat-capped, not extrapolated
+test('Section 3a — flat 10% cap at and below $10, not just exactly at $10', () => {
+  assertClose(bootstrapRiskPct(10), 0.10);
+  assertClose(bootstrapRiskPct(9.99), 0.10);
+  assertClose(bootstrapRiskPct(5), 0.10);
+  assertClose(bootstrapRiskPct(1), 0.10);
+  assertClose(bootstrapRiskPct(0), 0.10);
+  assertClose(bootstrapRiskPct(-5), 0.10); // blown-past-zero edge case; still flat-capped, not extrapolated
 });
 
-test('Section 3a — approaches 5% as balance approaches $50 from below (no discontinuity)', () => {
-  assertClose(bootstrapRiskPct(49.999999), 0.05, 1e-6);
+test('Section 3a — approaches 30% as balance approaches $50 from below (no discontinuity)', () => {
+  assertClose(bootstrapRiskPct(49.999999), 0.30, 1e-6);
 });
 
 test('Section 3a — throws rather than extrapolating for balance >= $50', () => {
@@ -90,24 +91,24 @@ test('getTierRiskParameters — routes to bootstrap regime below $50', () => {
   assert.equal(params.regime, 'bootstrap');
   assert.equal(params.tier, null);
   assert.equal(params.stepSize, null);
-  assertClose(params.baseRisk, 0.5375);
+  assertClose(params.baseRisk, 0.15);
   // In bootstrap mode there is only one risk number — it serves as both
   // base risk and ceiling (Section 4 reads it this way).
-  assertClose(params.maxRiskCeiling, 0.5375);
+  assertClose(params.maxRiskCeiling, 0.15);
 });
 
 test('getTierRiskParameters — bootstrap flat cap ignores completedBlocks entirely', () => {
   const a = getTierRiskParameters({ balance: 8, completedBlocks: 0 });
   const b = getTierRiskParameters({ balance: 8, completedBlocks: 6 });
-  assertClose(a.baseRisk, 0.70);
-  assertClose(b.baseRisk, 0.70);
+  assertClose(a.baseRisk, 0.10);
+  assertClose(b.baseRisk, 0.10);
 });
 
 test('getTierRiskParameters — $50 is the inclusive handoff to the standard matrix', () => {
   const atFifty = getTierRiskParameters({ balance: 50, completedBlocks: 0 });
   assert.equal(atFifty.regime, 'standard');
   assert.equal(atFifty.tier, 0);
-  assertClose(atFifty.maxRiskCeiling, 0.05);
+  assertClose(atFifty.maxRiskCeiling, 0.30);
 
   const justBelow = getTierRiskParameters({ balance: 49.999999, completedBlocks: 0 });
   assert.equal(justBelow.regime, 'bootstrap');
@@ -167,7 +168,7 @@ test('getTierRiskParameters — injected tierRows has no effect in bootstrap reg
   const overrideRows = TIER_MATRIX.map((row) => ({ ...row, maxRiskCeiling: 0.99 }));
   const params = getTierRiskParameters({ balance: 20, completedBlocks: 0, tierRows: overrideRows });
   assert.equal(params.regime, 'bootstrap');
-  assertClose(params.baseRisk, 0.5375);
+  assertClose(params.baseRisk, 0.15);
 });
 
 // --- Phase 7.9 — getTierRow's tierRows injection (live risk_tier_config) --

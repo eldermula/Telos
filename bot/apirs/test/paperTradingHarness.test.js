@@ -32,30 +32,30 @@ const neutralBootstrapTrade = {
 
 // --- Phase 3 exit criteria: position sizing, bootstrap regime ------------
 
-test('bootstrap regime: first trade sizes at the 70% flat-cap ceiling and a win compounds correctly', () => {
+test('bootstrap regime: first trade sizes at the 10% flat-cap ceiling and a win compounds correctly', () => {
   const state = createInitialState(); // $10, per Section 2
   const { state: newState, trace } = runTradeCycle(state, { ...neutralBootstrapTrade, outcomeRMultiple: 1 });
 
   assert.equal(trace.tradeApproved, true);
-  assertClose(trace.riskResult.appliedRisk, 0.70); // clamped to bootstrap ceiling
+  assertClose(trace.riskResult.appliedRisk, 0.10); // clamped to bootstrap ceiling
   assert.equal(trace.riskResult.riskSource, 'section4_tier_based');
-  assertClose(trace.balanceAfterTrade, 17); // $10 + (0.70 * $10 * 1R)
+  assertClose(trace.balanceAfterTrade, 11); // $10 + (0.10 * $10 * 1R)
   assert.equal(newState.activeStrategyMode, STRATEGY_A);
   assert.equal(newState.currentTier, 0); // still below $50, profit-lock doesn't apply
 });
 
 // --- Both circuit breakers, exercised through the full pipeline ----------
 
-test('macro breaker alone escalates A -> B on a single large bootstrap-ceiling loss', () => {
+test('a full-ceiling bootstrap loss escalates A -> B via the Section 3a override, not the macro breaker', () => {
   const state = createInitialState();
   const { state: newState, trace } = runTradeCycle(state, { ...neutralBootstrapTrade, outcomeRMultiple: -1 });
 
-  assertClose(trace.riskResult.appliedRisk, 0.70);
-  assertClose(trace.balanceAfterTrade, 3); // $10 - 70% of $10
-  assert.equal(trace.macroResult.macroBreachTriggered, true);
-  // Drawdown (70%) alone already clears the 45% macro threshold, so the
-  // Section 3a addendum isn't even needed to explain this transition.
-  assert.equal(trace.modeResult.bootstrapSingleLossOverrideTriggered, false);
+  assertClose(trace.riskResult.appliedRisk, 0.10);
+  assertClose(trace.balanceAfterTrade, 9); // $10 - 10% of $10
+  // A 10% drawdown is far short of the 45% macro threshold, so the
+  // Section 3a addendum is what carries this transition on its own.
+  assert.equal(trace.macroResult.macroBreachTriggered, false);
+  assert.equal(trace.modeResult.bootstrapSingleLossOverrideTriggered, true);
   assert.equal(newState.activeStrategyMode, STRATEGY_B);
 });
 
@@ -77,9 +77,9 @@ test('bootstrap single-loss override fires when the macro drawdown check alone w
 
   const { state: newState, trace } = runTradeCycle(state, tradeInput);
 
-  assertClose(trace.riskResult.appliedRisk, 0.245); // 0.70 * (0.85+0.5+0+0-0-1-0)
-  assertClose(trace.balanceAfterTrade, 7.55);
-  assertClose(trace.macroResult.drawdownFromPeak, 0.245);
+  assertClose(trace.riskResult.appliedRisk, 0.035); // 0.10 * (0.85+0.5+0+0-0-1-0)
+  assertClose(trace.balanceAfterTrade, 9.65);
+  assertClose(trace.macroResult.drawdownFromPeak, 0.035);
   assert.equal(trace.macroResult.macroBreachTriggered, false); // macro alone: no breach
   assert.equal(trace.modeResult.bootstrapSingleLossOverrideTriggered, true); // addendum: fires anyway
   assert.equal(newState.activeStrategyMode, STRATEGY_B);
@@ -137,12 +137,12 @@ test('profit-lock triggers and advances the tier once net profit crosses one ful
 
   const { state: newState, trace } = runTradeCycle(state, tradeInput);
 
-  assertClose(trace.riskResult.appliedRisk, 0.05); // Tier 0 ceiling
-  assertClose(trace.balanceAfterTrade, 350); // $200 + (0.05*200*15)
+  assertClose(trace.riskResult.appliedRisk, 0.07); // 0.02 * 3.5, under Tier 0's ceiling
+  assertClose(trace.balanceAfterTrade, 410); // $200 + (0.07*200*15)
   assert.equal(trace.profitLockResult.profitLockTriggered, true);
   assertClose(trace.profitLockResult.lockedProfitAmount, 105); // 150 * 0.70
-  assertClose(newState.balance, 245); // 350 - 105
-  assertClose(newState.peakEquity, 245); // Peak Reset Vector: reduced by the same amount
+  assertClose(newState.balance, 305); // 410 - 105
+  assertClose(newState.peakEquity, 305); // Peak Reset Vector: reduced by the same amount
   assert.equal(newState.currentTier, 1);
 });
 
@@ -256,10 +256,9 @@ test('runTradeCycle does not mutate the input state', () => {
 // --- Phase 7.8 — evaluateEntry's tierRows injection point -----------------
 
 test('evaluateEntry — third-arg tierRows reaches the standard-regime sizing', () => {
-  // Tier 0 (baseRisk 0.02, ceiling 0.05): a best-case score (riskScore=4)
-  // calculates to 0.08, which the default ceiling clamps down to 0.05 —
-  // same setup as positionSizing.test.js's "clamped at tier ceiling" case,
-  // chosen deliberately so raising the ceiling is observable in appliedRisk.
+  // Tier 0 (baseRisk 0.02, ceiling 0.30): this score calculates to 0.07,
+  // under the default ceiling — chosen deliberately so an injected lower
+  // ceiling is observable in appliedRisk.
   const state = {
     balance: 60,
     peakEquity: 60,
@@ -271,17 +270,17 @@ test('evaluateEntry — third-arg tierRows reaches the standard-regime sizing', 
   const tradeInput = { ...neutralBootstrapTrade, marketVolatility: 'NORMAL' };
 
   const withoutOverride = evaluateEntry(state, tradeInput);
-  assertClose(withoutOverride.riskResult.sizing.tierParams.maxRiskCeiling, 0.05); // Tier 0 default
-  assertClose(withoutOverride.riskResult.appliedRisk, 0.05); // clamped
+  assertClose(withoutOverride.riskResult.sizing.tierParams.maxRiskCeiling, 0.30); // Tier 0 default
+  assertClose(withoutOverride.riskResult.appliedRisk, 0.07); // unclamped
 
   const overrideRows = TIER_MATRIX.map((row) =>
-    row.tier === 0 ? { ...row, maxRiskCeiling: 0.99 } : row
+    row.tier === 0 ? { ...row, maxRiskCeiling: 0.01 } : row
   );
   const withOverride = evaluateEntry(state, tradeInput, { tierRows: overrideRows });
-  assertClose(withOverride.riskResult.sizing.tierParams.maxRiskCeiling, 0.99);
-  // No longer clamped by the (now much higher) ceiling — appliedRisk should
-  // equal the raw calculatedRisk rather than the old 0.05 ceiling.
-  assertClose(withOverride.riskResult.appliedRisk, withOverride.riskResult.sizing.calculatedRisk);
+  assertClose(withOverride.riskResult.sizing.tierParams.maxRiskCeiling, 0.01);
+  // Now clamped by the (much lower) injected ceiling rather than tracking
+  // the raw calculatedRisk the default matrix allowed through.
+  assertClose(withOverride.riskResult.appliedRisk, 0.01);
   assert.notEqual(withOverride.riskResult.appliedRisk, withoutOverride.riskResult.appliedRisk);
 });
 

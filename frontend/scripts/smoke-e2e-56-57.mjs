@@ -72,8 +72,8 @@ async function main() {
   assert(preStart.data.status === 'stopped', 'expected stopped before Start');
   assert(preStart.data.bootstrap_phase === true, 'expected bootstrap_phase at $10 start');
   assert(
-    Math.abs(preStart.data.bootstrap_risk_ceiling_pct - 0.7) < 1e-9,
-    `expected bootstrap_risk_ceiling_pct 0.70 at $10, got ${preStart.data.bootstrap_risk_ceiling_pct}`,
+    Math.abs(preStart.data.bootstrap_risk_ceiling_pct - 0.1) < 1e-9,
+    `expected bootstrap_risk_ceiling_pct 0.10 at $10, got ${preStart.data.bootstrap_risk_ceiling_pct}`,
   );
 
   const start = await req('/trading/session/start', { method: 'POST', token });
