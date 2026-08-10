@@ -2242,3 +2242,616 @@
 [synthetic-bot-runtime] tick failed: read ECONNRESET
 [bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
 [synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[error] {
+  code: 'ECONNRESET',
+  message: 'read ECONNRESET',
+  stack: 'Error: read ECONNRESET\n' +
+    '    at C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\node_modules\\pg-pool\\index.js:45:11\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n' +
+    '    at async Object.login (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\services\\auth.service.js:52:18)\n' +
+    '    at async login (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\controllers\\auth.controller.js:36:20)',
+  path: '/api/v1/auth/login',
+  method: 'POST'
+}
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[error] {
+  code: 'ECONNRESET',
+  message: 'read ECONNRESET',
+  stack: 'Error: read ECONNRESET\n' +
+    '    at C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\node_modules\\pg-pool\\index.js:45:11\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n' +
+    '    at async Object.getMe (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\services\\auth.service.js:118:18)\n' +
+    '    at async me (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\controllers\\auth.controller.js:74:20)',
+  path: '/api/v1/auth/me',
+  method: 'GET'
+}
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[error] {
+  code: 'ECONNRESET',
+  message: 'read ECONNRESET',
+  stack: 'Error: read ECONNRESET\n' +
+    '    at C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\node_modules\\pg-pool\\index.js:45:11\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n' +
+    '    at async Object.login (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\services\\auth.service.js:52:18)\n' +
+    '    at async login (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\controllers\\auth.controller.js:36:20)',
+  path: '/api/v1/auth/login',
+  method: 'POST'
+}
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[error] {
+  code: 'ECONNRESET',
+  message: 'read ECONNRESET',
+  stack: 'Error: read ECONNRESET\n' +
+    '    at C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\node_modules\\pg-pool\\index.js:45:11\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n' +
+    '    at async Object.login (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\services\\auth.service.js:52:18)\n' +
+    '    at async login (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\controllers\\auth.controller.js:36:20)',
+  path: '/api/v1/auth/login',
+  method: 'POST'
+}
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[error] {
+  code: 'ECONNRESET',
+  message: 'read ECONNRESET',
+  stack: 'Error: read ECONNRESET\n' +
+    '    at C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\node_modules\\pg-pool\\index.js:45:11\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n' +
+    '    at async Object.login (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\services\\auth.service.js:52:18)\n' +
+    '    at async login (C:\\Users\\USER\\Desktop\\Projects\\forextradebot\\backend\\src\\controllers\\auth.controller.js:36:20)',
+  path: '/api/v1/auth/login',
+  method: 'POST'
+}
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[synthetic-bot-runtime] tick failed: read ECONNRESET
+[bot-runtime] 203d358b-60d9-4d6b-b9ba-8f9c64f531fe read ECONNRESET
