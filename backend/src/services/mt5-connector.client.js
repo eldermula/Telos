@@ -62,6 +62,10 @@ async function validateBrokerCredentials(credentials) {
  */
 
 async function connectorRequest(path, { method = 'GET', body } = {}) {
+  const diagTiming =
+    process.env.DIAG_TIMING === '1' ? require('../engine/diag-timing-context') : null;
+  const fetchStarted = diagTiming ? Date.now() : 0;
+
   let response;
   try {
     response = await fetch(`${MT5_CONNECTOR_URL}${path}`, {
@@ -84,6 +88,12 @@ async function connectorRequest(path, { method = 'GET', body } = {}) {
   } catch {
     throw new AppError(502, 'MT5_CONNECTOR_INVALID_RESPONSE', 'MT5 connector returned an invalid response');
   }
+
+  if (diagTiming) {
+    const httpMs = Date.now() - fetchStarted;
+    diagTiming.recordConnector(path, method, httpMs, respBody._diag_timing || null);
+  }
+
   return { status: response.status, ok: response.ok, body: respBody };
 }
 
