@@ -245,6 +245,12 @@ export function TradingPage() {
   }
 
   const isRunning = session?.status === 'running';
+  // status==='error' still needs a way back — stopSession() already
+  // unconditionally clears error status (bot-runtime.js halts to 'error',
+  // Stop is the only path back to 'stopped'), but the header used to only
+  // ever show Start Trading in that state, which just re-throws
+  // BOT_INSTANCE_ERROR. Show Stop whenever there's an error to clear too.
+  const canStop = isRunning || session?.status === 'error';
   const haltNewOpensActive = Boolean(session?.halt_new_opens);
   const liveConfirmed = Boolean(session?.live_trading_confirmed_at);
 
@@ -272,17 +278,19 @@ export function TradingPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="type-display-sm">Trading</h1>
-        {isRunning ? (
+        {canStop ? (
           <div className="flex flex-wrap gap-2.5">
-            {haltNewOpensActive ? (
-              <Button variant="secondary" onClick={() => setConfirmAction('resume')}>
-                Resume new trades
-              </Button>
-            ) : (
-              <Button variant="secondary" onClick={() => setConfirmAction('halt')}>
-                Halt new trades
-              </Button>
-            )}
+            {isRunning ? (
+              haltNewOpensActive ? (
+                <Button variant="secondary" onClick={() => setConfirmAction('resume')}>
+                  Resume new trades
+                </Button>
+              ) : (
+                <Button variant="secondary" onClick={() => setConfirmAction('halt')}>
+                  Halt new trades
+                </Button>
+              )
+            ) : null}
             <Button variant="destructive" onClick={() => setConfirmAction('stop')}>
               Stop Trading
             </Button>
