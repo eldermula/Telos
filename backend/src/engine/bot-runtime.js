@@ -62,6 +62,17 @@ const { computeLiveWinProbability, computeConsecutiveLosses } = require(
 /** Default paper tick interval (ms). Overridable via PAPER_TICK_MS. */
 const DEFAULT_TICK_MS = Number(process.env.PAPER_TICK_MS) || 2000;
 
+/**
+ * Read-only account-info pre-check retry delay (ms). Same value and same
+ * scope as synthetic-bot-runtime.js's ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS —
+ * absorbs a transient MT5 connector IPC blip (-10004 "No IPC connection"),
+ * which mt5-connector/server.py's per-request initialize()/shutdown() makes
+ * possible whenever two connector requests land close together. Deliberately
+ * NOT shared with placeOrder — real orders keep "log, skip, no auto-retry"
+ * to avoid double-fills.
+ */
+const ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS = 400;
+
 function markersFromInstance(instance) {
   return {
     day: instance.daily_drawdown_day ?? null,
@@ -639,15 +650,32 @@ class BotRuntime {
     const deps = this._realOpen;
     const forcedSelection = options.forcedSelection || null;
     const manualTest = options.manualTest === true;
+
+    // Read-only Layer 0 / equity pre-check. One short retry absorbs a
+    // transient MT5 IPC blip (-10004) — see ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS.
+    // Deliberately NOT shared with placeOrder — real orders keep "log, skip,
+    // no auto-retry" to avoid double-fills.
     let accountInfo;
     try {
       accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
-    } catch (err) {
-      await this._haltRealOpenFailure('account_info_unavailable', {
-        message: err.message,
-        code: err.code || null,
-      });
-      return { state: this.state, entryResult: null, trade: null, error: true };
+    } catch (firstErr) {
+      console.warn(
+        '[bot-runtime] account-info pre-check failed; one read-only retry ' +
+          `after ${ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS}ms (not placeOrder)`,
+        { message: firstErr.message, code: firstErr.code || null }
+      );
+      try {
+        await new Promise((r) => setTimeout(r, ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS));
+        accountInfo = await deps.getMatchedAccountInfo(this.botInstanceId);
+      } catch (err) {
+        await this._haltRealOpenFailure('account_info_unavailable', {
+          message: err.message,
+          code: err.code || null,
+          retried: true,
+          first_error: firstErr.message,
+        });
+        return { state: this.state, entryResult: null, trade: null, error: true };
+      }
     }
 
     // Freshness before equity persist — a stale connection must not
