@@ -150,6 +150,26 @@ router.post(
   controller.stopM5PaperSession
 );
 
+// M1 PAPER-ONLY EXPERIMENT (docs/15_M1_Forex_Paper_Experiment.md) — same
+// isolation pattern as m5-paper-*: in-memory, admin-only, never reaches
+// real dispatch. Deliberately NOT nested under /forex/* or reachable from
+// the normal Trading page flow.
+router.get(
+  '/experimental/m1-paper-status',
+  rateLimit.read({ max: 20 }),
+  controller.getM1PaperStatus
+);
+router.post(
+  '/experimental/m1-paper-start',
+  rateLimit.write({ max: 5 }),
+  controller.startM1PaperSession
+);
+router.post(
+  '/experimental/m1-paper-stop',
+  rateLimit.write({ max: 5 }),
+  controller.stopM1PaperSession
+);
+
 // M5 real-dispatch (UNPROVEN LIVE, docs/14_M5_Forex_Paper_Experiment.md) — a
 // SEPARATE tool from m5-paper-* above. Can place real orders once Layer 0-3
 // (below) are all armed. Admin-only, testing-only, never reachable from the

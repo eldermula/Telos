@@ -43,9 +43,9 @@
 const { evaluateM5Tick } = require('./m5-paper-strategy');
 const { resolveExpectedAccountTypeForLayer0 } = require('./execution-mode');
 const { isConnectionFresh } = require('./connection-freshness');
+const { REAL_MAX_LOT } = require('../config/env');
 
 const ACCOUNT_INFO_PRECHECK_RETRY_DELAY_MS = 400;
-const HISTORY_RETRY_DELAY_MS = 250;
 const REAL_HISTORY_RETRY_TICKS = 3;
 const ASSET_CLASS = 'm5_forex_gold';
 
@@ -169,6 +169,18 @@ async function attemptOpen(deps) {
 
   // decision.outcome === 'opened' from here — real placeOrder.
   const trade = decision.trade;
+  // Apply the same REAL_MAX_LOT hard ceiling forex uses (paper clampLotSize
+  // only respects broker volume_max, which is often much higher).
+  const cappedLot = Math.min(Number(trade.lotSize), REAL_MAX_LOT);
+  if (!(cappedLot > 0)) {
+    return {
+      outcome: 'sizing_error',
+      halt: false,
+      details: { symbol: trade.symbol, reason: 'real_max_lot_zero', lotSize: trade.lotSize },
+    };
+  }
+  trade.lotSize = cappedLot;
+
   const expectedAccountType = resolveExpectedAccountTypeForLayer0(accountInfo.account_type);
 
   const placeStarted = Date.now();
@@ -219,49 +231,96 @@ async function attemptOpen(deps) {
     balance_snapshot: trade.balanceSnapshot,
   };
 
-  const tradeRow = await deps.insertOpenRealTrade({
-    botInstanceId: deps.botInstanceId,
-    symbol: trade.symbol,
-    direction: trade.direction,
-    entryPrice,
-    stopPrice: trade.stopPrice,
-    targetPrice: trade.targetPrice,
-    lotSize,
-    finalAppliedPositionRisk: trade.appliedRisk,
-    brokerTicket,
-    conditions,
-    assetClass: ASSET_CLASS,
-    origin: 'bot',
-  });
-
-  await deps.insertDecision({
-    botInstanceId: deps.botInstanceId,
-    decisionType: 'real_order_placed',
-    triggeringCondition: `${trade.direction} ${trade.symbol} ticket=${brokerTicket} lots=${lotSize}`,
-    assetClass: ASSET_CLASS,
-    details: {
-      trade_id: tradeRow.id,
-      broker_ticket: brokerTicket,
+  // Post-place persistence MUST NOT throw into the harness soft tick_error
+  // path — that can leave a live broker ticket with no in-memory openTrade
+  // and no DB row (or a DB row with no monitor). Halt loudly instead.
+  let tradeRow;
+  try {
+    tradeRow = await deps.insertOpenRealTrade({
+      botInstanceId: deps.botInstanceId,
       symbol: trade.symbol,
       direction: trade.direction,
-      lot_size: lotSize,
-      calculated_size: trade.lotSize,
-      entry_price: entryPrice,
-      stop_price: trade.stopPrice,
-      target_price: trade.targetPrice,
-      applied_risk: trade.appliedRisk,
-      expected_account_type: expectedAccountType,
-      detected_account_type: accountInfo.account_type,
-      latency_ms: latencyMs,
-      place_order_raw: placeResult,
-    },
-  });
+      entryPrice,
+      stopPrice: trade.stopPrice,
+      targetPrice: trade.targetPrice,
+      lotSize,
+      finalAppliedPositionRisk: trade.appliedRisk,
+      brokerTicket,
+      conditions,
+      assetClass: ASSET_CLASS,
+      origin: 'bot',
+    });
+  } catch (err) {
+    return {
+      outcome: 'post_place_persist_failed',
+      halt: true,
+      details: {
+        message: err.message,
+        broker_ticket: brokerTicket,
+        symbol: trade.symbol,
+        direction: trade.direction,
+        lot_size: lotSize,
+        entry_price: entryPrice,
+        stop_price: trade.stopPrice,
+        target_price: trade.targetPrice,
+        phase: 'insertOpenRealTrade',
+      },
+      // Still surface enough for a human to reconcile the orphan ticket.
+      openTrade: {
+        tradeRowId: null,
+        symbol: trade.symbol,
+        direction: trade.direction,
+        entryPrice,
+        stopPrice: trade.stopPrice,
+        targetPrice: trade.targetPrice,
+        lotSize,
+        contractSize: trade.contractSize,
+        brokerTicket: Number(brokerTicket),
+        appliedRisk: trade.appliedRisk,
+        strategyName: trade.strategyName,
+        historyRetryCount: 0,
+        openedAt: new Date().toISOString(),
+        orphaned: true,
+      },
+    };
+  }
 
-  await deps.forceNotifyUser(
-    deps.userId,
-    'real_order',
-    `M5 experiment real order placed: ${trade.direction} ${trade.symbol} ticket ${brokerTicket} (${lotSize} lots).`
-  );
+  try {
+    await deps.insertDecision({
+      botInstanceId: deps.botInstanceId,
+      decisionType: 'real_order_placed',
+      triggeringCondition: `${trade.direction} ${trade.symbol} ticket=${brokerTicket} lots=${lotSize}`,
+      assetClass: ASSET_CLASS,
+      details: {
+        trade_id: tradeRow.id,
+        broker_ticket: brokerTicket,
+        symbol: trade.symbol,
+        direction: trade.direction,
+        lot_size: lotSize,
+        calculated_size: trade.lotSize,
+        entry_price: entryPrice,
+        stop_price: trade.stopPrice,
+        target_price: trade.targetPrice,
+        applied_risk: trade.appliedRisk,
+        expected_account_type: expectedAccountType,
+        detected_account_type: accountInfo.account_type,
+        latency_ms: latencyMs,
+        place_order_raw: placeResult,
+      },
+    });
+  } catch (err) {
+    console.error('[m5-real-dispatch] insertDecision after place failed (continuing):', err.message);
+  }
+
+  try {
+    await deps.forceNotifyUser(
+      deps.userId,
+      'real_order',
+      `M5 experiment real order placed: ${trade.direction} ${trade.symbol} ticket ${brokerTicket} (${lotSize} lots).`
+    );
+  } catch (err) {
+    console.error('[m5-real-dispatch] forceNotifyUser after place failed (continuing):', err.message);
+  }
 
   return {
     outcome: 'opened',
@@ -305,31 +364,40 @@ async function attemptMonitor(deps, openTrade) {
 
   const stillOpen = (positions || []).some((p) => Number(p.ticket) === Number(openTrade.brokerTicket));
   if (stillOpen) {
+    openTrade.historyRetryCount = 0;
     return { outcome: 'still_open', halt: false };
   }
 
-  // Ticket gone — broker closed it (SL/TP, manual, stop-out). Reconcile via history.
-  let history = null;
-  let lastErr = null;
-  for (let i = 0; i < REAL_HISTORY_RETRY_TICKS; i += 1) {
-    try {
-      history = await deps.getOrderHistory(openTrade.brokerTicket);
-      lastErr = null;
-      break;
-    } catch (err) {
-      lastErr = err;
+  // Ticket gone — broker closed it (SL/TP, manual, stop-out). Reconcile via
+  // history across ticks (mirrors bot-runtime.js), not a compressed intra-tick
+  // loop that burns REAL_HISTORY_RETRY_TICKS in ~750ms then hard-halts.
+  let history;
+  try {
+    history = await deps.getOrderHistory(openTrade.brokerTicket);
+    openTrade.historyRetryCount = 0;
+  } catch (err) {
+    const retries = (openTrade.historyRetryCount || 0) + 1;
+    openTrade.historyRetryCount = retries;
+    if (retries < REAL_HISTORY_RETRY_TICKS) {
       console.warn(
         `[m5-real-dispatch] close history lag for ticket ${openTrade.brokerTicket} ` +
-          `(${i + 1}/${REAL_HISTORY_RETRY_TICKS}): ${err.message}`
+          `(${retries}/${REAL_HISTORY_RETRY_TICKS}): ${err.message}`
       );
-      await new Promise((r) => setTimeout(r, HISTORY_RETRY_DELAY_MS));
+      return {
+        outcome: 'history_retry',
+        halt: false,
+        details: { broker_ticket: openTrade.brokerTicket, retries, message: err.message },
+      };
     }
-  }
-  if (!history) {
     return {
       outcome: 'order_history_unavailable',
       halt: true,
-      details: { broker_ticket: openTrade.brokerTicket, message: lastErr ? lastErr.message : null },
+      details: {
+        broker_ticket: openTrade.brokerTicket,
+        retries,
+        max_retries: REAL_HISTORY_RETRY_TICKS,
+        message: err.message,
+      },
     };
   }
 

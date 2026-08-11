@@ -171,6 +171,10 @@ function createM5RealHarness(deps = {}) {
   async function tick() {
     tickCount += 1;
     try {
+      if (status !== 'running') {
+        // Stop/halt raced an in-flight tick — do not place or open further.
+        return;
+      }
       if (openTrade) {
         const result = await attemptMonitor(repo, openTrade);
         if (result.halt) {
@@ -191,19 +195,27 @@ function createM5RealHarness(deps = {}) {
         return;
       }
 
+      if (status !== 'running') return;
+
       const { armed, reason } = await resolveArmedState();
       if (!armed) {
         await haltSession('gate_no_longer_armed', { reason });
         return;
       }
 
+      if (status !== 'running') return;
+
       const result = await attemptOpen(repo);
+      if (result.openTrade) {
+        // Set even when halt (e.g. post_place_persist_failed) so the ticket
+        // is visible in status for human reconcile.
+        openTrade = result.openTrade;
+      }
       if (result.halt) {
         await haltSession(result.outcome, result.details);
         return;
       }
       if (result.outcome === 'opened') {
-        openTrade = result.openTrade;
         pushDecision({
           type: 'opened',
           symbol: openTrade.symbol,
@@ -219,8 +231,6 @@ function createM5RealHarness(deps = {}) {
       ) {
         pushDecision({ type: result.outcome, ...(result.details || {}) });
       }
-      // 'no_signal' / 'no_price' / 'no_data' — deliberately not logged every
-      // tick, same reasoning as m5-paper-harness.js (avoid flooding history).
       lastTickError = null;
     } catch (err) {
       lastTickError = err.message;
@@ -286,14 +296,32 @@ function createM5RealHarness(deps = {}) {
   }
 
   async function stop() {
+    // Fence: mark stopped first so any in-flight tick bails before placeOrder,
+    // then wait for the in-flight tick to finish.
+    status = 'stopped';
+    stoppedAt = new Date().toISOString();
+    haltReason = null;
     if (timer) {
       clearInterval(timer);
       timer = null;
     }
+    const waitStart = Date.now();
+    while (tickInFlight && Date.now() - waitStart < 30000) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    if (openTrade) {
+      console.warn(
+        `[m5-real-harness] Stop while openTrade still set (ticket=${openTrade.brokerTicket}). ` +
+          'Broker SL/TP remain; harness will no longer monitor. Reconcile manually if needed.'
+      );
+      pushDecision({
+        type: 'stopped_with_open_trade',
+        symbol: openTrade.symbol,
+        brokerTicket: openTrade.brokerTicket,
+        message: 'Stop abandoned monitoring; broker SL/TP still active',
+      });
+    }
     const hadInstance = repo.botInstanceId;
-    status = 'stopped';
-    stoppedAt = new Date().toISOString();
-    haltReason = null;
     // Clearing confirm-live on Stop mirrors trading-engine.js's forex
     // "re-confirm after every Stop" decision (live-trading-confirmation.js).
     if (hadInstance) {
@@ -306,6 +334,9 @@ function createM5RealHarness(deps = {}) {
         );
       }
     }
+    // Clear operator pointers so status matches a clean stopped session.
+    repo.botInstanceId = null;
+    repo.userId = null;
     return getStatus();
   }
 

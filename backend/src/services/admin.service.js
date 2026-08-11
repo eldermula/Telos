@@ -13,6 +13,9 @@ const { NEWS_LLM_ENABLED } = require('../config/env');
 // harness has no real-dispatch capability at all (see its file header);
 // admin start/stop here only toggles an in-memory paper simulation.
 const m5PaperHarness = require('../engine/m5-paper-harness');
+// M1 PAPER-ONLY EXPERIMENT (docs/15_M1_Forex_Paper_Experiment.md) — same
+// isolation pattern as m5PaperHarness: in-memory paper only, never real.
+const m1PaperHarness = require('../engine/m1-paper-harness');
 // M5 real-dispatch (UNPROVEN LIVE) — separate module/singleton from
 // m5PaperHarness above; can place real orders once Layer 0-3 are armed.
 // See backend/src/engine/m5-real-harness.js and m5-real-dispatch.js headers.
@@ -482,6 +485,22 @@ async function stopM5PaperSession(adminUserId) {
   return status;
 }
 
+function getM1PaperStatus() {
+  return m1PaperHarness.getStatus();
+}
+
+async function startM1PaperSession(adminUserId) {
+  const status = m1PaperHarness.start();
+  await writeAudit({ adminUserId, action: 'm1_paper_experiment.start' });
+  return status;
+}
+
+async function stopM1PaperSession(adminUserId) {
+  const status = m1PaperHarness.stop();
+  await writeAudit({ adminUserId, action: 'm1_paper_experiment.stop' });
+  return status;
+}
+
 // ---------------------------------------------------------------------------
 // M5 real-dispatch (UNPROVEN LIVE, docs/14_M5_Forex_Paper_Experiment.md) —
 // admin-only, mirrors forex's confirm-live + demo-dispatch-toggle shape but
@@ -629,6 +648,9 @@ module.exports = {
   getM5PaperStatus,
   startM5PaperSession,
   stopM5PaperSession,
+  getM1PaperStatus,
+  startM1PaperSession,
+  stopM1PaperSession,
   getM5RealStatus,
   startM5RealSession,
   stopM5RealSession,

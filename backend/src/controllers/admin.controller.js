@@ -332,6 +332,33 @@ async function stopM5PaperSession(req, res, next) {
   }
 }
 
+async function getM1PaperStatus(req, res, next) {
+  try {
+    const data = adminService.getM1PaperStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function startM1PaperSession(req, res, next) {
+  try {
+    const data = await adminService.startM1PaperSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function stopM1PaperSession(req, res, next) {
+  try {
+    const data = await adminService.stopM1PaperSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 // M5 real-dispatch (UNPROVEN LIVE) — see admin.service.js's section header.
 async function getM5RealStatus(req, res, next) {
   try {
@@ -455,6 +482,9 @@ module.exports = {
   getM5PaperStatus,
   startM5PaperSession,
   stopM5PaperSession,
+  getM1PaperStatus,
+  startM1PaperSession,
+  stopM1PaperSession,
   getM5RealStatus,
   startM5RealSession,
   stopM5RealSession,

@@ -28,6 +28,7 @@ import {
   getForexDemoDispatchStatus,
   getForexDemoManualTradeStatus,
   getM5PaperStatus,
+  getM1PaperStatus,
   getM5RealDemoConfirmStatus,
   getM5RealDemoDispatchStatus,
   getM5RealStatus,
@@ -41,8 +42,10 @@ import {
   patchCandidateStrategy,
   patchRiskTier,
   startM5PaperSession,
+  startM1PaperSession,
   startM5RealSession,
   stopM5PaperSession,
+  stopM1PaperSession,
   stopM5RealSession,
   type AdminUser,
   type AdminUserDetail,
@@ -51,6 +54,7 @@ import {
   type ForexDemoDispatchStatus,
   type ForexDemoManualTradeStatus,
   type M5PaperStatus,
+  type M1PaperStatus,
   type M5RealDemoConfirmStatus,
   type M5RealDemoDispatchStatus,
   type M5RealStatus,
@@ -75,9 +79,9 @@ function formatRemaining(seconds: number): string {
 
 export function AdminPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'health' | 'users' | 'tiers' | 'strategies' | 'demo' | 'm5paper'>(
-    'health',
-  );
+  const [tab, setTab] = useState<
+    'health' | 'users' | 'tiers' | 'strategies' | 'demo' | 'm5paper' | 'm1paper'
+  >('health');
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
@@ -95,6 +99,7 @@ export function AdminPage() {
   const [forexDemoManualTrade, setForexDemoManualTrade] =
     useState<ForexDemoManualTradeStatus | null>(null);
   const [m5PaperStatus, setM5PaperStatus] = useState<M5PaperStatus | null>(null);
+  const [m1PaperStatus, setM1PaperStatus] = useState<M1PaperStatus | null>(null);
   const [m5RealStatus, setM5RealStatus] = useState<M5RealStatus | null>(null);
   const [m5RealDemoDispatch, setM5RealDemoDispatch] =
     useState<M5RealDemoDispatchStatus | null>(null);
@@ -117,7 +122,7 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [h, u, t, s, d, c, m, fd, fc, fm, m5, m5r, m5rd, m5rc] = await Promise.all([
+    const [h, u, t, s, d, c, m, fd, fc, fm, m5, m1, m5r, m5rd, m5rc] = await Promise.all([
       getSystemHealth(),
       listAdminUsers({ page: 1, limit: 50 }),
       listRiskTiers(),
@@ -129,6 +134,7 @@ export function AdminPage() {
       getForexDemoConfirmStatus(),
       getForexDemoManualTradeStatus(),
       getM5PaperStatus(),
+      getM1PaperStatus(),
       getM5RealStatus(),
       getM5RealDemoDispatchStatus(),
       getM5RealDemoConfirmStatus(),
@@ -144,6 +150,7 @@ export function AdminPage() {
     setForexDemoConfirm(fc);
     setForexDemoManualTrade(fm);
     setM5PaperStatus(m5);
+    setM1PaperStatus(m1);
     setM5RealStatus(m5r);
     setM5RealDemoDispatch(m5rd);
     setM5RealDemoConfirm(m5rc);
@@ -476,6 +483,39 @@ export function AdminPage() {
     }
   }
 
+  async function onStartM1Paper() {
+    if (
+      !window.confirm(
+        'Start the M1 PAPER-ONLY experimental session? This never places real ' +
+          'orders — it only simulates entries/exits in memory using live M1 ' +
+          'market data, purely for measurement.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await startM1PaperSession();
+      setM1PaperStatus(status);
+      setMessage('M1 paper-only session started.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Start failed.');
+    }
+  }
+
+  async function onStopM1Paper() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await stopM1PaperSession();
+      setM1PaperStatus(status);
+      setMessage('M1 paper-only session stopped.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Stop failed.');
+    }
+  }
+
   async function onConfirmM5RealLiveTrading() {
     if (!m5RealConfirmPhrase.trim()) {
       setError('Enter the exact confirmation phrase first.');
@@ -644,6 +684,7 @@ export function AdminPage() {
             ['strategies', 'Strategies'],
             ['demo', 'Demo dispatch'],
             ['m5paper', 'M5 paper (experimental)'],
+            ['m1paper', 'M1 paper (experimental)'],
           ] as const
         ).map(([id, label]) => (
           <Button
@@ -1526,6 +1567,125 @@ export function AdminPage() {
                     {entry.reason ? ` (${entry.reason})` : ''}
                     {entry.message ? ` — ${entry.message}` : ''}
                     {entry.halt ? ' [HALT]' : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No decisions logged yet.</p>
+            )}
+          </GlassCard>
+        </div>
+      ) : null}
+
+      {tab === 'm1paper' ? (
+        <div className="flex flex-col gap-6">
+          <p className="type-caption text-state-danger">
+            Experimental — PAPER-ONLY, not proven. Simulates entries/exits in
+            memory using live M1 market data and the same strategy gates as the
+            main engine, but never places a real order — there is no code path
+            here that reaches the broker. Completely separate from the Trading
+            page&apos;s M15 Start Trading control and from M5 paper/real. See{' '}
+            docs/15_M1_Forex_Paper_Experiment.md. Enabling real dispatch for M1
+            is a deliberate future decision that requires explicit human review;
+            this tool does not unlock it.
+          </p>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">M1 forex/gold paper session</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Watchlist: {m1PaperStatus?.watchlist.join(', ') ?? '—'}. Ticks every{' '}
+              {m1PaperStatus ? Math.round(m1PaperStatus.tickMs / 1000) : '—'}s.
+              History is in-memory only and resets on backend restart.
+            </p>
+            {m1PaperStatus ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {m1PaperStatus.status === 'running' ? 'RUNNING' : 'stopped'}
+                  </span>
+                </p>
+                {m1PaperStatus.startedAt ? <p>Started: {m1PaperStatus.startedAt}</p> : null}
+                <p>Ticks so far: {m1PaperStatus.tickCount}</p>
+                {m1PaperStatus.lastTickError ? (
+                  <p className="text-state-danger">Last tick error: {m1PaperStatus.lastTickError}</p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="destructive" onClick={() => void onStartM1Paper()}>
+                Start M1 paper session
+              </Button>
+              {m1PaperStatus?.status === 'running' ? (
+                <Button variant="ghost" onClick={() => void onStopM1Paper()}>
+                  Stop
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={() => void refresh()}>
+                Refresh status
+              </Button>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Open position (paper)</h2>
+            {m1PaperStatus?.openTrade ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                <li>
+                  {m1PaperStatus.openTrade.symbol} {m1PaperStatus.openTrade.direction} @{' '}
+                  {m1PaperStatus.openTrade.entryPrice} (lot {m1PaperStatus.openTrade.lotSize})
+                </li>
+                <li>Strategy: {m1PaperStatus.openTrade.strategyName}</li>
+                <li>
+                  Stop {m1PaperStatus.openTrade.stopPrice} / Target{' '}
+                  {m1PaperStatus.openTrade.targetPrice}
+                </li>
+                <li>Opened: {m1PaperStatus.openTrade.openedAt}</li>
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No open paper position.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Recent closed paper trades</h2>
+            {m1PaperStatus && m1PaperStatus.closedTrades.length > 0 ? (
+              <DataTable
+                emptyMessage="No closed trades yet."
+                getRowKey={(row) => `${row.symbol}-${row.closedAt ?? row.openedAt}`}
+                columns={[
+                  { key: 'symbol', header: 'Symbol', render: (row) => row.symbol },
+                  { key: 'direction', header: 'Dir', render: (row) => row.direction },
+                  { key: 'strategy', header: 'Strategy', render: (row) => row.strategyName },
+                  { key: 'outcome', header: 'Outcome', render: (row) => row.outcome ?? '—' },
+                  {
+                    key: 'pnl',
+                    header: 'PnL',
+                    numeric: true,
+                    render: (row) => (row.pnl != null ? row.pnl.toFixed(2) : '—'),
+                  },
+                  { key: 'closedAt', header: 'Closed', render: (row) => row.closedAt ?? '—' },
+                ]}
+                rows={m1PaperStatus.closedTrades}
+              />
+            ) : (
+              <p className="type-caption text-text-secondary">No closed trades yet.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Decision log (most recent first)</h2>
+            {m1PaperStatus && m1PaperStatus.decisionLog.length > 0 ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                {m1PaperStatus.decisionLog.slice(0, 20).map((entry, i) => (
+                  <li key={`${entry.at}-${i}`}>
+                    {entry.at} — {entry.type}
+                    {entry.symbol ? ` — ${entry.symbol}` : ''}
+                    {entry.direction ? ` ${entry.direction}` : ''}
+                    {entry.reason ? ` (${entry.reason})` : ''}
+                    {entry.message ? ` — ${entry.message}` : ''}
                   </li>
                 ))}
               </ul>

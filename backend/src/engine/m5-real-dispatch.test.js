@@ -291,9 +291,22 @@ describe('m5-real-dispatch: attemptMonitor — broker-authoritative close detect
         throw new Error('deal not found in history yet');
       },
     });
-    const result = await attemptMonitor(deps, openTrade);
-    assert.equal(result.halt, true);
-    assert.equal(result.outcome, 'order_history_unavailable');
+    // Across-tick retries (mirrors bot-runtime.js): first two attempts soft-retry,
+    // third exhausts REAL_HISTORY_RETRY_TICKS and hard-halts.
+    const trade = { ...openTrade, historyRetryCount: 0 };
+    const r1 = await attemptMonitor(deps, trade);
+    assert.equal(r1.halt, false);
+    assert.equal(r1.outcome, 'history_retry');
+    assert.equal(trade.historyRetryCount, 1);
+
+    const r2 = await attemptMonitor(deps, trade);
+    assert.equal(r2.halt, false);
+    assert.equal(r2.outcome, 'history_retry');
+    assert.equal(trade.historyRetryCount, 2);
+
+    const r3 = await attemptMonitor(deps, trade);
+    assert.equal(r3.halt, true);
+    assert.equal(r3.outcome, 'order_history_unavailable');
   });
 
   it('a transient getPositions error retries next tick, never invents a close', async () => {

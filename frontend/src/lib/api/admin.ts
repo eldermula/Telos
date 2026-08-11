@@ -282,6 +282,26 @@ export function stopM5PaperSession(): Promise<M5PaperStatus> {
 }
 
 /**
+ * M1 PAPER-ONLY EXPERIMENT — admin-only, in-memory, never reaches real
+ * dispatch (docs/15_M1_Forex_Paper_Experiment.md). Same shape as M5 paper.
+ */
+export type M1PaperTrade = M5PaperTrade;
+export type M1PaperDecision = M5PaperDecision;
+export type M1PaperStatus = M5PaperStatus;
+
+export function getM1PaperStatus(): Promise<M1PaperStatus> {
+  return apiRequest('/admin/experimental/m1-paper-status');
+}
+
+export function startM1PaperSession(): Promise<M1PaperStatus> {
+  return apiRequest('/admin/experimental/m1-paper-start', { method: 'POST' });
+}
+
+export function stopM1PaperSession(): Promise<M1PaperStatus> {
+  return apiRequest('/admin/experimental/m1-paper-stop', { method: 'POST' });
+}
+
+/**
  * M5 real-dispatch (UNPROVEN LIVE, docs/14_M5_Forex_Paper_Experiment.md) —
  * a SEPARATE module/singleton from the M5 paper harness above. This one CAN
  * place real MT5 orders once an admin arms Layer 0-3. Testing-only, never
