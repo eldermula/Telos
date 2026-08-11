@@ -5,6 +5,42 @@ This is the place for "how to keep it running," not product design.
 
 ---
 
+## 0. Starting the local stack after a machine restart
+
+**Standard method — `scripts/start-everything.ps1`.** Supersedes the manual
+process of opening Docker Desktop, running `docker compose up`, and starting
+the MT5 connector / Cloudflare tunnel / backend each in their own window by
+hand with no check that the previous piece actually came up before starting
+the next. That manual process is fragile — it's easy to start the backend
+before Postgres/Redis are actually healthy, or the tunnel before the backend
+is listening, and get confusing failures with no clear cause.
+
+From the repo root:
+
+```powershell
+powershell -File scripts/start-everything.ps1
+```
+
+Starts, in order, with a real health check between each step before moving
+on: (1) Docker Desktop, (2) Postgres + Redis containers only — **never** the
+unused `backend` compose image, (3) Redis `PING`, (4) the MT5 connector
+(own window, titled `Telos - MT5 Connector`), (5) a check that the MT5
+desktop terminal is actually logged in (prints the attached
+`login`/`account_type` so you can visually confirm it's the right account;
+prompts and waits for Enter if it isn't logged in yet), (6) the Cloudflare
+tunnel (own window, titled `Telos - Cloudflare Tunnel`), (7) the backend via
+the existing `scripts/start-telos-backend.ps1` (own window, titled
+`Telos - Backend`; confirms `NODE_ENV=production`). Finishes with a
+per-service healthy/failed summary and a specific thing to check for any
+failure (e.g. "open Docker Desktop manually and re-run" if step 1 times out).
+
+Safe to re-run: each of the MT5 connector, tunnel, and backend checks its
+own health endpoint first and skips spawning a duplicate window if it's
+already up. Orchestration only — it doesn't modify any of the services it
+starts.
+
+---
+
 ## 1. Encrypted Postgres backups (Phase 8.2)
 
 Settled in `05_Database_Design.md` §4 / `09_Security.md` §5: daily encrypted

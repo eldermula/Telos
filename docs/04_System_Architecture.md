@@ -86,6 +86,8 @@ Defines the system-level component boundaries, data flow, and integration points
 - The user's own linked broker account (Blueprint 5a — non-custodial)
 - Credentials (MT5 login, password, server) captured once via `/broker-connections` (`06_API_Specification.md` Section 4), encrypted at rest, passed to the local MT5 terminal only at connection time — never persisted by the Python connector itself, only by the Backend API's encrypted storage (`09_Security.md` Section 3)
 
+**Starting the connector locally:** part of the standard local-stack startup — see `OPS.md` Section 0, `scripts/start-everything.ps1`. Starts the connector in its own window and waits for `/health`, then `/account-info`, before the rest of the stack comes up.
+
 ## 4. Core User Flow, Mapped to Components
 
 Matches the flow defined in `01_Project_Vision.md` Section 5 and `02_Product_Requirements.md` Section 3.2:
