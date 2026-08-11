@@ -6,15 +6,20 @@ import { DataTable } from '../../components/ui/DataTable';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Input } from '../../components/ui/Input';
 import {
+  confirmM5RealLiveTrading,
   disableForexDemoConfirm,
   disableForexDemoDispatch,
   disableForexDemoManualTrade,
+  disableM5RealDemoConfirm,
+  disableM5RealDemoDispatch,
   disableSyntheticDemoConfirm,
   disableSyntheticDemoDispatch,
   disableSyntheticDemoManualTrade,
   enableForexDemoConfirm,
   enableForexDemoDispatch,
   enableForexDemoManualTrade,
+  enableM5RealDemoConfirm,
+  enableM5RealDemoDispatch,
   enableSyntheticDemoConfirm,
   enableSyntheticDemoDispatch,
   enableSyntheticDemoManualTrade,
@@ -23,6 +28,9 @@ import {
   getForexDemoDispatchStatus,
   getForexDemoManualTradeStatus,
   getM5PaperStatus,
+  getM5RealDemoConfirmStatus,
+  getM5RealDemoDispatchStatus,
+  getM5RealStatus,
   getSyntheticDemoConfirmStatus,
   getSyntheticDemoDispatchStatus,
   getSyntheticDemoManualTradeStatus,
@@ -33,7 +41,9 @@ import {
   patchCandidateStrategy,
   patchRiskTier,
   startM5PaperSession,
+  startM5RealSession,
   stopM5PaperSession,
+  stopM5RealSession,
   type AdminUser,
   type AdminUserDetail,
   type CandidateStrategy,
@@ -41,6 +51,9 @@ import {
   type ForexDemoDispatchStatus,
   type ForexDemoManualTradeStatus,
   type M5PaperStatus,
+  type M5RealDemoConfirmStatus,
+  type M5RealDemoDispatchStatus,
+  type M5RealStatus,
   type RiskTier,
   type SyntheticDemoConfirmStatus,
   type SyntheticDemoDispatchStatus,
@@ -82,12 +95,21 @@ export function AdminPage() {
   const [forexDemoManualTrade, setForexDemoManualTrade] =
     useState<ForexDemoManualTradeStatus | null>(null);
   const [m5PaperStatus, setM5PaperStatus] = useState<M5PaperStatus | null>(null);
+  const [m5RealStatus, setM5RealStatus] = useState<M5RealStatus | null>(null);
+  const [m5RealDemoDispatch, setM5RealDemoDispatch] =
+    useState<M5RealDemoDispatchStatus | null>(null);
+  const [m5RealDemoConfirm, setM5RealDemoConfirm] = useState<M5RealDemoConfirmStatus | null>(
+    null,
+  );
   const [demoDispatchMinutes, setDemoDispatchMinutes] = useState('15');
   const [demoConfirmMinutes, setDemoConfirmMinutes] = useState('15');
   const [demoManualTradeMinutes, setDemoManualTradeMinutes] = useState('15');
   const [forexDemoDispatchMinutes, setForexDemoDispatchMinutes] = useState('15');
   const [forexDemoConfirmMinutes, setForexDemoConfirmMinutes] = useState('15');
   const [forexDemoManualTradeMinutes, setForexDemoManualTradeMinutes] = useState('15');
+  const [m5RealDemoDispatchMinutes, setM5RealDemoDispatchMinutes] = useState('15');
+  const [m5RealDemoConfirmMinutes, setM5RealDemoConfirmMinutes] = useState('15');
+  const [m5RealConfirmPhrase, setM5RealConfirmPhrase] = useState('');
   const [editTier, setEditTier] = useState<RiskTier | null>(null);
   const [ceilingDraft, setCeilingDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -95,7 +117,7 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [h, u, t, s, d, c, m, fd, fc, fm, m5] = await Promise.all([
+    const [h, u, t, s, d, c, m, fd, fc, fm, m5, m5r, m5rd, m5rc] = await Promise.all([
       getSystemHealth(),
       listAdminUsers({ page: 1, limit: 50 }),
       listRiskTiers(),
@@ -107,6 +129,9 @@ export function AdminPage() {
       getForexDemoConfirmStatus(),
       getForexDemoManualTradeStatus(),
       getM5PaperStatus(),
+      getM5RealStatus(),
+      getM5RealDemoDispatchStatus(),
+      getM5RealDemoConfirmStatus(),
     ]);
     setHealth(h);
     setUsers(u.data);
@@ -119,6 +144,9 @@ export function AdminPage() {
     setForexDemoConfirm(fc);
     setForexDemoManualTrade(fm);
     setM5PaperStatus(m5);
+    setM5RealStatus(m5r);
+    setM5RealDemoDispatch(m5rd);
+    setM5RealDemoConfirm(m5rc);
   }, []);
 
   useEffect(() => {
@@ -445,6 +473,143 @@ export function AdminPage() {
       setMessage('M5 paper-only session stopped.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Stop failed.');
+    }
+  }
+
+  async function onConfirmM5RealLiveTrading() {
+    if (!m5RealConfirmPhrase.trim()) {
+      setError('Enter the exact confirmation phrase first.');
+      return;
+    }
+    if (
+      !window.confirm(
+        'Confirm M5 REAL-DISPATCH live trading (UNPROVEN LIVE)? This arms Layer 2 for ' +
+          'this admin account. A real order can only be placed once Layer 1 ' +
+          '(M5_REAL_TRADING_ENABLED), Layer 3 (demo bypass, if on a demo account), and ' +
+          'Start are also satisfied.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await confirmM5RealLiveTrading(m5RealConfirmPhrase.trim());
+      setM5RealConfirmPhrase('');
+      setMessage(
+        `M5 real-dispatch live trading confirmed for bot_instance ${result.bot_instance_id} ` +
+          `(account_type=${result.account_type}).`,
+      );
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Confirmation failed.');
+    }
+  }
+
+  async function onStartM5Real() {
+    if (
+      !window.confirm(
+        'Start the M5 REAL-DISPATCH experimental session? UNPROVEN LIVE — this CAN place ' +
+          'real MT5 orders if Layer 1-3 are all armed. Testing-only. Do not start this ' +
+          'unless you intend to test real order placement right now.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await startM5RealSession();
+      setM5RealStatus(status);
+      setMessage('M5 real-dispatch session started.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Start failed.');
+    }
+  }
+
+  async function onStopM5Real() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await stopM5RealSession();
+      setM5RealStatus(status);
+      setMessage('M5 real-dispatch session stopped. Confirm-live cleared.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Stop failed.');
+    }
+  }
+
+  async function onEnableM5RealDemoDispatch() {
+    const minutes = Number.parseInt(m5RealDemoDispatchMinutes, 10);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30) {
+      setError('M5 real dispatch duration must be an integer from 1 to 30 minutes.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Enable M5 real-dispatch DEMO bypass (Layer 3) for ${minutes} minute(s)? ` +
+          'Confirmed demo sessions may place real MT5 orders via the M5 experiment.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await enableM5RealDemoDispatch(minutes);
+      setM5RealDemoDispatch(status);
+      setMessage(`M5 real Layer 3 demo-dispatch enabled until ${status.enabled_until ?? '—'}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Enable failed.');
+    }
+  }
+
+  async function onDisableM5RealDemoDispatch() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await disableM5RealDemoDispatch();
+      setM5RealDemoDispatch(status);
+      setMessage('M5 real Layer 3 demo-dispatch disabled.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Disable failed.');
+    }
+  }
+
+  async function onEnableM5RealDemoConfirm() {
+    const minutes = Number.parseInt(m5RealDemoConfirmMinutes, 10);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30) {
+      setError('M5 real confirm duration must be an integer from 1 to 30 minutes.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Enable M5 real-dispatch DEMO confirm bypass (Layer 2) for ${minutes} minute(s)? ` +
+          'Demo accounts may pass M5 confirm-live. Layer 3 is still required to dispatch.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await enableM5RealDemoConfirm(minutes);
+      setM5RealDemoConfirm(status);
+      setMessage(`M5 real Layer 2 demo-confirm enabled until ${status.enabled_until ?? '—'}.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Enable failed.');
+    }
+  }
+
+  async function onDisableM5RealDemoConfirm() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await disableM5RealDemoConfirm();
+      setM5RealDemoConfirm(status);
+      setMessage('M5 real Layer 2 demo-confirm disabled.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Disable failed.');
     }
   }
 
@@ -1085,6 +1250,282 @@ export function AdminPage() {
                     {entry.direction ? ` ${entry.direction}` : ''}
                     {entry.reason ? ` (${entry.reason})` : ''}
                     {entry.message ? ` — ${entry.message}` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No decisions logged yet.</p>
+            )}
+          </GlassCard>
+
+          <h2 className="type-heading text-state-danger">M5 real-dispatch (UNPROVEN LIVE)</h2>
+          <p className="type-caption text-state-danger">
+            Testing-only. Unlike the paper session above, this CAN place real MT5 orders.
+            Separate module/singleton (m5-real-dispatch.js / m5-real-harness.js), reachable
+            only from this admin tab — never from the Trading page. Requires Layer 1
+            (M5_REAL_TRADING_ENABLED env, server-side only), Layer 2 (confirm-live below,
+            independent of forex&apos;s own confirm-live), and — on a demo account only —
+            Layer 3 (demo-dispatch bypass below). A human-reviewed live proof is still
+            required before this is trusted; see docs/14_M5_Forex_Paper_Experiment.md.
+          </p>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Layer 1 — master kill switch</h2>
+            <p className="type-caption text-text-secondary">
+              M5_REAL_TRADING_ENABLED (env var, server-side only — cannot be toggled from
+              this UI):{' '}
+              <span className="text-text-primary">
+                {m5RealStatus?.realTradingEnabled ? 'ENABLED' : 'disabled'}
+              </span>
+              . If disabled, Start below always fails regardless of confirm-live or demo
+              bypasses.
+            </p>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Layer 2 — M5 confirm-live (this admin account)</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Independent of forex&apos;s live_trading_confirmed_at and synthetics&apos; own
+              confirmation — confirming here does not confirm or affect M15 forex, and vice
+              versa. Requires a real account, or a demo account with the Layer 2 demo-confirm
+              bypass below enabled. The M5 real session must be stopped to confirm.
+            </p>
+            <div className="flex max-w-lg flex-col gap-3">
+              <Input
+                label="Confirmation phrase"
+                type="text"
+                placeholder="I CONFIRM LIVE TRADING WITH REAL MONEY"
+                value={m5RealConfirmPhrase}
+                onChange={(e) => setM5RealConfirmPhrase(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="destructive"
+                  onClick={() => void onConfirmM5RealLiveTrading()}
+                >
+                  Confirm M5 live trading
+                </Button>
+                <Button variant="ghost" onClick={() => void refresh()}>
+                  Refresh status
+                </Button>
+              </div>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Layer 2 bypass — M5 demo confirm-live</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Lets a demo account pass M5 confirm-live above. Independent of forex/synthetic
+              demo-confirm. Does not by itself allow order placement — Layer 3 below is still
+              required to dispatch.
+            </p>
+            {m5RealDemoConfirm ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {m5RealDemoConfirm.enabled ? 'ENABLED' : 'disabled'}
+                  </span>
+                </p>
+                {m5RealDemoConfirm.enabled ? (
+                  <>
+                    <p>Until: {m5RealDemoConfirm.enabled_until ?? '—'}</p>
+                    <p>Remaining: {formatRemaining(m5RealDemoConfirm.remaining_seconds)}</p>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex max-w-md flex-col gap-3">
+              <Input
+                label="Duration (minutes, 1–30)"
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                value={m5RealDemoConfirmMinutes}
+                onChange={(e) => setM5RealDemoConfirmMinutes(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="destructive" onClick={() => void onEnableM5RealDemoConfirm()}>
+                  Enable confirm bypass
+                </Button>
+                {m5RealDemoConfirm?.enabled ? (
+                  <Button variant="ghost" onClick={() => void onDisableM5RealDemoConfirm()}>
+                    Disable now
+                  </Button>
+                ) : null}
+                <Button variant="ghost" onClick={() => void refresh()}>
+                  Refresh status
+                </Button>
+              </div>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Layer 3 bypass — M5 demo real-dispatch</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Lets a confirmed M5 real session actually dispatch real orders on a demo
+              account. Independent of forex/synthetic demo-dispatch. Requires Layer 2
+              (confirm) to have succeeded first.
+            </p>
+            {m5RealDemoDispatch ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {m5RealDemoDispatch.enabled ? 'ENABLED' : 'disabled'}
+                  </span>
+                </p>
+                {m5RealDemoDispatch.enabled ? (
+                  <>
+                    <p>Until: {m5RealDemoDispatch.enabled_until ?? '—'}</p>
+                    <p>Remaining: {formatRemaining(m5RealDemoDispatch.remaining_seconds)}</p>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex max-w-md flex-col gap-3">
+              <Input
+                label="Duration (minutes, 1–30)"
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                value={m5RealDemoDispatchMinutes}
+                onChange={(e) => setM5RealDemoDispatchMinutes(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="destructive" onClick={() => void onEnableM5RealDemoDispatch()}>
+                  Enable dispatch bypass
+                </Button>
+                {m5RealDemoDispatch?.enabled ? (
+                  <Button variant="ghost" onClick={() => void onDisableM5RealDemoDispatch()}>
+                    Disable now
+                  </Button>
+                ) : null}
+                <Button variant="ghost" onClick={() => void refresh()}>
+                  Refresh status
+                </Button>
+              </div>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">M5 real-dispatch session</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Watchlist: {m5RealStatus?.watchlist.join(', ') ?? '—'}. Ticks every{' '}
+              {m5RealStatus ? Math.round(m5RealStatus.tickMs / 1000) : '—'}s. Re-verifies
+              Layer 1-3 on every tick — if any gate degrades mid-session (confirm-live
+              expiring, a demo bypass being disabled), this halts to an error state rather
+              than falling back to paper. No resume-after-backend-restart for an open real
+              position — the broker-side stop/target still protects it, but this harness
+              will not track it after a restart.
+            </p>
+            {m5RealStatus ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span
+                    className="text-text-primary"
+                    style={
+                      m5RealStatus.status === 'error' ? { color: '#C45C5C' } : undefined
+                    }
+                  >
+                    {m5RealStatus.status.toUpperCase()}
+                  </span>
+                </p>
+                {m5RealStatus.startedAt ? <p>Started: {m5RealStatus.startedAt}</p> : null}
+                <p>Ticks so far: {m5RealStatus.tickCount}</p>
+                {m5RealStatus.haltReason ? (
+                  <p className="text-state-danger">Halt reason: {m5RealStatus.haltReason}</p>
+                ) : null}
+                {m5RealStatus.lastTickError ? (
+                  <p className="text-state-danger">
+                    Last tick error: {m5RealStatus.lastTickError}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="destructive" onClick={() => void onStartM5Real()}>
+                Start M5 real-dispatch session
+              </Button>
+              {m5RealStatus?.status === 'running' || m5RealStatus?.status === 'error' ? (
+                <Button variant="ghost" onClick={() => void onStopM5Real()}>
+                  Stop
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={() => void refresh()}>
+                Refresh status
+              </Button>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Open position (real)</h2>
+            {m5RealStatus?.openTrade ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                <li>
+                  {m5RealStatus.openTrade.symbol} {m5RealStatus.openTrade.direction} @{' '}
+                  {m5RealStatus.openTrade.entryPrice} (lot {m5RealStatus.openTrade.lotSize})
+                </li>
+                <li>Broker ticket: {m5RealStatus.openTrade.brokerTicket}</li>
+                <li>Strategy: {m5RealStatus.openTrade.strategyName}</li>
+                <li>
+                  Stop {m5RealStatus.openTrade.stopPrice} / Target{' '}
+                  {m5RealStatus.openTrade.targetPrice}
+                </li>
+                <li>Opened: {m5RealStatus.openTrade.openedAt}</li>
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No open real position.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Recent closed real trades</h2>
+            {m5RealStatus && m5RealStatus.closedTrades.length > 0 ? (
+              <DataTable
+                emptyMessage="No closed trades yet."
+                getRowKey={(row) => `${row.brokerTicket}-${row.closedAt ?? row.openedAt}`}
+                columns={[
+                  { key: 'symbol', header: 'Symbol', render: (row) => row.symbol },
+                  { key: 'direction', header: 'Dir', render: (row) => row.direction },
+                  { key: 'ticket', header: 'Ticket', render: (row) => row.brokerTicket },
+                  {
+                    key: 'pnl',
+                    header: 'PnL',
+                    numeric: true,
+                    render: (row) => (row.pnl != null ? row.pnl.toFixed(2) : '—'),
+                  },
+                  { key: 'closedAt', header: 'Closed', render: (row) => row.closedAt ?? '—' },
+                ]}
+                rows={m5RealStatus.closedTrades}
+              />
+            ) : (
+              <p className="type-caption text-text-secondary">No closed trades yet.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Real-dispatch decision log (most recent first)</h2>
+            {m5RealStatus && m5RealStatus.decisionLog.length > 0 ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                {m5RealStatus.decisionLog.slice(0, 20).map((entry, i) => (
+                  <li key={`${entry.at}-${i}`}>
+                    {entry.at} — {entry.type}
+                    {entry.symbol ? ` — ${entry.symbol}` : ''}
+                    {entry.direction ? ` ${entry.direction}` : ''}
+                    {entry.brokerTicket ? ` ticket=${entry.brokerTicket}` : ''}
+                    {entry.reason ? ` (${entry.reason})` : ''}
+                    {entry.message ? ` — ${entry.message}` : ''}
+                    {entry.halt ? ' [HALT]' : ''}
                   </li>
                 ))}
               </ul>

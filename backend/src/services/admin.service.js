@@ -13,6 +13,13 @@ const { NEWS_LLM_ENABLED } = require('../config/env');
 // harness has no real-dispatch capability at all (see its file header);
 // admin start/stop here only toggles an in-memory paper simulation.
 const m5PaperHarness = require('../engine/m5-paper-harness');
+// M5 real-dispatch (UNPROVEN LIVE) — separate module/singleton from
+// m5PaperHarness above; can place real orders once Layer 0-3 are armed.
+// See backend/src/engine/m5-real-harness.js and m5-real-dispatch.js headers.
+const m5RealHarness = require('../engine/m5-real-harness');
+const m5DemoDispatchService = require('../engine/m5-demo-dispatch.service');
+const botInstanceRepository = require('../engine/bot-instance.repository');
+const { LIVE_TRADING_CONFIRMATION_PHRASE } = require('../engine/live-trading-confirmation');
 
 const STRATEGY_STATUSES = new Set(['proposed', 'paper_testing', 'active', 'rejected']);
 
@@ -475,6 +482,124 @@ async function stopM5PaperSession(adminUserId) {
   return status;
 }
 
+// ---------------------------------------------------------------------------
+// M5 real-dispatch (UNPROVEN LIVE, docs/14_M5_Forex_Paper_Experiment.md) —
+// admin-only, mirrors forex's confirm-live + demo-dispatch-toggle shape but
+// fully independent state (bot_instances.m5_live_trading_confirmed_at,
+// m5_demo_dispatch_config). See m5-real-harness.js's file header for the
+// full safety-layer design before touching any of this.
+// ---------------------------------------------------------------------------
+
+function getM5RealStatus() {
+  return m5RealHarness.getStatus();
+}
+
+async function startM5RealSession(adminUserId) {
+  console.warn(
+    `[admin] M5 REAL-DISPATCH session START requested by admin_user_id=${adminUserId} ` +
+      '— UNPROVEN LIVE, testing-only'
+  );
+  const status = await m5RealHarness.start({ operatorUserId: adminUserId });
+  await writeAudit({ adminUserId, action: 'm5_real_dispatch.start' });
+  return status;
+}
+
+async function stopM5RealSession(adminUserId) {
+  const status = await m5RealHarness.stop();
+  await writeAudit({ adminUserId, action: 'm5_real_dispatch.stop' });
+  return status;
+}
+
+/**
+ * M5-specific confirm-live — independent of forex's confirmLiveTrading
+ * (trading-engine.js) and synthetics'. Requires the M5 real harness to be
+ * currently stopped (same "must be stopped before confirming" precondition
+ * forex uses), the admin's own bot_instance to qualify (real account, or
+ * demo with the M5 demo-confirm bypass enabled), and the exact phrase.
+ */
+async function confirmM5RealLiveTrading(adminUserId, confirmationPhrase) {
+  const harnessStatus = m5RealHarness.getStatus();
+  if (harnessStatus.status !== 'stopped') {
+    throw new AppError(
+      409,
+      'INSTANCE_MUST_BE_STOPPED',
+      'Stop the M5 real session before confirming live trading'
+    );
+  }
+
+  const instance = await botInstanceRepository.ensureForUser(adminUserId);
+
+  const demoAcceptanceAllowed = await m5DemoDispatchService.isM5DemoConfirmEnabled();
+  const accountQualifies =
+    instance.account_type === 'real' ||
+    (demoAcceptanceAllowed && instance.account_type === 'demo');
+  if (!accountQualifies) {
+    throw new AppError(
+      409,
+      'NOT_A_REAL_ACCOUNT',
+      'M5 live trading confirmation only applies to a real MT5 account (or demo with the M5 demo-confirm bypass enabled)'
+    );
+  }
+
+  if (confirmationPhrase !== LIVE_TRADING_CONFIRMATION_PHRASE) {
+    throw new AppError(400, 'CONFIRMATION_PHRASE_MISMATCH', 'Confirmation phrase does not match');
+  }
+
+  const updated = await botInstanceRepository.updateStatusFields(instance.id, {
+    m5_live_trading_confirmed_at: new Date(),
+  });
+  console.warn(
+    `[admin] M5 real-dispatch live trading CONFIRMED by admin_user_id=${adminUserId} ` +
+      `bot_instance_id=${instance.id} account_type=${instance.account_type} — UNPROVEN LIVE`
+  );
+  await writeAudit({ adminUserId, action: 'm5_real_dispatch.confirm_live' });
+  return {
+    bot_instance_id: updated.id,
+    account_type: instance.account_type,
+    m5_live_trading_confirmed_at: updated.m5_live_trading_confirmed_at,
+  };
+}
+
+function getM5RealDispatchStatus() {
+  return m5DemoDispatchService.getDispatchStatus();
+}
+
+async function enableM5RealDispatch(adminUserId, minutes) {
+  const status = await m5DemoDispatchService.enableDispatch(adminUserId, minutes);
+  await writeAudit({
+    adminUserId,
+    action: 'm5_real_demo_dispatch.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableM5RealDispatch(adminUserId) {
+  const status = await m5DemoDispatchService.disableDispatch(adminUserId);
+  await writeAudit({ adminUserId, action: 'm5_real_demo_dispatch.disable' });
+  return status;
+}
+
+function getM5RealConfirmStatus() {
+  return m5DemoDispatchService.getConfirmStatus();
+}
+
+async function enableM5RealConfirm(adminUserId, minutes) {
+  const status = await m5DemoDispatchService.enableConfirm(adminUserId, minutes);
+  await writeAudit({
+    adminUserId,
+    action: 'm5_real_demo_confirm.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableM5RealConfirm(adminUserId) {
+  const status = await m5DemoDispatchService.disableConfirm(adminUserId);
+  await writeAudit({ adminUserId, action: 'm5_real_demo_confirm.disable' });
+  return status;
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -504,5 +629,15 @@ module.exports = {
   getM5PaperStatus,
   startM5PaperSession,
   stopM5PaperSession,
+  getM5RealStatus,
+  startM5RealSession,
+  stopM5RealSession,
+  confirmM5RealLiveTrading,
+  getM5RealDispatchStatus,
+  enableM5RealDispatch,
+  disableM5RealDispatch,
+  getM5RealConfirmStatus,
+  enableM5RealConfirm,
+  disableM5RealConfirm,
   writeAudit,
 };

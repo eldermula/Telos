@@ -70,6 +70,17 @@ const SYNTHETIC_REAL_TRADING_ENABLED =
   process.env.SYNTHETIC_REAL_TRADING_ENABLED === 'true';
 
 /**
+ * M5 PAPER-ONLY EXPERIMENT real-dispatch Layer 1 (docs/14_M5_Forex_Paper_Experiment.md)
+ * — independent kill switch from forex REAL_TRADING_ENABLED and
+ * SYNTHETIC_REAL_TRADING_ENABLED. Exact-string 'true' only; default off
+ * everywhere, including production. This is the master switch for the
+ * separate m5-real-dispatch.js/m5-real-harness.js modules only — it has
+ * no effect on the M5 paper harness (m5-paper-harness.js), which cannot
+ * place real orders regardless of any flag (see that file's header).
+ */
+const M5_REAL_TRADING_ENABLED = process.env.M5_REAL_TRADING_ENABLED === 'true';
+
+/**
  * Option 2 E.3 — hard lot-size ceiling for real orders, independent of
  * APIRS risk-%. Approved default 1.00 (raised from 0.01 after Deriv
  * re-verification — still below broker volume_max of 20 FX / 10 XAU).
@@ -125,6 +136,7 @@ module.exports = {
   ACCESS_GATE_COOKIE_NAME,
   REAL_TRADING_ENABLED,
   SYNTHETIC_REAL_TRADING_ENABLED,
+  M5_REAL_TRADING_ENABLED,
   REAL_MAX_LOT,
   REAL_CONNECTION_MAX_AGE_HOURS,
   NEWS_LLM_ENABLED,

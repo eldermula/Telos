@@ -82,6 +82,10 @@ function mapBotInstance(row) {
     live_trading_confirmed_at: row.live_trading_confirmed_at,
     // Synthetics Layer 2 — independent of forex live_trading_confirmed_at.
     synthetic_live_trading_confirmed_at: row.synthetic_live_trading_confirmed_at,
+    // M5 PAPER-ONLY EXPERIMENT real-dispatch Layer 2 (migration 026) —
+    // independent of both live_trading_confirmed_at and
+    // synthetic_live_trading_confirmed_at. See m5-real-dispatch.js.
+    m5_live_trading_confirmed_at: row.m5_live_trading_confirmed_at,
     // Daily drawdown markers (micro breaker §7) — nullable until first tick.
     daily_drawdown_day: toDateOnly(row.daily_drawdown_day),
     daily_start_equity: toNullableNumber(row.daily_start_equity),
@@ -97,6 +101,7 @@ const SELECT_COLUMNS = `
   bi.initial_balance, bi.active_trading_balance, bi.peak_equity, bi.current_tier,
   bi.synthetic_initial_balance, bi.synthetic_active_trading_balance, bi.synthetic_peak_equity,
   bi.synthetic_current_tier, bi.synthetic_live_trading_confirmed_at,
+  bi.m5_live_trading_confirmed_at,
   bc.account_type, bi.live_trading_confirmed_at,
   bi.daily_drawdown_day, bi.daily_start_equity, bi.daily_peak_equity,
   bi.created_at, bi.updated_at
@@ -108,6 +113,7 @@ const RETURNING_COLUMNS = `
   initial_balance, active_trading_balance, peak_equity, current_tier,
   synthetic_initial_balance, synthetic_active_trading_balance, synthetic_peak_equity,
   synthetic_current_tier, synthetic_live_trading_confirmed_at,
+  m5_live_trading_confirmed_at,
   (SELECT account_type FROM broker_connections WHERE id = bot_instances.broker_connection_id) AS account_type,
   live_trading_confirmed_at,
   daily_drawdown_day, daily_start_equity, daily_peak_equity,
@@ -247,6 +253,10 @@ async function updateStatusFields(botInstanceId, fields) {
     'synthetic_peak_equity',
     'synthetic_current_tier',
     'synthetic_live_trading_confirmed_at',
+    // M5 PAPER-ONLY EXPERIMENT real-dispatch Layer 2 (migration 026) — set
+    // only by the dedicated M5 confirm-live admin endpoint, cleared to null
+    // on every M5 real-session Stop. See m5-real-dispatch.js.
+    'm5_live_trading_confirmed_at',
     // Daily drawdown markers — bot-runtime only; null-safe until first tick.
     'daily_drawdown_day',
     'daily_start_equity',

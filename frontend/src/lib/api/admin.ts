@@ -280,3 +280,123 @@ export function startM5PaperSession(): Promise<M5PaperStatus> {
 export function stopM5PaperSession(): Promise<M5PaperStatus> {
   return apiRequest('/admin/experimental/m5-paper-stop', { method: 'POST' });
 }
+
+/**
+ * M5 real-dispatch (UNPROVEN LIVE, docs/14_M5_Forex_Paper_Experiment.md) —
+ * a SEPARATE module/singleton from the M5 paper harness above. This one CAN
+ * place real MT5 orders once an admin arms Layer 0-3. Testing-only, never
+ * reachable from the Trading page. Independent confirm-live/demo-dispatch
+ * state from both M15 forex and synthetics.
+ */
+export type M5RealTrade = {
+  tradeRowId: string;
+  symbol: string;
+  direction: 'BUY' | 'SELL';
+  entryPrice: number;
+  stopPrice: number;
+  targetPrice: number;
+  lotSize: number;
+  contractSize: number;
+  brokerTicket: number;
+  appliedRisk: number;
+  strategyName: string;
+  historyRetryCount: number;
+  openedAt: string;
+  status?: 'closed';
+  exitPrice?: number;
+  pnl?: number;
+  wasWin?: boolean;
+  closedAt?: string;
+};
+
+export type M5RealDecision = {
+  type: string;
+  symbol?: string;
+  direction?: string;
+  lotSize?: number;
+  entryPrice?: number;
+  brokerTicket?: number;
+  pnl?: number;
+  reason?: string;
+  message?: string;
+  halt?: boolean;
+  at: string;
+};
+
+export type M5RealStatus = {
+  status: 'stopped' | 'running' | 'error';
+  startedAt: string | null;
+  stoppedAt: string | null;
+  tickMs: number;
+  tickCount: number;
+  watchlist: string[];
+  operatorUserId: string | null;
+  botInstanceId: string | null;
+  openTrade: M5RealTrade | null;
+  closedTrades: M5RealTrade[];
+  decisionLog: M5RealDecision[];
+  lastTickError: string | null;
+  haltReason: string | null;
+  realTradingEnabled: boolean;
+};
+
+export function getM5RealStatus(): Promise<M5RealStatus> {
+  return apiRequest('/admin/experimental/m5-real-status');
+}
+
+export function startM5RealSession(): Promise<M5RealStatus> {
+  return apiRequest('/admin/experimental/m5-real-start', { method: 'POST' });
+}
+
+export function stopM5RealSession(): Promise<M5RealStatus> {
+  return apiRequest('/admin/experimental/m5-real-stop', { method: 'POST' });
+}
+
+export type M5RealConfirmResult = {
+  bot_instance_id: string;
+  account_type: string;
+  m5_live_trading_confirmed_at: string | null;
+};
+
+export function confirmM5RealLiveTrading(confirmationPhrase: string): Promise<M5RealConfirmResult> {
+  return apiRequest('/admin/experimental/m5-real-confirm-live', {
+    method: 'POST',
+    body: { confirmationPhrase },
+  });
+}
+
+/** Same shape as forex/synthetic demo dispatch status — M5's own Layer 3 bypass. */
+export type M5RealDemoDispatchStatus = SyntheticDemoDispatchStatus;
+
+export function getM5RealDemoDispatchStatus(): Promise<M5RealDemoDispatchStatus> {
+  return apiRequest('/admin/experimental/m5-real-demo-dispatch-status');
+}
+
+export function enableM5RealDemoDispatch(minutes: number): Promise<M5RealDemoDispatchStatus> {
+  return apiRequest('/admin/experimental/m5-real-demo-dispatch-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableM5RealDemoDispatch(): Promise<M5RealDemoDispatchStatus> {
+  return apiRequest('/admin/experimental/m5-real-demo-dispatch-disable', { method: 'POST' });
+}
+
+/** Same shape — M5's own Layer 2 demo confirm-live bypass. */
+export type M5RealDemoConfirmStatus = SyntheticDemoDispatchStatus;
+
+export function getM5RealDemoConfirmStatus(): Promise<M5RealDemoConfirmStatus> {
+  return apiRequest('/admin/experimental/m5-real-demo-confirm-status');
+}
+
+export function enableM5RealDemoConfirm(minutes: number): Promise<M5RealDemoConfirmStatus> {
+  return apiRequest('/admin/experimental/m5-real-demo-confirm-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableM5RealDemoConfirm(): Promise<M5RealDemoConfirmStatus> {
+  return apiRequest('/admin/experimental/m5-real-demo-confirm-disable', { method: 'POST' });
+}

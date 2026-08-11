@@ -9,6 +9,7 @@ const {
   parseRiskTierParam,
 } = require('../utils/query-enums');
 const { AppError } = require('../utils/app-error');
+const { confirmLiveTradingSchema } = require('../validators/trading.schemas');
 
 function parseBody(schema, body) {
   const parsed = schema.safeParse(body);
@@ -331,6 +332,100 @@ async function stopM5PaperSession(req, res, next) {
   }
 }
 
+// M5 real-dispatch (UNPROVEN LIVE) — see admin.service.js's section header.
+async function getM5RealStatus(req, res, next) {
+  try {
+    const data = adminService.getM5RealStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function startM5RealSession(req, res, next) {
+  try {
+    const data = await adminService.startM5RealSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function stopM5RealSession(req, res, next) {
+  try {
+    const data = await adminService.stopM5RealSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function confirmM5RealLiveTrading(req, res, next) {
+  try {
+    const body = parseBody(confirmLiveTradingSchema, req.body);
+    const data = await adminService.confirmM5RealLiveTrading(req.user.id, body.confirmationPhrase);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getM5RealDispatchStatus(req, res, next) {
+  try {
+    const data = await adminService.getM5RealDispatchStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableM5RealDispatch(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableM5RealDispatch(req.user.id, body.minutes);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableM5RealDispatch(req, res, next) {
+  try {
+    const data = await adminService.disableM5RealDispatch(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getM5RealConfirmStatus(req, res, next) {
+  try {
+    const data = await adminService.getM5RealConfirmStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableM5RealConfirm(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableM5RealConfirm(req.user.id, body.minutes);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableM5RealConfirm(req, res, next) {
+  try {
+    const data = await adminService.disableM5RealConfirm(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -360,4 +455,14 @@ module.exports = {
   getM5PaperStatus,
   startM5PaperSession,
   stopM5PaperSession,
+  getM5RealStatus,
+  startM5RealSession,
+  stopM5RealSession,
+  confirmM5RealLiveTrading,
+  getM5RealDispatchStatus,
+  enableM5RealDispatch,
+  disableM5RealDispatch,
+  getM5RealConfirmStatus,
+  enableM5RealConfirm,
+  disableM5RealConfirm,
 };

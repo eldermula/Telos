@@ -1,0 +1,12 @@
+-- 025_add_m5_asset_class.sql
+-- M5 PAPER-ONLY EXPERIMENT real-dispatch (docs/14_M5_Forex_Paper_Experiment.md).
+-- New asset_class value so M5 real trades/decisions are clearly distinguished
+-- from M15 forex ('forex_gold') in trades / bot_decision_log, same discipline
+-- as crypto/synthetic (013).
+--
+-- ADD VALUE only, no other statements in this file: Postgres forbids using a
+-- freshly-added enum value in the same transaction it was added in (same
+-- constraint already hit by 003/009/010/011) -- keeping this file to just the
+-- ADD VALUE avoids that restriction biting migration 026 or any INSERT/UPDATE
+-- that references 'm5_forex_gold'.
+ALTER TYPE asset_class ADD VALUE 'm5_forex_gold';

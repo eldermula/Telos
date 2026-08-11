@@ -150,4 +150,66 @@ router.post(
   controller.stopM5PaperSession
 );
 
+// M5 real-dispatch (UNPROVEN LIVE, docs/14_M5_Forex_Paper_Experiment.md) — a
+// SEPARATE tool from m5-paper-* above. Can place real orders once Layer 0-3
+// (below) are all armed. Admin-only, testing-only, never reachable from the
+// Trading page or any normal user flow. See m5-real-harness.js's header.
+router.get(
+  '/experimental/m5-real-status',
+  rateLimit.read({ max: 20 }),
+  controller.getM5RealStatus
+);
+router.post(
+  '/experimental/m5-real-start',
+  rateLimit.write({ max: 5 }),
+  controller.startM5RealSession
+);
+router.post(
+  '/experimental/m5-real-stop',
+  rateLimit.write({ max: 5 }),
+  controller.stopM5RealSession
+);
+// Layer 2 — M5-specific confirm-live, independent of forex's
+// /trading/session/confirm-live. Requires the M5 real session to be
+// stopped first (same precondition forex's confirmLiveTrading uses).
+router.post(
+  '/experimental/m5-real-confirm-live',
+  rateLimit.write({ max: 5 }),
+  controller.confirmM5RealLiveTrading
+);
+// Layer 3 — M5 demo real-dispatch bypass, independent of
+// forex_demo_dispatch_config / synthetic_demo_dispatch_config.
+router.get(
+  '/experimental/m5-real-demo-dispatch-status',
+  rateLimit.read({ max: 20 }),
+  controller.getM5RealDispatchStatus
+);
+router.post(
+  '/experimental/m5-real-demo-dispatch-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableM5RealDispatch
+);
+router.post(
+  '/experimental/m5-real-demo-dispatch-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableM5RealDispatch
+);
+// Layer 2b — M5 demo confirm-live bypass (allows confirm-live to succeed
+// on a demo account for testing), independently toggleable from Layer 3.
+router.get(
+  '/experimental/m5-real-demo-confirm-status',
+  rateLimit.read({ max: 20 }),
+  controller.getM5RealConfirmStatus
+);
+router.post(
+  '/experimental/m5-real-demo-confirm-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableM5RealConfirm
+);
+router.post(
+  '/experimental/m5-real-demo-confirm-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableM5RealConfirm
+);
+
 module.exports = router;
