@@ -9,6 +9,10 @@ const syntheticDemoDispatchService = require('../engine/synthetic-demo-dispatch.
 const forexDemoDispatchService = require('../engine/forex-demo-dispatch.service');
 const { getNewsLlmUsage } = require('./news-llm-usage');
 const { NEWS_LLM_ENABLED } = require('../config/env');
+// M5 PAPER-ONLY EXPERIMENT (docs/14_M5_Forex_Paper_Experiment.md) — this
+// harness has no real-dispatch capability at all (see its file header);
+// admin start/stop here only toggles an in-memory paper simulation.
+const m5PaperHarness = require('../engine/m5-paper-harness');
 
 const STRATEGY_STATUSES = new Set(['proposed', 'paper_testing', 'active', 'rejected']);
 
@@ -455,6 +459,22 @@ async function disableForexDemoManualTrade(adminUserId) {
   return status;
 }
 
+function getM5PaperStatus() {
+  return m5PaperHarness.getStatus();
+}
+
+async function startM5PaperSession(adminUserId) {
+  const status = m5PaperHarness.start();
+  await writeAudit({ adminUserId, action: 'm5_paper_experiment.start' });
+  return status;
+}
+
+async function stopM5PaperSession(adminUserId) {
+  const status = m5PaperHarness.stop();
+  await writeAudit({ adminUserId, action: 'm5_paper_experiment.stop' });
+  return status;
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -481,5 +501,8 @@ module.exports = {
   getForexDemoManualTradeStatus,
   enableForexDemoManualTrade,
   disableForexDemoManualTrade,
+  getM5PaperStatus,
+  startM5PaperSession,
+  stopM5PaperSession,
   writeAudit,
 };

@@ -22,6 +22,7 @@ import {
   getForexDemoConfirmStatus,
   getForexDemoDispatchStatus,
   getForexDemoManualTradeStatus,
+  getM5PaperStatus,
   getSyntheticDemoConfirmStatus,
   getSyntheticDemoDispatchStatus,
   getSyntheticDemoManualTradeStatus,
@@ -31,12 +32,15 @@ import {
   listRiskTiers,
   patchCandidateStrategy,
   patchRiskTier,
+  startM5PaperSession,
+  stopM5PaperSession,
   type AdminUser,
   type AdminUserDetail,
   type CandidateStrategy,
   type ForexDemoConfirmStatus,
   type ForexDemoDispatchStatus,
   type ForexDemoManualTradeStatus,
+  type M5PaperStatus,
   type RiskTier,
   type SyntheticDemoConfirmStatus,
   type SyntheticDemoDispatchStatus,
@@ -58,7 +62,9 @@ function formatRemaining(seconds: number): string {
 
 export function AdminPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'health' | 'users' | 'tiers' | 'strategies' | 'demo'>('health');
+  const [tab, setTab] = useState<'health' | 'users' | 'tiers' | 'strategies' | 'demo' | 'm5paper'>(
+    'health',
+  );
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
@@ -75,6 +81,7 @@ export function AdminPage() {
   );
   const [forexDemoManualTrade, setForexDemoManualTrade] =
     useState<ForexDemoManualTradeStatus | null>(null);
+  const [m5PaperStatus, setM5PaperStatus] = useState<M5PaperStatus | null>(null);
   const [demoDispatchMinutes, setDemoDispatchMinutes] = useState('15');
   const [demoConfirmMinutes, setDemoConfirmMinutes] = useState('15');
   const [demoManualTradeMinutes, setDemoManualTradeMinutes] = useState('15');
@@ -88,7 +95,7 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [h, u, t, s, d, c, m, fd, fc, fm] = await Promise.all([
+    const [h, u, t, s, d, c, m, fd, fc, fm, m5] = await Promise.all([
       getSystemHealth(),
       listAdminUsers({ page: 1, limit: 50 }),
       listRiskTiers(),
@@ -99,6 +106,7 @@ export function AdminPage() {
       getForexDemoDispatchStatus(),
       getForexDemoConfirmStatus(),
       getForexDemoManualTradeStatus(),
+      getM5PaperStatus(),
     ]);
     setHealth(h);
     setUsers(u.data);
@@ -110,6 +118,7 @@ export function AdminPage() {
     setForexDemoDispatch(fd);
     setForexDemoConfirm(fc);
     setForexDemoManualTrade(fm);
+    setM5PaperStatus(m5);
   }, []);
 
   useEffect(() => {
@@ -406,6 +415,39 @@ export function AdminPage() {
     }
   }
 
+  async function onStartM5Paper() {
+    if (
+      !window.confirm(
+        'Start the M5 PAPER-ONLY experimental session? This never places real ' +
+          'orders — it only simulates entries/exits in memory using live M5 ' +
+          'market data, purely for measurement.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await startM5PaperSession();
+      setM5PaperStatus(status);
+      setMessage('M5 paper-only session started.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Start failed.');
+    }
+  }
+
+  async function onStopM5Paper() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await stopM5PaperSession();
+      setM5PaperStatus(status);
+      setMessage('M5 paper-only session stopped.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Stop failed.');
+    }
+  }
+
   if (loading) {
     return <p className="text-text-secondary">Loading admin…</p>;
   }
@@ -436,6 +478,7 @@ export function AdminPage() {
             ['tiers', 'Risk tiers'],
             ['strategies', 'Strategies'],
             ['demo', 'Demo dispatch'],
+            ['m5paper', 'M5 paper (experimental)'],
           ] as const
         ).map(([id, label]) => (
           <Button
@@ -929,6 +972,125 @@ export function AdminPage() {
                 </Button>
               </div>
             </div>
+          </GlassCard>
+        </div>
+      ) : null}
+
+      {tab === 'm5paper' ? (
+        <div className="flex flex-col gap-6">
+          <p className="type-caption text-state-danger">
+            Experimental — PAPER-ONLY, not proven. Simulates entries/exits in
+            memory using live M5 market data and the same strategy gates as the
+            main engine, but never places a real order — there is no code path
+            here that reaches the broker. Completely separate from the
+            Trading page&apos;s M15 Start Trading control. See{' '}
+            docs/14_M5_Forex_Paper_Experiment.md. Enabling real dispatch for M5
+            is a deliberate future decision that requires explicit human
+            review; this tool does not unlock it.
+          </p>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">M5 forex/gold paper session</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Watchlist: {m5PaperStatus?.watchlist.join(', ') ?? '—'}. Ticks every{' '}
+              {m5PaperStatus ? Math.round(m5PaperStatus.tickMs / 1000) : '—'}s.
+              History is in-memory only and resets on backend restart.
+            </p>
+            {m5PaperStatus ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {m5PaperStatus.status === 'running' ? 'RUNNING' : 'stopped'}
+                  </span>
+                </p>
+                {m5PaperStatus.startedAt ? <p>Started: {m5PaperStatus.startedAt}</p> : null}
+                <p>Ticks so far: {m5PaperStatus.tickCount}</p>
+                {m5PaperStatus.lastTickError ? (
+                  <p className="text-state-danger">Last tick error: {m5PaperStatus.lastTickError}</p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="destructive" onClick={() => void onStartM5Paper()}>
+                Start M5 paper session
+              </Button>
+              {m5PaperStatus?.status === 'running' ? (
+                <Button variant="ghost" onClick={() => void onStopM5Paper()}>
+                  Stop
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={() => void refresh()}>
+                Refresh status
+              </Button>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Open position (paper)</h2>
+            {m5PaperStatus?.openTrade ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                <li>
+                  {m5PaperStatus.openTrade.symbol} {m5PaperStatus.openTrade.direction} @{' '}
+                  {m5PaperStatus.openTrade.entryPrice} (lot {m5PaperStatus.openTrade.lotSize})
+                </li>
+                <li>Strategy: {m5PaperStatus.openTrade.strategyName}</li>
+                <li>
+                  Stop {m5PaperStatus.openTrade.stopPrice} / Target{' '}
+                  {m5PaperStatus.openTrade.targetPrice}
+                </li>
+                <li>Opened: {m5PaperStatus.openTrade.openedAt}</li>
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No open paper position.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Recent closed paper trades</h2>
+            {m5PaperStatus && m5PaperStatus.closedTrades.length > 0 ? (
+              <DataTable
+                emptyMessage="No closed trades yet."
+                getRowKey={(row) => `${row.symbol}-${row.closedAt ?? row.openedAt}`}
+                columns={[
+                  { key: 'symbol', header: 'Symbol', render: (row) => row.symbol },
+                  { key: 'direction', header: 'Dir', render: (row) => row.direction },
+                  { key: 'strategy', header: 'Strategy', render: (row) => row.strategyName },
+                  { key: 'outcome', header: 'Outcome', render: (row) => row.outcome ?? '—' },
+                  {
+                    key: 'pnl',
+                    header: 'PnL',
+                    numeric: true,
+                    render: (row) => (row.pnl != null ? row.pnl.toFixed(2) : '—'),
+                  },
+                  { key: 'closedAt', header: 'Closed', render: (row) => row.closedAt ?? '—' },
+                ]}
+                rows={m5PaperStatus.closedTrades}
+              />
+            ) : (
+              <p className="type-caption text-text-secondary">No closed trades yet.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Decision log (most recent first)</h2>
+            {m5PaperStatus && m5PaperStatus.decisionLog.length > 0 ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                {m5PaperStatus.decisionLog.slice(0, 20).map((entry, i) => (
+                  <li key={`${entry.at}-${i}`}>
+                    {entry.at} — {entry.type}
+                    {entry.symbol ? ` — ${entry.symbol}` : ''}
+                    {entry.direction ? ` ${entry.direction}` : ''}
+                    {entry.reason ? ` (${entry.reason})` : ''}
+                    {entry.message ? ` — ${entry.message}` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No decisions logged yet.</p>
+            )}
           </GlassCard>
         </div>
       ) : null}

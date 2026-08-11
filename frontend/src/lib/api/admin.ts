@@ -219,3 +219,64 @@ export function enableForexDemoManualTrade(
 export function disableForexDemoManualTrade(): Promise<ForexDemoManualTradeStatus> {
   return apiRequest('/admin/forex/demo-manual-trade-disable', { method: 'POST' });
 }
+
+/**
+ * M5 PAPER-ONLY EXPERIMENT — an isolated, in-memory, admin-only paper
+ * simulation (docs/14_M5_Forex_Paper_Experiment.md). Never reaches real
+ * dispatch. Not nested under /forex/* on purpose — this has nothing to
+ * do with the real forex demo-dispatch bypasses above.
+ */
+export type M5PaperTrade = {
+  symbol: string;
+  direction: 'BUY' | 'SELL';
+  strategyName: string;
+  entryPrice: number;
+  stopPrice: number;
+  targetPrice: number;
+  lotSize: number;
+  contractSize: number;
+  appliedRisk: number;
+  balanceSnapshot: number;
+  status: 'open' | 'closed';
+  openedAt: string;
+  closedAt?: string;
+  closePrice?: number;
+  pnl?: number;
+  outcome?: 'target_hit' | 'stop_hit';
+};
+
+export type M5PaperDecision = {
+  type: string;
+  symbol?: string;
+  direction?: string;
+  strategyName?: string;
+  reason?: string;
+  pnl?: number;
+  message?: string;
+  at: string;
+};
+
+export type M5PaperStatus = {
+  status: 'stopped' | 'running';
+  startedAt: string | null;
+  stoppedAt: string | null;
+  tickMs: number;
+  tickCount: number;
+  watchlist: string[];
+  openTrade: M5PaperTrade | null;
+  closedTrades: M5PaperTrade[];
+  decisionLog: M5PaperDecision[];
+  lastTickError: string | null;
+};
+
+export function getM5PaperStatus(): Promise<M5PaperStatus> {
+  return apiRequest('/admin/experimental/m5-paper-status');
+}
+
+export function startM5PaperSession(): Promise<M5PaperStatus> {
+  return apiRequest('/admin/experimental/m5-paper-start', { method: 'POST' });
+}
+
+export function stopM5PaperSession(): Promise<M5PaperStatus> {
+  return apiRequest('/admin/experimental/m5-paper-stop', { method: 'POST' });
+}

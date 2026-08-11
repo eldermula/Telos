@@ -129,4 +129,25 @@ router.post(
   controller.disableForexDemoManualTrade
 );
 
+// M5 PAPER-ONLY EXPERIMENT (docs/14_M5_Forex_Paper_Experiment.md) — an
+// isolated, in-memory, admin-only paper simulation. Never reaches real
+// dispatch; see backend/src/engine/m5-paper-harness.js's file header.
+// Deliberately NOT nested under /forex/* or reachable from the normal
+// Trading page flow at all.
+router.get(
+  '/experimental/m5-paper-status',
+  rateLimit.read({ max: 20 }),
+  controller.getM5PaperStatus
+);
+router.post(
+  '/experimental/m5-paper-start',
+  rateLimit.write({ max: 5 }),
+  controller.startM5PaperSession
+);
+router.post(
+  '/experimental/m5-paper-stop',
+  rateLimit.write({ max: 5 }),
+  controller.stopM5PaperSession
+);
+
 module.exports = router;

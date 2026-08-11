@@ -304,6 +304,33 @@ async function disableForexDemoManualTrade(req, res, next) {
   }
 }
 
+async function getM5PaperStatus(req, res, next) {
+  try {
+    const data = adminService.getM5PaperStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function startM5PaperSession(req, res, next) {
+  try {
+    const data = await adminService.startM5PaperSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function stopM5PaperSession(req, res, next) {
+  try {
+    const data = await adminService.stopM5PaperSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -330,4 +357,7 @@ module.exports = {
   getForexDemoManualTradeStatus,
   enableForexDemoManualTrade,
   disableForexDemoManualTrade,
+  getM5PaperStatus,
+  startM5PaperSession,
+  stopM5PaperSession,
 };
