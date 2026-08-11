@@ -41,6 +41,7 @@ function createM1PaperHarness(deps = {}) {
   let startedAt = null;
   let stoppedAt = null;
   let timer = null;
+  let tickInFlight = false;
   let openTrade = null; // one open paper trade at a time — same one-position design as live/M5 paper
   const closedTrades = [];
   const decisionLog = [];
@@ -115,6 +116,10 @@ function createM1PaperHarness(deps = {}) {
           connector.getRates(symbol, { timeframe: 'M1', count: M1_BAR_COUNT }),
           connector.getSymbolInfo(symbol),
         ]);
+        if (!ratesResult || !Array.isArray(ratesResult.bars) || ratesResult.bars.length === 0) {
+          pushDecision({ type: 'data_fetch_error', symbol, message: 'no M1 bars returned' });
+          continue;
+        }
         instruments.push({ symbol, bars: ratesResult.bars, symbolInfo });
       } catch (err) {
         pushDecision({ type: 'data_fetch_error', symbol, message: err.message });
@@ -150,6 +155,8 @@ function createM1PaperHarness(deps = {}) {
   }
 
   async function tick() {
+    if (tickInFlight) return;
+    tickInFlight = true;
     tickCount += 1;
     try {
       await monitorOpenTrade();
@@ -158,6 +165,8 @@ function createM1PaperHarness(deps = {}) {
     } catch (err) {
       lastTickError = err.message;
       pushDecision({ type: 'tick_error', message: err.message });
+    } finally {
+      tickInFlight = false;
     }
   }
 
@@ -197,7 +206,9 @@ function createM1PaperHarness(deps = {}) {
       tickCount,
       watchlist,
       openTrade,
-      closedTrades: closedTrades.slice(0, 20),
+      // Cap high enough for judgment-based paper experiments (was 20 —
+      // that silently truncated sample stats once closed history grew).
+      closedTrades: closedTrades.slice(0, 100),
       decisionLog: decisionLog.slice(0, 50),
       lastTickError,
     };
@@ -206,6 +217,7 @@ function createM1PaperHarness(deps = {}) {
   function _resetForTests() {
     if (timer) clearInterval(timer);
     timer = null;
+    tickInFlight = false;
     status = 'stopped';
     openTrade = null;
     closedTrades.length = 0;

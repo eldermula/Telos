@@ -1,0 +1,20 @@
+{
+  "note": "Preserved from the first uncapped M1 paper session (2026-08-11 ~22:37–22:52 UTC) before it was stopped to remove the artificial tick cap. Not part of the judgment-based run that followed.",
+  "startedAt": "2026-08-11T22:37:03.783Z",
+  "snapshotAt": "2026-08-11T22:52:04.017Z",
+  "tickCount": 60,
+  "closedCount": 6,
+  "wins": 0,
+  "losses": 6,
+  "totalPnl": -6.002883484965915,
+  "bySymbol": {
+    "USDCAD": { "n": 6, "pnl": -6.002883484965915, "wins": 0, "losses": 6 }
+  },
+  "decisionTypesSample": {
+    "data_fetch_error": 15,
+    "stop_hit": 6,
+    "opened": 6,
+    "account_info_unavailable": 1
+  },
+  "observation": "All 6 closes were USDCAD MA Crossover stop-hits within ~15s of open. M1 stop distances (~0.00007–0.00008) were smaller than typical bid/ask noise relative to the 15s tick, producing immediate stop-outs. Lot sizes ~0.13 on $10 / 10% bootstrap risk."
+}

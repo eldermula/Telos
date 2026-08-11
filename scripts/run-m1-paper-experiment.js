@@ -8,9 +8,11 @@
  * Writes periodic snapshots to backend/_m1-paper-run-results.json.
  * Duration: M1_PAPER_RUN_HOURS env (default 3), tick every 15s.
  */
-require('dotenv').config({ path: require('path').join(__dirname, '..', 'backend', '.env') });
-const fs = require('fs');
 const path = require('path');
+require(path.join(__dirname, '..', 'backend', 'node_modules', 'dotenv')).config({
+  path: path.join(__dirname, '..', 'backend', '.env'),
+});
+const fs = require('fs');
 const mt5Connector = require('../backend/src/services/mt5-connector.client');
 const candidateStrategiesRepository = require('../backend/src/engine/candidate-strategies.repository');
 const { createM1PaperHarness } = require('../backend/src/engine/m1-paper-harness');
