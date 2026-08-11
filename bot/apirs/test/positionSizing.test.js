@@ -163,8 +163,8 @@ test('final risk — standard tier, mid-range score lands between floor and ceil
   assertClose(result.finalRisk, 0.10);
 });
 
-test('final risk — standard tier, best-case score clamped at the tier ceiling', () => {
-  // Tier 0: baseRisk 0.02, ceiling 0.05. Best case risk_score = 4.0 -> calculated 0.08 > ceiling.
+test('final risk — standard tier, best-case score sits under Tier 0\'s ceiling', () => {
+  // Tier 0: baseRisk 0.02, ceiling 0.30. Best case risk_score = 4.0 -> calculated 0.08 < ceiling.
   const result = computeFinalAppliedRisk({
     balance: 60,
     completedBlocks: 0,
@@ -178,7 +178,7 @@ test('final risk — standard tier, best-case score clamped at the tier ceiling'
   });
   assertClose(result.riskScore, 4.0);
   assertClose(result.calculatedRisk, 0.08);
-  assertClose(result.finalRisk, 0.05); // clamped to Tier 0's ceiling
+  assertClose(result.finalRisk, 0.08); // under Tier 0's ceiling, so not clamped
 });
 
 test('final risk — standard tier, worst-case negative score clamped at the 1% floor', () => {
@@ -201,7 +201,7 @@ test('final risk — standard tier, worst-case negative score clamped at the 1% 
 // --- computeFinalAppliedRisk (bootstrap regime) ---------------------------
 
 test('final risk — bootstrap regime, best-case score clamped at the bootstrap risk ceiling', () => {
-  // balance=20 -> bootstrap risk 0.5375, used as both baseRisk and maxRiskCeiling.
+  // balance=20 -> bootstrap risk 0.15, used as both baseRisk and maxRiskCeiling.
   const result = computeFinalAppliedRisk({
     balance: 20,
     strategyConfidence: 1,
@@ -213,9 +213,9 @@ test('final risk — bootstrap regime, best-case score clamped at the bootstrap 
     lossPenalty: 0,
   });
   assert.equal(result.tierParams.regime, 'bootstrap');
-  assertClose(result.tierParams.baseRisk, 0.5375);
-  assertClose(result.calculatedRisk, 0.5375 * 4); // 2.15, well over the ceiling
-  assertClose(result.finalRisk, 0.5375); // clamped down to the bootstrap ceiling
+  assertClose(result.tierParams.baseRisk, 0.15);
+  assertClose(result.calculatedRisk, 0.15 * 4); // 0.60, well over the ceiling
+  assertClose(result.finalRisk, 0.15); // clamped down to the bootstrap ceiling
 });
 
 test('final risk — bootstrap regime, worst-case score clamped at the 1% floor', () => {
@@ -236,10 +236,10 @@ test('final risk — bootstrap regime, worst-case score clamped at the 1% floor'
 
 // --- computeFinalAppliedRisk — Phase 7.8 tierRows injection ---------------
 
-test('final risk — injected tierRows raises the effective ceiling for that tier', () => {
+test('final risk — injected tierRows changes the effective ceiling for that tier', () => {
   const { TIER_MATRIX } = require('../src/tierMatrix');
   const overrideRows = TIER_MATRIX.map((row) =>
-    row.tier === 0 ? { ...row, maxRiskCeiling: 0.5 } : row
+    row.tier === 0 ? { ...row, maxRiskCeiling: 0.05 } : row
   );
   const result = computeFinalAppliedRisk({
     balance: 60,
@@ -253,12 +253,12 @@ test('final risk — injected tierRows raises the effective ceiling for that tie
     volatilityPenalty: 0,
     lossPenalty: 0,
   });
-  // Same inputs as the "clamped at the tier ceiling" test above, but the
-  // ceiling is now 0.5 instead of 0.05 — calculatedRisk (0.08) is under
-  // the new ceiling, so it's no longer clamped.
+  // Same inputs as the unclamped Tier 0 test above, but the ceiling is now
+  // 0.05 instead of 0.30 — calculatedRisk (0.08) is over the injected
+  // ceiling, so it gets clamped where the default matrix wouldn't have.
   assertClose(result.calculatedRisk, 0.08);
-  assertClose(result.finalRisk, 0.08);
-  assertClose(result.tierParams.maxRiskCeiling, 0.5);
+  assertClose(result.finalRisk, 0.05);
+  assertClose(result.tierParams.maxRiskCeiling, 0.05);
 });
 
 test('final risk — omitting tierRows is identical to the hardcoded matrix', () => {

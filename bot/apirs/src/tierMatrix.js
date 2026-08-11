@@ -15,7 +15,7 @@
  * values ever change, this array must be updated to match.
  */
 const TIER_MATRIX = [
-  { tier: 0, completedBlocksMin: 0, stepSize: 150, baseRisk: 0.02, maxRiskCeiling: 0.05 },
+  { tier: 0, completedBlocksMin: 0, stepSize: 150, baseRisk: 0.02, maxRiskCeiling: 0.30 },
   { tier: 1, completedBlocksMin: 1, stepSize: 150, baseRisk: 0.02, maxRiskCeiling: 0.10 },
   { tier: 2, completedBlocksMin: 2, stepSize: 150, baseRisk: 0.03, maxRiskCeiling: 0.15 },
   { tier: 3, completedBlocksMin: 3, stepSize: 150, baseRisk: 0.04, maxRiskCeiling: 0.20 },
@@ -30,15 +30,15 @@ const STANDARD_MATRIX_FLOOR_BALANCE = 50;
 
 /**
  * 08_Bot_Architecture.md Section 3a — Sub-$50 Bootstrap Risk Curve
- * Two anchor points for the inverse-linear scale:
- *   - $50 balance -> 5% risk (matches Tier 0's Max AI Risk Ceiling exactly,
+ * Two anchor points for the linear scale:
+ *   - $50 balance -> 30% risk (matches Tier 0's Max AI Risk Ceiling exactly,
  *     so there's no discontinuity at the handoff to the standard matrix)
- *   - $10 balance -> 70% risk, flat-capped for any balance <= $10
+ *   - $10 balance -> 10% risk, flat-capped for any balance <= $10
  */
 const BOOTSTRAP_UPPER_BALANCE = 50;
 const BOOTSTRAP_LOWER_BALANCE = 10;
-const BOOTSTRAP_UPPER_RISK = 0.05;
-const BOOTSTRAP_LOWER_RISK = 0.70;
+const BOOTSTRAP_UPPER_RISK = 0.30;
+const BOOTSTRAP_LOWER_RISK = 0.10;
 
 /**
  * Direct, validated lookup of a tier row by tier number (0-7). Used by
@@ -82,7 +82,7 @@ function getStandardTier(completedBlocks, tierRows = TIER_MATRIX) {
 }
 
 /**
- * Section 3a — inverse-linear bootstrap risk curve. Only valid for
+ * Section 3a — linear bootstrap risk curve. Only valid for
  * balance < $50 (callers should route >= $50 to getStandardTier instead;
  * this throws rather than silently extrapolating past its domain).
  */
@@ -99,7 +99,7 @@ function bootstrapRiskPct(balance) {
     return BOOTSTRAP_LOWER_RISK;
   }
   const span = BOOTSTRAP_UPPER_BALANCE - BOOTSTRAP_LOWER_BALANCE; // 40
-  const riskSpan = BOOTSTRAP_LOWER_RISK - BOOTSTRAP_UPPER_RISK; // 0.65
+  const riskSpan = BOOTSTRAP_LOWER_RISK - BOOTSTRAP_UPPER_RISK; // -0.20
   return BOOTSTRAP_UPPER_RISK + ((BOOTSTRAP_UPPER_BALANCE - balance) / span) * riskSpan;
 }
 

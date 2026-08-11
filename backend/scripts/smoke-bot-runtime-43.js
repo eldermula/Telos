@@ -110,7 +110,7 @@ async function main() {
   });
 
   // Second tick's outcome is legitimately branchy, not a bug: a loss on
-  // cycle1 at the bootstrap 70%-ceiling correctly fires the Section
+  // cycle1 at the bootstrap 10%-ceiling correctly fires the Section
   // 3a/7 single-loss override into STRATEGY_B (see closed1.state.mode
   // above), and STRATEGY_B's 0.90 confidence bar (Section 6.1) then
   // correctly rejects the fake Selection's fixed 0.85 confidence — 0.85

@@ -179,7 +179,7 @@ Read-only server-side composition of Broker Connections + Trading + Portfolio + 
   "active_trading_balance": 0.00,
   "peak_equity": 0.00,
   "bootstrap_phase": true,
-  "bootstrap_risk_ceiling_pct": 0.70,
+  "bootstrap_risk_ceiling_pct": 0.10,
   "account_type": "demo | contest | real",
   "real_trading_available": false,
   "live_trading_confirmed_at": null

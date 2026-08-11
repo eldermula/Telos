@@ -68,14 +68,14 @@ test('switches to STRATEGY_B exactly at the 45% drawdown threshold (inclusive)',
 
 // --- The specific scenario requested: single large bootstrap-phase loss --
 
-test('macro breaker fires after a single large loss at bootstrap-phase risk levels', () => {
-  // Account at the $10 flat-cap bootstrap ceiling: risk = 70% per trade.
+test('a single max-risk bootstrap loss stays under the macro threshold', () => {
+  // Account at the $10 flat-cap bootstrap ceiling: risk = 10% per trade.
   const balanceBeforeLoss = 10;
   const riskPct = bootstrapRiskPct(balanceBeforeLoss);
-  assertClose(riskPct, 0.70);
+  assertClose(riskPct, 0.10);
 
-  const lossAmount = balanceBeforeLoss * riskPct; // $7 lost on a $10 account
-  const balanceAfterLoss = balanceBeforeLoss - lossAmount; // $3
+  const lossAmount = balanceBeforeLoss * riskPct; // $1 lost on a $10 account
+  const balanceAfterLoss = balanceBeforeLoss - lossAmount; // $9
 
   const result = evaluateMacroCircuitBreaker({
     activeTradingBalance: balanceAfterLoss,
@@ -83,15 +83,13 @@ test('macro breaker fires after a single large loss at bootstrap-phase risk leve
     activeStrategyMode: STRATEGY_A,
   });
 
-  // A single trade produced a 70% drawdown from peak — far past the 45%
-  // macro threshold — confirming Section 3a's accepted tradeoff: one loss
-  // is enough to trip the macro breaker outright at this risk level.
-  assertClose(result.drawdownFromPeak, 0.70);
-  assert.equal(result.macroBreachTriggered, true);
-  // And critically: even though drawdown (70%) also clears the 60% halt
-  // floor, it lands in STRATEGY_B, not HALTED — A never jumps straight
-  // to a full halt, regardless of how far past both thresholds one loss goes.
-  assert.equal(result.activeStrategyMode, STRATEGY_B);
+  // A single full-ceiling loss is a 10% drawdown — well under the 45%
+  // macro threshold, so the macro breaker alone leaves the account in
+  // STRATEGY_A. Escalation in the bootstrap phase is owned by Section 7's
+  // single-loss override (microCircuitBreaker.js), not by this breaker.
+  assertClose(result.drawdownFromPeak, 0.10);
+  assert.equal(result.macroBreachTriggered, false);
+  assert.equal(result.activeStrategyMode, STRATEGY_A);
   assert.equal(result.haltTriggered, false);
 });
 
