@@ -33,6 +33,7 @@ import {
   getForexDemoManualTradeStatus,
   getM5PaperStatus,
   getM1PaperStatus,
+  getXauVwapPaperStatus,
   getM5RealDemoConfirmStatus,
   getM5RealDemoDispatchStatus,
   getM5RealStatus,
@@ -47,9 +48,11 @@ import {
   patchRiskTier,
   startM5PaperSession,
   startM1PaperSession,
+  startXauVwapPaperSession,
   startM5RealSession,
   stopM5PaperSession,
   stopM1PaperSession,
+  stopXauVwapPaperSession,
   stopM5RealSession,
   type AdminUser,
   type AdminUserDetail,
@@ -59,6 +62,7 @@ import {
   type ForexDemoManualTradeStatus,
   type M5PaperStatus,
   type M1PaperStatus,
+  type XauVwapPaperStatus,
   type M5RealDemoConfirmStatus,
   type M5RealDemoDispatchStatus,
   type M5RealStatus,
@@ -93,7 +97,7 @@ function confirmLiveRemainingSeconds(confirmedAt: string | null, nowMs = Date.no
 export function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<
-    'health' | 'users' | 'tiers' | 'strategies' | 'demo' | 'm5paper' | 'm1paper'
+    'health' | 'users' | 'tiers' | 'strategies' | 'demo' | 'm5paper' | 'm1paper' | 'xauvwappaper'
   >('health');
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -113,6 +117,7 @@ export function AdminPage() {
     useState<ForexDemoManualTradeStatus | null>(null);
   const [m5PaperStatus, setM5PaperStatus] = useState<M5PaperStatus | null>(null);
   const [m1PaperStatus, setM1PaperStatus] = useState<M1PaperStatus | null>(null);
+  const [xauVwapPaperStatus, setXauVwapPaperStatus] = useState<XauVwapPaperStatus | null>(null);
   const [m5RealStatus, setM5RealStatus] = useState<M5RealStatus | null>(null);
   const [m5RealDemoDispatch, setM5RealDemoDispatch] =
     useState<M5RealDemoDispatchStatus | null>(null);
@@ -138,7 +143,7 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [h, u, t, s, d, c, m, fd, fc, fm, m5, m1, m5r, m5rd, m5rc] = await Promise.all([
+    const [h, u, t, s, d, c, m, fd, fc, fm, m5, m1, xauV, m5r, m5rd, m5rc] = await Promise.all([
       getSystemHealth(),
       listAdminUsers({ page: 1, limit: 50 }),
       listRiskTiers(),
@@ -151,6 +156,7 @@ export function AdminPage() {
       getForexDemoManualTradeStatus(),
       getM5PaperStatus(),
       getM1PaperStatus(),
+      getXauVwapPaperStatus(),
       getM5RealStatus(),
       getM5RealDemoDispatchStatus(),
       getM5RealDemoConfirmStatus(),
@@ -167,6 +173,7 @@ export function AdminPage() {
     setForexDemoManualTrade(fm);
     setM5PaperStatus(m5);
     setM1PaperStatus(m1);
+    setXauVwapPaperStatus(xauV);
     setM5RealStatus(m5r);
     setM5RealDemoDispatch(m5rd);
     setM5RealDemoConfirm(m5rc);
@@ -550,6 +557,38 @@ export function AdminPage() {
     }
   }
 
+  async function onStartXauVwapPaper() {
+    if (
+      !window.confirm(
+        'Start the XAUUSD VWAP p90 PAPER-ONLY experimental session? Candidate signal ' +
+          'from a small backtest — NOT proven. Never places real orders.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await startXauVwapPaperSession();
+      setXauVwapPaperStatus(status);
+      setMessage('XAU VWAP paper-only session started.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Start failed.');
+    }
+  }
+
+  async function onStopXauVwapPaper() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await stopXauVwapPaperSession();
+      setXauVwapPaperStatus(status);
+      setMessage('XAU VWAP paper-only session stopped.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Stop failed.');
+    }
+  }
+
   async function onConfirmM5RealLiveTrading(phrase: string) {
     setError(null);
     setMessage(null);
@@ -711,6 +750,7 @@ export function AdminPage() {
             ['demo', 'Demo dispatch'],
             ['m5paper', 'M5 (experimental)'],
             ['m1paper', 'M1 paper (experimental)'],
+            ['xauvwappaper', 'XAU VWAP paper (experimental)'],
           ] as const
         ).map(([id, label]) => (
           <Button
@@ -1762,6 +1802,135 @@ export function AdminPage() {
                     {entry.at} — {entry.type}
                     {entry.symbol ? ` — ${entry.symbol}` : ''}
                     {entry.direction ? ` ${entry.direction}` : ''}
+                    {entry.reason ? ` (${entry.reason})` : ''}
+                    {entry.message ? ` — ${entry.message}` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No decisions logged yet.</p>
+            )}
+          </GlassCard>
+        </div>
+      ) : null}
+
+      {tab === 'xauvwappaper' ? (
+        <div className="flex flex-col gap-6">
+          <p className="type-caption text-state-danger">
+            Experimental — PAPER-ONLY, candidate signal, not proven. XAUUSD M5 only:
+            intraday VWAP p90 stretch-reversion (trade toward VWAP on empirical p90
+            cross). Simulates entries/exits in memory using live M5 data — never places
+            a real order. Based on a ~3.5-day costed backtest (n=16, E[R]=+0.31) —
+            requires extended paper validation before any real-dispatch consideration.
+            See docs/16_XAU_VWAP_Paper_Experiment.md. No confirm-live, no real-trading
+            flag, no path to placeOrder for this strategy.
+          </p>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">XAUUSD VWAP p90 paper session</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Symbol: {xauVwapPaperStatus?.symbol ?? 'XAUUSD'}. Timeframe:{' '}
+              {xauVwapPaperStatus?.timeframe ?? 'M5'}. Bars per tick:{' '}
+              {xauVwapPaperStatus?.barCount ?? '—'}. Ticks every{' '}
+              {xauVwapPaperStatus ? Math.round(xauVwapPaperStatus.tickMs / 1000) : '—'}s.
+            </p>
+            {xauVwapPaperStatus ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {xauVwapPaperStatus.status === 'running' ? 'RUNNING' : 'stopped'}
+                  </span>
+                </p>
+                {xauVwapPaperStatus.startedAt ? (
+                  <p>Started: {xauVwapPaperStatus.startedAt}</p>
+                ) : null}
+                <p>Ticks so far: {xauVwapPaperStatus.tickCount}</p>
+                {xauVwapPaperStatus.lastTickError ? (
+                  <p className="text-state-danger">
+                    Last tick error: {xauVwapPaperStatus.lastTickError}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="destructive" onClick={() => void onStartXauVwapPaper()}>
+                Start XAU VWAP paper session
+              </Button>
+              {xauVwapPaperStatus?.status === 'running' ? (
+                <Button variant="ghost" onClick={() => void onStopXauVwapPaper()}>
+                  Stop
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={() => void refresh()}>
+                Refresh status
+              </Button>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Open position (paper)</h2>
+            {xauVwapPaperStatus?.openTrade ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                <li>
+                  {xauVwapPaperStatus.openTrade.symbol}{' '}
+                  {xauVwapPaperStatus.openTrade.direction} @{' '}
+                  {xauVwapPaperStatus.openTrade.entryPrice} (lot{' '}
+                  {xauVwapPaperStatus.openTrade.lotSize})
+                </li>
+                <li>Strategy: {xauVwapPaperStatus.openTrade.strategyName}</li>
+                <li>
+                  p90 threshold at signal: {xauVwapPaperStatus.openTrade.p90Threshold}
+                </li>
+                <li>
+                  Stop {xauVwapPaperStatus.openTrade.stopPrice} / Target{' '}
+                  {xauVwapPaperStatus.openTrade.targetPrice}
+                </li>
+                <li>Opened: {xauVwapPaperStatus.openTrade.openedAt}</li>
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No open paper position.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Closed trades (paper)</h2>
+            {xauVwapPaperStatus && xauVwapPaperStatus.closedTrades.length > 0 ? (
+              <DataTable
+                emptyMessage="No closed trades yet."
+                getRowKey={(row) => `${row.symbol}-${row.closedAt ?? row.openedAt}`}
+                columns={[
+                  { key: 'direction', header: 'Dir', render: (row) => row.direction },
+                  { key: 'entryPrice', header: 'Entry', render: (row) => row.entryPrice },
+                  { key: 'closePrice', header: 'Exit', render: (row) => row.closePrice ?? '—' },
+                  {
+                    key: 'pnl',
+                    header: 'PnL',
+                    numeric: true,
+                    render: (row) => (row.pnl != null ? row.pnl.toFixed(2) : '—'),
+                  },
+                  { key: 'outcome', header: 'Outcome', render: (row) => row.outcome ?? '—' },
+                  { key: 'closedAt', header: 'Closed', render: (row) => row.closedAt ?? '—' },
+                ]}
+                rows={xauVwapPaperStatus.closedTrades}
+              />
+            ) : (
+              <p className="type-caption text-text-secondary">No closed trades yet.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Decision log (most recent first)</h2>
+            {xauVwapPaperStatus && xauVwapPaperStatus.decisionLog.length > 0 ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                {xauVwapPaperStatus.decisionLog.slice(0, 20).map((entry, i) => (
+                  <li key={`${entry.at}-${i}`}>
+                    {entry.at} — {entry.type}
+                    {entry.symbol ? ` — ${entry.symbol}` : ''}
+                    {entry.direction ? ` ${entry.direction}` : ''}
+                    {entry.p90Threshold != null ? ` p90=${entry.p90Threshold}` : ''}
                     {entry.reason ? ` (${entry.reason})` : ''}
                     {entry.message ? ` — ${entry.message}` : ''}
                   </li>

@@ -302,6 +302,48 @@ export function stopM1PaperSession(): Promise<M1PaperStatus> {
 }
 
 /**
+ * XAUUSD VWAP p90 stretch-reversion — PAPER-ONLY (docs/16_XAU_VWAP_Paper_Experiment.md).
+ * XAUUSD + M5 only. Never reaches real dispatch.
+ */
+export type XauVwapPaperTrade = M5PaperTrade & {
+  p90Threshold?: number;
+  absDistAtSignal?: number;
+  flooredBySpread?: boolean;
+  spreadAtEntry?: number | null;
+};
+
+export type XauVwapPaperDecision = M5PaperDecision & {
+  p90Threshold?: number;
+};
+
+export type XauVwapPaperStatus = {
+  status: 'stopped' | 'running';
+  startedAt: string | null;
+  stoppedAt: string | null;
+  tickMs: number;
+  tickCount: number;
+  symbol: string;
+  timeframe: string;
+  barCount: number;
+  openTrade: XauVwapPaperTrade | null;
+  closedTrades: XauVwapPaperTrade[];
+  decisionLog: XauVwapPaperDecision[];
+  lastTickError: string | null;
+};
+
+export function getXauVwapPaperStatus(): Promise<XauVwapPaperStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-paper-status');
+}
+
+export function startXauVwapPaperSession(): Promise<XauVwapPaperStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-paper-start', { method: 'POST' });
+}
+
+export function stopXauVwapPaperSession(): Promise<XauVwapPaperStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-paper-stop', { method: 'POST' });
+}
+
+/**
  * M5 real-dispatch (UNPROVEN LIVE, docs/14_M5_Forex_Paper_Experiment.md) —
  * a SEPARATE module/singleton from the M5 paper harness above. This one CAN
  * place real MT5 orders once an admin arms Layer 0-3. Testing-only, never

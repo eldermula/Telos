@@ -170,6 +170,24 @@ router.post(
   controller.stopM1PaperSession
 );
 
+// XAUUSD VWAP p90 stretch-reversion — PAPER-ONLY (docs/16_XAU_VWAP_Paper_Experiment.md).
+// Isolated from M5/M1 paper and all real-dispatch paths.
+router.get(
+  '/experimental/xau-vwap-paper-status',
+  rateLimit.read({ max: 20 }),
+  controller.getXauVwapPaperStatus
+);
+router.post(
+  '/experimental/xau-vwap-paper-start',
+  rateLimit.write({ max: 5 }),
+  controller.startXauVwapPaperSession
+);
+router.post(
+  '/experimental/xau-vwap-paper-stop',
+  rateLimit.write({ max: 5 }),
+  controller.stopXauVwapPaperSession
+);
+
 // M5 real-dispatch (UNPROVEN LIVE, docs/14_M5_Forex_Paper_Experiment.md) — a
 // SEPARATE tool from m5-paper-* above. Can place real orders once Layer 0-3
 // (below) are all armed. Admin-only, testing-only, never reachable from the

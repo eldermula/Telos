@@ -16,6 +16,7 @@ const m5PaperHarness = require('../engine/m5-paper-harness');
 // M1 PAPER-ONLY EXPERIMENT (docs/15_M1_Forex_Paper_Experiment.md) — same
 // isolation pattern as m5PaperHarness: in-memory paper only, never real.
 const m1PaperHarness = require('../engine/m1-paper-harness');
+const xauVwapPaperHarness = require('../engine/xau-vwap-paper-harness');
 // M5 real-dispatch (UNPROVEN LIVE) — separate module/singleton from
 // m5PaperHarness above; can place real orders once Layer 0-3 are armed.
 // See backend/src/engine/m5-real-harness.js and m5-real-dispatch.js headers.
@@ -501,6 +502,22 @@ async function stopM1PaperSession(adminUserId) {
   return status;
 }
 
+function getXauVwapPaperStatus() {
+  return xauVwapPaperHarness.getStatus();
+}
+
+async function startXauVwapPaperSession(adminUserId) {
+  const status = xauVwapPaperHarness.start();
+  await writeAudit({ adminUserId, action: 'xau_vwap_paper_experiment.start' });
+  return status;
+}
+
+async function stopXauVwapPaperSession(adminUserId) {
+  const status = xauVwapPaperHarness.stop();
+  await writeAudit({ adminUserId, action: 'xau_vwap_paper_experiment.stop' });
+  return status;
+}
+
 // ---------------------------------------------------------------------------
 // M5 real-dispatch (UNPROVEN LIVE, docs/14_M5_Forex_Paper_Experiment.md) —
 // admin-only, mirrors forex's confirm-live + demo-dispatch-toggle shape but
@@ -651,6 +668,9 @@ module.exports = {
   getM1PaperStatus,
   startM1PaperSession,
   stopM1PaperSession,
+  getXauVwapPaperStatus,
+  startXauVwapPaperSession,
+  stopXauVwapPaperSession,
   getM5RealStatus,
   startM5RealSession,
   stopM5RealSession,

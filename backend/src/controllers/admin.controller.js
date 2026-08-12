@@ -359,6 +359,33 @@ async function stopM1PaperSession(req, res, next) {
   }
 }
 
+async function getXauVwapPaperStatus(req, res, next) {
+  try {
+    const data = adminService.getXauVwapPaperStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function startXauVwapPaperSession(req, res, next) {
+  try {
+    const data = await adminService.startXauVwapPaperSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function stopXauVwapPaperSession(req, res, next) {
+  try {
+    const data = await adminService.stopXauVwapPaperSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 // M5 real-dispatch (UNPROVEN LIVE) — see admin.service.js's section header.
 async function getM5RealStatus(req, res, next) {
   try {
@@ -485,6 +512,9 @@ module.exports = {
   getM1PaperStatus,
   startM1PaperSession,
   stopM1PaperSession,
+  getXauVwapPaperStatus,
+  startXauVwapPaperSession,
+  stopXauVwapPaperSession,
   getM5RealStatus,
   startM5RealSession,
   stopM5RealSession,
