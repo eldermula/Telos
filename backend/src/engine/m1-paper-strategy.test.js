@@ -3,14 +3,14 @@
 /**
  * M1 PAPER-ONLY EXPERIMENT — pure-math coverage (docs/15_M1_Forex_Paper_Experiment.md).
  *
- * Stop-distance and clamp-skip fixtures below are taken directly from the
- * 2026-08-11 M1 probe report (real live connector data, M1 timeframe,
- * 1000 bars/instrument) — not re-derived or approximated here:
- *   Stop distance (1.5x ATR14, M1): EURUSD 0.00006612, GBPUSD 0.00008173,
- *   USDJPY 0.00667279, AUDUSD 0.00007936, USDCAD 0.00005385, XAUUSD 1.32788.
- *   Min viable balance (current bootstrap curve): EURUSD $0.34, GBPUSD
- *   $0.41, AUDUSD $0.40, USDCAD $0.27 (all viable at $5) — XAUUSD $6.64
- *   (SKIP at $5, OK at $10), USDJPY $21.32 (NOT viable at $5 or $10).
+ * ATR fixtures: original 2026-08-11 M1 probe (1000 bars/instrument).
+ * Spread fixtures: live bid/ask samples from the 2026-08-11/12 spread probe
+ * (8 samples/symbol) that motivated SPREAD_STOP_MULTIPLE = 2.0.
+ *
+ * New stop = max(1.5×ATR14, 2.0 × mean_live_spread). Min-viable balances
+ * below are recomputed with that formula on the original probe ATRs + the
+ * observed mean spreads (so the delta vs the old probe mins is attributable
+ * to the spread floor, not a different ATR day).
  */
 
 const { describe, it } = require('node:test');
@@ -21,6 +21,8 @@ const {
   computeAppliedRisk,
   resolveContractSize,
   isGoldFamilySymbol,
+  SPREAD_STOP_MULTIPLE,
+  resolveM1StopDistance,
   evaluateM1Tick,
   evaluateM1Monitor,
 } = require('./m1-paper-strategy');
@@ -33,13 +35,52 @@ const { computeStopTarget } = require(path.join(strategyEnginePath, 'stopTarget.
 const tierMatrixPath = path.join(__dirname, '..', '..', '..', 'bot', 'apirs', 'src', 'tierMatrix.js');
 const { bootstrapRiskPct, TIER_MATRIX } = require(tierMatrixPath);
 
-const M1_PROBE_FIXTURES = {
-  EURUSD: { atr14: 0.00004407888194360689, stopDistance: 0.00006611832291541033, contractSize: 100000, minViableBalance: 0.34 },
-  GBPUSD: { atr14: 0.00005448971573144887, stopDistance: 0.00008173457359717331, contractSize: 100000, minViableBalance: 0.41 },
-  USDJPY: { atr14: 0.0044485257442623384, stopDistance: 0.006672788616393508, contractSize: 100000, minViableBalance: 21.32 },
-  AUDUSD: { atr14: 0.00005290931370080406, stopDistance: 0.00007936397055120609, contractSize: 100000, minViableBalance: 0.4 },
-  USDCAD: { atr14: 0.00003589941597767033, stopDistance: 0.000053849123966505496, contractSize: 100000, minViableBalance: 0.27 },
-  XAUUSD: { atr14: 0.8852525197800026, stopDistance: 1.327878779670004, contractSize: 100, minViableBalance: 6.64 },
+/** Original M1 probe ATR14 + ATR-only stop (pre spread floor). */
+const M1_PROBE_ATR = {
+  EURUSD: { atr14: 0.00004407888194360689, atrStop: 0.00006611832291541033, contractSize: 100000 },
+  GBPUSD: { atr14: 0.00005448971573144887, atrStop: 0.00008173457359717331, contractSize: 100000 },
+  USDJPY: { atr14: 0.0044485257442623384, atrStop: 0.006672788616393508, contractSize: 100000 },
+  AUDUSD: { atr14: 0.00005290931370080406, atrStop: 0.00007936397055120609, contractSize: 100000 },
+  USDCAD: { atr14: 0.00003589941597767033, atrStop: 0.000053849123966505496, contractSize: 100000 },
+  XAUUSD: { atr14: 0.8852525197800026, atrStop: 1.327878779670004, contractSize: 100 },
+};
+
+/**
+ * Live mean spreads (8 samples) from the spread probe that chose
+ * SPREAD_STOP_MULTIPLE = 2.0. See docs/15.
+ */
+const LIVE_MEAN_SPREAD = {
+  EURUSD: 0.00012875,
+  GBPUSD: 0.00013625,
+  USDJPY: 0.015,
+  AUDUSD: 0.0001275,
+  USDCAD: 0.00015,
+  XAUUSD: 0.1825,
+};
+
+/** Old (ATR-only) min-viable from the original M1 probe. */
+const OLD_MIN_VIABLE = {
+  EURUSD: 0.34,
+  GBPUSD: 0.41,
+  USDJPY: 21.32,
+  AUDUSD: 0.4,
+  USDCAD: 0.27,
+  XAUUSD: 6.64,
+};
+
+/**
+ * Spread-aware stop + min-viable (probe ATR + observed mean spread).
+ * Recomputed 2026-08-12 (ceiled to cents so clamp clears): EURUSD $1.29,
+ * GBPUSD $1.37, USDJPY $50.01, AUDUSD $1.28, USDCAD $1.51, XAUUSD $6.64
+ * (floor does not bind on gold — min unchanged vs ATR-only probe).
+ */
+const M1_SPREAD_AWARE = {
+  EURUSD: { stopDistance: 0.0002575, minViableBalance: 1.29 },
+  GBPUSD: { stopDistance: 0.0002725, minViableBalance: 1.37 },
+  USDJPY: { stopDistance: 0.03, minViableBalance: 50.01 },
+  AUDUSD: { stopDistance: 0.000255, minViableBalance: 1.28 },
+  USDCAD: { stopDistance: 0.0003, minViableBalance: 1.51 },
+  XAUUSD: { stopDistance: 1.327878779670004, minViableBalance: 6.64 },
 };
 
 const FX_SYMBOL_INFO = { volume_min: 0.01, volume_step: 0.01, volume_max: 20 };
@@ -87,9 +128,9 @@ describe('m1-paper-strategy: resolveContractSize', () => {
   });
 });
 
-describe('m1-paper-strategy: M1 stop distances match the real probe numbers exactly', () => {
-  for (const [symbol, fixture] of Object.entries(M1_PROBE_FIXTURES)) {
-    it(`${symbol}: 1.5x ATR14(M1) reproduces the probe's stop distance`, () => {
+describe('m1-paper-strategy: ATR baseline still matches the original probe', () => {
+  for (const [symbol, fixture] of Object.entries(M1_PROBE_ATR)) {
+    it(`${symbol}: 1.5x ATR14(M1) reproduces the probe's ATR stop`, () => {
       const { stopDistance } = computeStopTarget({
         entryPrice: 1,
         direction: 'BUY',
@@ -98,19 +139,58 @@ describe('m1-paper-strategy: M1 stop distances match the real probe numbers exac
         targetRule: { ratio: 2 },
       });
       assert.ok(
-        Math.abs(stopDistance - fixture.stopDistance) < 1e-9,
-        `${symbol}: expected ~${fixture.stopDistance}, got ${stopDistance}`
+        Math.abs(stopDistance - fixture.atrStop) < 1e-9,
+        `${symbol}: expected ~${fixture.atrStop}, got ${stopDistance}`
       );
     });
   }
 });
 
-describe('m1-paper-strategy: clamp-skip at $5/$10 matches the M1 probe', () => {
+describe('m1-paper-strategy: spread-aware stop floor (SPREAD_STOP_MULTIPLE=2.0)', () => {
+  it('exports SPREAD_STOP_MULTIPLE = 2.0 (chosen from live M1 spreads)', () => {
+    assert.equal(SPREAD_STOP_MULTIPLE, 2.0);
+  });
+
+  for (const [symbol, atrFix] of Object.entries(M1_PROBE_ATR)) {
+    it(`${symbol}: stop = max(ATR stop, 2× mean spread) matches fixture`, () => {
+      const spread = LIVE_MEAN_SPREAD[symbol];
+      const expected = M1_SPREAD_AWARE[symbol].stopDistance;
+      const resolved = resolveM1StopDistance({
+        currentATR: atrFix.atr14,
+        stopRule: { multiple: 1.5 },
+        symbolInfo: { bid: 1, ask: 1 + spread },
+      });
+      assert.ok(
+        Math.abs(resolved.stopDistance - expected) < 1e-9,
+        `${symbol}: expected ${expected}, got ${resolved.stopDistance}`
+      );
+      const shouldFloor = expected > atrFix.atrStop + 1e-15;
+      assert.equal(resolved.flooredBySpread, shouldFloor);
+    });
+  }
+
+  it('USDCAD Session-A style: ATR stop inside spread is floored above the book', () => {
+    // Session A stops ~0.000077–0.00008 vs live USDCAD spread ~0.00015
+    const resolved = resolveM1StopDistance({
+      currentATR: 0.000053849123966505496 / 1.5,
+      stopRule: { multiple: 1.5 },
+      symbolInfo: { bid: 1.39201, ask: 1.39216 },
+    });
+    const spread = 0.00015;
+    assert.ok(resolved.atrStopDistance < spread, 'ATR stop was inside the spread');
+    assert.equal(resolved.flooredBySpread, true);
+    assert.ok(resolved.stopDistance >= SPREAD_STOP_MULTIPLE * spread - 1e-12);
+    assert.ok(resolved.stopDistance > spread, 'floor must clear opposite side of book');
+  });
+});
+
+describe('m1-paper-strategy: clamp-skip with spread-aware stops', () => {
   const VIABLE_AT_5_AND_10 = ['EURUSD', 'GBPUSD', 'AUDUSD', 'USDCAD'];
 
   for (const symbol of VIABLE_AT_5_AND_10) {
-    it(`${symbol} clears volume_min at both $5 and $10 (per probe)`, () => {
-      const fixture = M1_PROBE_FIXTURES[symbol];
+    it(`${symbol} still clears volume_min at both $5 and $10 after spread floor`, () => {
+      const stop = M1_SPREAD_AWARE[symbol].stopDistance;
+      const contractSize = M1_PROBE_ATR[symbol].contractSize;
       const symbolInfo = symbolInfoFor(symbol);
       for (const balance of [5, 10]) {
         const appliedRisk = computeAppliedRisk(balance);
@@ -118,8 +198,8 @@ describe('m1-paper-strategy: clamp-skip at $5/$10 matches the M1 probe', () => {
           effectiveBalance: balance,
           appliedRisk,
           entryPrice: 1,
-          stopPrice: 1 - fixture.stopDistance,
-          contractSize: fixture.contractSize,
+          stopPrice: 1 - stop,
+          contractSize,
         });
         const clamp = clampLotSize(raw.rawLotSize, symbolInfo);
         assert.equal(clamp.skipped, false, `${symbol} at $${balance} should NOT be skipped`);
@@ -127,18 +207,19 @@ describe('m1-paper-strategy: clamp-skip at $5/$10 matches the M1 probe', () => {
     });
   }
 
-  it('XAUUSD clamp-skips at $5 but clears at $10 (per probe)', () => {
-    const fixture = M1_PROBE_FIXTURES.XAUUSD;
+  it('XAUUSD clamp-skips at $5 but clears at $10 (spread floor does not bind)', () => {
+    const stop = M1_SPREAD_AWARE.XAUUSD.stopDistance;
     const symbolInfo = symbolInfoFor('XAUUSD');
     const entry = 4375;
+    const contractSize = 100;
 
     const at5 = clampLotSize(
       computeSyntheticRawLotSize({
         effectiveBalance: 5,
         appliedRisk: computeAppliedRisk(5),
         entryPrice: entry,
-        stopPrice: entry - fixture.stopDistance,
-        contractSize: fixture.contractSize,
+        stopPrice: entry - stop,
+        contractSize,
       }).rawLotSize,
       symbolInfo
     );
@@ -149,16 +230,16 @@ describe('m1-paper-strategy: clamp-skip at $5/$10 matches the M1 probe', () => {
         effectiveBalance: 10,
         appliedRisk: computeAppliedRisk(10),
         entryPrice: entry,
-        stopPrice: entry - fixture.stopDistance,
-        contractSize: fixture.contractSize,
+        stopPrice: entry - stop,
+        contractSize,
       }).rawLotSize,
       symbolInfo
     );
     assert.equal(at10.skipped, false, 'XAUUSD at $10 should NOT skip');
   });
 
-  it('USDJPY correctly clamp-skips at both $5 and $10 (per probe)', () => {
-    const fixture = M1_PROBE_FIXTURES.USDJPY;
+  it('USDJPY correctly clamp-skips at both $5 and $10 (wider after spread floor)', () => {
+    const stop = M1_SPREAD_AWARE.USDJPY.stopDistance;
     const symbolInfo = symbolInfoFor('USDJPY');
     for (const balance of [5, 10]) {
       const appliedRisk = computeAppliedRisk(balance);
@@ -166,8 +247,8 @@ describe('m1-paper-strategy: clamp-skip at $5/$10 matches the M1 probe', () => {
         effectiveBalance: balance,
         appliedRisk,
         entryPrice: 159,
-        stopPrice: 159 - fixture.stopDistance,
-        contractSize: fixture.contractSize,
+        stopPrice: 159 - stop,
+        contractSize: 100000,
       });
       const clamp = clampLotSize(raw.rawLotSize, symbolInfo);
       assert.equal(clamp.skipped, true, `USDJPY at $${balance} should be skipped`);
@@ -175,18 +256,19 @@ describe('m1-paper-strategy: clamp-skip at $5/$10 matches the M1 probe', () => {
     }
   });
 
-  it('a trivially small balance skips and the probe minimum itself opens', () => {
+  it('spread-aware min-viable opens; a trivially small balance skips', () => {
     const below = 0.05;
-    for (const [symbol, fixture] of Object.entries(M1_PROBE_FIXTURES)) {
+    for (const [symbol, aware] of Object.entries(M1_SPREAD_AWARE)) {
       const symbolInfo = symbolInfoFor(symbol);
       const entry = symbol === 'XAUUSD' ? 4375 : symbol === 'USDJPY' ? 159 : 1;
+      const contractSize = M1_PROBE_ATR[symbol].contractSize;
 
       const rawBelow = computeSyntheticRawLotSize({
         effectiveBalance: below,
         appliedRisk: computeAppliedRisk(below),
         entryPrice: entry,
-        stopPrice: entry - fixture.stopDistance,
-        contractSize: fixture.contractSize,
+        stopPrice: entry - aware.stopDistance,
+        contractSize,
       });
       assert.equal(
         clampLotSize(rawBelow.rawLotSize, symbolInfo).skipped,
@@ -195,17 +277,27 @@ describe('m1-paper-strategy: clamp-skip at $5/$10 matches the M1 probe', () => {
       );
 
       const rawAt = computeSyntheticRawLotSize({
-        effectiveBalance: fixture.minViableBalance,
-        appliedRisk: computeAppliedRisk(fixture.minViableBalance),
+        effectiveBalance: aware.minViableBalance,
+        appliedRisk: computeAppliedRisk(aware.minViableBalance),
         entryPrice: entry,
-        stopPrice: entry - fixture.stopDistance,
-        contractSize: fixture.contractSize,
+        stopPrice: entry - aware.stopDistance,
+        contractSize,
       });
       assert.equal(
         clampLotSize(rawAt.rawLotSize, symbolInfo).skipped,
         false,
-        `${symbol}: $${fixture.minViableBalance} (probe minimum) should NOT skip`
+        `${symbol}: $${aware.minViableBalance} (spread-aware minimum) should NOT skip`
       );
+
+      // Document that FX mins rose vs the ATR-only probe; XAU unchanged.
+      if (symbol !== 'XAUUSD') {
+        assert.ok(
+          aware.minViableBalance > OLD_MIN_VIABLE[symbol],
+          `${symbol}: new min should exceed old ATR-only min $${OLD_MIN_VIABLE[symbol]}`
+        );
+      } else {
+        assert.equal(aware.minViableBalance, OLD_MIN_VIABLE.XAUUSD);
+      }
     }
   });
 });
@@ -250,9 +342,13 @@ const EMA_STRATEGY = {
 };
 
 describe('m1-paper-strategy: evaluateM1Tick end-to-end', () => {
-  it('opens a paper trade when a strategy fires and balance clears volume_min', () => {
+  it('opens a paper trade with spread-floored stop when ATR stop is inside the spread', () => {
     const bars = genOversoldBars();
-    const symbolInfo = { ...FX_SYMBOL_INFO, bid: 1.0976, ask: 1.0978, trade_contract_size: 100000 };
+    // Spread 0.0004 → floor 0.0008; fixture 1.5×ATR ≈ 0.00051 so floor binds.
+    const bid = 1.0976;
+    const ask = 1.098;
+    const spread = ask - bid;
+    const symbolInfo = { ...FX_SYMBOL_INFO, bid, ask, trade_contract_size: 100000 };
 
     const result = evaluateM1Tick({
       instruments: [{ symbol: 'EURUSD', bars, symbolInfo }],
@@ -264,7 +360,15 @@ describe('m1-paper-strategy: evaluateM1Tick end-to-end', () => {
     assert.equal(result.trade.symbol, 'EURUSD');
     assert.equal(result.trade.direction, 'BUY');
     assert.equal(result.trade.strategyName, 'RSI Mean Reversion');
-    assert.equal(result.trade.entryPrice, 1.0978);
+    assert.equal(result.trade.entryPrice, ask);
+    assert.equal(result.trade.flooredBySpread, true);
+    assert.ok(
+      Math.abs(result.trade.stopDistance - SPREAD_STOP_MULTIPLE * spread) < 1e-12,
+      `expected floor stop ${SPREAD_STOP_MULTIPLE * spread}, got ${result.trade.stopDistance}`
+    );
+    // BUY stop below entry by stopDistance; target 2R above.
+    assert.ok(Math.abs(result.trade.stopPrice - (ask - result.trade.stopDistance)) < 1e-12);
+    assert.ok(Math.abs(result.trade.targetPrice - (ask + 2 * result.trade.stopDistance)) < 1e-12);
     assert.ok(result.trade.lotSize >= 0.01);
     assert.equal(result.trade.appliedRisk, 0.1);
   });

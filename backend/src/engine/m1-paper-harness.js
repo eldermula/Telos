@@ -139,6 +139,9 @@ function createM1PaperHarness(deps = {}) {
         strategyName: result.trade.strategyName,
         lotSize: result.trade.lotSize,
         entryPrice: result.trade.entryPrice,
+        stopDistance: result.trade.stopDistance,
+        atrStopDistance: result.trade.atrStopDistance,
+        flooredBySpread: result.trade.flooredBySpread,
       });
     } else if (result.outcome === 'skipped_below_volume_min') {
       pushDecision({
