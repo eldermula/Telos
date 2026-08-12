@@ -7,8 +7,8 @@
 * Account type: real
 * Demo/sandbox login (masked): 22****97
 * Market-data source: live MT5 connector `getRates(XAUUSD, M5)`
-* Test start: 2026-08-12T11:43:31.800Z
-* Test end: 2026-08-12T11:58:35.626Z
+* Test start: 2026-08-12T12:26:56.621Z
+* Test end: 2026-08-12T12:57:00.522Z
 
 ### Market Test
 
@@ -19,7 +19,7 @@
 * Live candles observed: 120
 * Valid signals: 0
 * Executions: 0
-* Rejected signals/orders: 0
+* Rejected signals/orders: 1
 
 ### Execution
 
@@ -33,21 +33,21 @@
 | --- | --- |
 | Live market data | ok |
 | VWAP / p90 / spread path | exercised when snapshot present |
-| Dispatcher / risk / kill switch | enforced (non-demo = no placeOrder; demo = harness Layers 0–3) |
+| Dispatcher / risk / kill switch | enforced via harness Layers 0–2 (real) or 0–3 (demo) |
 | Fabricated values | **none** (fabricated=false) |
-| Strategy disabled after test | yes (no live harness left running; kill switch left off after operator disable) |
+| Strategy disabled after test | yes (harness stopped; operator restores kill switch to false) |
 
 ### Notes
 
 * initial snapshot ok=true tick_outcome=no_signal
-* Linked account_type=real — first controlled live test refuses placeOrder on non-demo. Running READ-ONLY live observation (VWAP/p90/signal detect only; no dispatch).
-* strategy remained DISABLED for real-money dispatch (no harness start)
+* OPERATOR-AUTHORIZED REAL-MONEY dispatch: XAU_VWAP_LIVE_ALLOW_REAL=true; demo Layer 2b/3 not used; Layer 2 confirm-live + Layer 1 kill switch only
+* confirm-live phrase accepted via adminService
 
 ### Final Result
 
 **LIVE TEST COMPLETED — NO VALID SIGNAL**
 
-> A **PASSED** result requires a demo/sandbox account and a verified
-> signal→dispatch→fill→monitor path. Read-only observation on a real
-> account that finds no signal correctly reports **NO VALID SIGNAL**.
-> Historical/paper E[R] was not used as an execution assumption.
+> A **PASSED** result requires a verified signal→dispatch→fill→monitor path
+> through the existing real-dispatch architecture (demo, or real with explicit
+> `XAU_VWAP_LIVE_ALLOW_REAL`). No fabricated fills. Historical/paper E[R]
+> was not used as an execution assumption.

@@ -5,6 +5,8 @@
 **2026-08-12**
 
 
+- **Operator-authorized real-account live harness (~30m, XAUUSD M5):** confirm-live armed (XAU_VWAP_LIVE_ALLOW_REAL); 0 signals / 0 orders; status **NO VALID SIGNAL**; skip noise included skipped_below_volume_min + stale_market_data; kill switch (XAU_VWAP_LIVE_TRADING_ENABLED) restored **false** after session. Report: [docs/17_XAU_VWAP_Live_Test_Report.md](17_XAU_VWAP_Live_Test_Report.md).
+
 - **Live market observation (~15m, live XAUUSD M5):** NO VALID SIGNAL; real account so no `placeOrder`; `fabricated=false`; kill switch (`XAU_VWAP_LIVE_TRADING_ENABLED`) left disabled after session.
 - **XAUUSD VWAP p90 — CONTROLLED REAL-MONEY module (docs/17_XAU_VWAP_Live_Strategy.md):** Transitions the paper-validated XAUUSD M5 VWAP p90 stretch-reversion candidate into an isolated live path. New modules: `xau-vwap-live-strategy.js` (intent + fail-closed guards; empirical p90 never hardcoded), `xau-vwap-live-dispatch.js` (orders only via existing `mt5-connector` `placeOrder` / broker-authoritative monitor), `xau-vwap-live-harness.js`, `xau-vwap-demo-dispatch.service.js`. Migration `027`: `asset_class=xau_vwap_live`; migration `028`: `xau_vwap_live_trading_confirmed_at`, `xau_vwap_demo_dispatch_config`. Independent Layer 1 `XAU_VWAP_LIVE_TRADING_ENABLED` (default off). Admin routes `xau-vwap-live-*` + Admin tab **“XAUUSD VWAP p90 — LIVE (REAL MONEY)”**. Respects `halt_new_opens`, one-open-per-user, `REAL_MAX_LOT`, confirm-live phrase, demo bypasses. Historical/paper E[R] is documentation-only — not baked into execution. Paper module (`docs/16`) unchanged and still cannot place orders.
 

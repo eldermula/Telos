@@ -5,12 +5,13 @@
  *
  * Uses REAL-TIME connector rates (no historical substitution).
  * Does NOT fabricate signals or fills.
- * Prefer DEMO account + Layer 2b/3 demo bypasses.
  *
  * Env:
- *   XAU_VWAP_LIVE_TEST_MINUTES (default 20)
- *   XAU_VWAP_LIVE_TRADING_ENABLED=true required
- *   ADMIN credentials via existing login helpers / JWT in env if provided
+ *   XAU_VWAP_LIVE_TEST_MINUTES (default 25)
+ *   XAU_VWAP_LIVE_TRADING_ENABLED=true required for dispatch
+ *   XAU_VWAP_LIVE_ALLOW_REAL=true — required to place orders on a REAL account
+ *     (operator-authorized controlled real-money test; default refuse)
+ *   Demo accounts use Layer 2b/3 demo bypasses; real accounts use confirm-live only
  *
  * Writes: docs/17_XAU_VWAP_Live_Test_Report.md and backend/_xau-vwap-live-test-result.json
  */
@@ -109,10 +110,16 @@ async function main() {
     console.log('[xau-live-test] P90 UPDATED', snap.ok ? snap.p90Threshold : null);
     console.log('[xau-live-test] SPREAD UPDATED', snap.ok ? snap.spread : null);
 
-    if (result.accountType !== 'demo') {
+    const allowReal =
+      process.env.XAU_VWAP_LIVE_ALLOW_REAL === 'true' ||
+      process.env.XAU_VWAP_LIVE_ALLOW_REAL === '1';
+    const isDemo = result.accountType === 'demo';
+    const canDispatch = isDemo || (result.accountType === 'real' && allowReal);
+
+    if (!canDispatch) {
       result.notes.push(
-        `Linked account_type=${result.accountType} — first controlled live test refuses placeOrder on non-demo. ` +
-          'Running READ-ONLY live observation (VWAP/p90/signal detect only; no dispatch).'
+        `Linked account_type=${result.accountType} — placeOrder refused without ` +
+          'XAU_VWAP_LIVE_ALLOW_REAL=true. Running READ-ONLY observation.'
       );
       console.log('[xau-live-test] READ-ONLY observation window (no orders)');
       const deadline = Date.now() + OBSERVE_MINUTES * 60 * 1000;
@@ -145,7 +152,7 @@ async function main() {
             console.log('[xau-live-test] SIGNAL DETECTED (read-only; order NOT sent)');
             result.notes.push(
               `signal_at=${new Date().toISOString()} direction=${liveTick.trade?.direction} ` +
-                `entry=${liveTick.trade?.entryPrice} — NOT dispatched (non-demo)`
+                `entry=${liveTick.trade?.entryPrice} — NOT dispatched`
             );
           }
         } catch (err) {
@@ -161,24 +168,31 @@ async function main() {
           ? 'LIVE TEST FAILED'
           : 'LIVE TEST COMPLETED — NO VALID SIGNAL';
       if (signalCount > 0) {
-        result.notes.push(
-          'Signal(s) seen in read-only window but execution was blocked because account is not demo'
-        );
+        result.notes.push('Signal(s) seen in read-only window but execution was blocked');
       }
       result.notes.push('strategy remained DISABLED for real-money dispatch (no harness start)');
       return;
     }
 
     if (!XAU_VWAP_LIVE_TRADING_ENABLED) {
-      result.notes.push('XAU_VWAP_LIVE_TRADING_ENABLED is not true — cannot arm live harness on demo');
+      result.notes.push('XAU_VWAP_LIVE_TRADING_ENABLED is not true — cannot arm live harness');
       result.status = 'LIVE TEST FAILED';
       return;
     }
 
-    // DEMO path: arm Layer 2b/3, confirm-live via phrase, start singleton harness.
-    await xauDemo.enableConfirm(admin.id, Math.min(30, OBSERVE_MINUTES + 5));
-    await xauDemo.enableDispatch(admin.id, Math.min(30, OBSERVE_MINUTES + 5));
-    result.notes.push('armed XAU VWAP demo confirm + demo dispatch bypasses');
+    if (isDemo) {
+      await xauDemo.enableConfirm(admin.id, Math.min(30, OBSERVE_MINUTES + 5));
+      await xauDemo.enableDispatch(admin.id, Math.min(30, OBSERVE_MINUTES + 5));
+      result.notes.push('armed XAU VWAP demo confirm + demo dispatch bypasses (Layer 2b/3)');
+    } else {
+      result.notes.push(
+        'OPERATOR-AUTHORIZED REAL-MONEY dispatch: XAU_VWAP_LIVE_ALLOW_REAL=true; ' +
+          'demo Layer 2b/3 not used; Layer 2 confirm-live + Layer 1 kill switch only'
+      );
+      console.warn(
+        '[xau-live-test] REAL MONEY ACCOUNT — dispatch armed. Orders will use existing placeOrder path.'
+      );
+    }
 
     // Ensure stopped before confirm.
     try {
@@ -190,7 +204,9 @@ async function main() {
     result.notes.push('confirm-live phrase accepted via adminService');
 
     await xauLiveHarness.start({ operatorUserId: admin.id });
-    console.log('[xau-live-test] strategy session STARTED — waiting for real signal (no fabrication)');
+    console.log(
+      '[xau-live-test] strategy session STARTED — waiting for real signal (no fabrication)'
+    );
 
     const deadline = Date.now() + OBSERVE_MINUTES * 60 * 1000;
     while (Date.now() < deadline) {
@@ -211,6 +227,9 @@ async function main() {
         console.log('[xau-live-test] NO SIGNAL / awaiting snapshot');
       }
 
+      if (st.lastSignal) {
+        console.log('[xau-live-test] LAST SIGNAL', st.lastSignal.outcome, st.lastSignal.at);
+      }
       if (st.openTrade) {
         console.log('[xau-live-test] ORDER FILLED / POSITION MONITORING', st.openTrade.brokerTicket);
         result.executions.push({ ...st.openTrade });
@@ -232,11 +251,13 @@ async function main() {
     await xauLiveHarness.stop();
     console.log('[xau-live-test] DISABLED AFTER LIVE TEST');
 
-    try {
-      await xauDemo.disableDispatch(admin.id);
-      await xauDemo.disableConfirm(admin.id);
-    } catch (e) {
-      result.notes.push(`demo bypass disable: ${e.message}`);
+    if (isDemo) {
+      try {
+        await xauDemo.disableDispatch(admin.id);
+        await xauDemo.disableConfirm(admin.id);
+      } catch (e) {
+        result.notes.push(`demo bypass disable: ${e.message}`);
+      }
     }
 
     result.signals = finalStatus.signalsDetected || 0;
@@ -249,7 +270,9 @@ async function main() {
       result.executions = finalStatus.closedTrades;
     } else if (result.orders > 0 && finalStatus.openTrade) {
       result.status = 'LIVE TEST PASSED';
-      result.notes.push('position still open at end of window — broker SL/TP active; harness stopped');
+      result.notes.push(
+        'position still open at end of window — broker SL/TP active; harness stopped'
+      );
       result.executions = [finalStatus.openTrade];
     } else if (result.signals === 0 && result.orders === 0) {
       result.status = 'LIVE TEST COMPLETED — NO VALID SIGNAL';
@@ -314,9 +337,9 @@ ${JSON.stringify(result.executions, null, 2)}
 | --- | --- |
 | Live market data | ${result.candlesObserved > 0 ? 'ok' : 'fail'} |
 | VWAP / p90 / spread path | exercised when snapshot present |
-| Dispatcher / risk / kill switch | enforced (non-demo = no placeOrder; demo = harness Layers 0–3) |
+| Dispatcher / risk / kill switch | enforced via harness Layers 0–2 (real) or 0–3 (demo) |
 | Fabricated values | **none** (fabricated=${result.fabricated}) |
-| Strategy disabled after test | yes (no live harness left running; kill switch left off after operator disable) |
+| Strategy disabled after test | yes (harness stopped; operator restores kill switch to false) |
 
 ### Notes
 
@@ -326,10 +349,10 @@ ${(result.notes || []).map((n) => `* ${n}`).join('\n') || '* (none)'}
 
 **${result.status}**
 
-> A **PASSED** result requires a demo/sandbox account and a verified
-> signal→dispatch→fill→monitor path. Read-only observation on a real
-> account that finds no signal correctly reports **NO VALID SIGNAL**.
-> Historical/paper E[R] was not used as an execution assumption.
+> A **PASSED** result requires a verified signal→dispatch→fill→monitor path
+> through the existing real-dispatch architecture (demo, or real with explicit
+> \`XAU_VWAP_LIVE_ALLOW_REAL\`). No fabricated fills. Historical/paper E[R]
+> was not used as an execution assumption.
 `;
   fs.writeFileSync(report, md);
   console.log('[xau-live-test]', result.status);
