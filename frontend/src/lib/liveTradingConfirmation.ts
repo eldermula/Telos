@@ -8,3 +8,10 @@
  */
 export const LIVE_TRADING_CONFIRMATION_PHRASE =
   'I CONFIRM LIVE TRADING WITH REAL MONEY';
+
+/**
+ * Must match `LIVE_TRADING_CONFIRMATION_TTL_MINUTES` in
+ * `backend/src/engine/live-trading-confirmation.js`. Shared Layer 2
+ * TTL for forex M15, M5 real-dispatch, and synthetics.
+ */
+export const LIVE_TRADING_CONFIRMATION_TTL_MINUTES = 120;

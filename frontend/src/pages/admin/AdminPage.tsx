@@ -5,6 +5,10 @@ import { Button } from '../../components/ui/Button';
 import { DataTable } from '../../components/ui/DataTable';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Input } from '../../components/ui/Input';
+import { ConfirmLiveTradingModal } from '../trading/ConfirmLiveTradingModal';
+import {
+  LIVE_TRADING_CONFIRMATION_TTL_MINUTES,
+} from '../../lib/liveTradingConfirmation';
 import {
   confirmM5RealLiveTrading,
   disableForexDemoConfirm,
@@ -77,6 +81,15 @@ function formatRemaining(seconds: number): string {
   return `${m}m ${s}s`;
 }
 
+function confirmLiveRemainingSeconds(confirmedAt: string | null, nowMs = Date.now()): number {
+  if (!confirmedAt) return 0;
+  const confirmedMs = Date.parse(confirmedAt);
+  if (!Number.isFinite(confirmedMs)) return 0;
+  const ttlMs = LIVE_TRADING_CONFIRMATION_TTL_MINUTES * 60 * 1000;
+  const remaining = Math.floor((confirmedMs + ttlMs - nowMs) / 1000);
+  return remaining > 0 ? remaining : 0;
+}
+
 export function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<
@@ -112,9 +125,12 @@ export function AdminPage() {
   const [forexDemoDispatchMinutes, setForexDemoDispatchMinutes] = useState('15');
   const [forexDemoConfirmMinutes, setForexDemoConfirmMinutes] = useState('15');
   const [forexDemoManualTradeMinutes, setForexDemoManualTradeMinutes] = useState('15');
-  const [m5RealDemoDispatchMinutes, setM5RealDemoDispatchMinutes] = useState('15');
-  const [m5RealDemoConfirmMinutes, setM5RealDemoConfirmMinutes] = useState('15');
-  const [m5RealConfirmPhrase, setM5RealConfirmPhrase] = useState('');
+  const [m5RealDemoDispatchMinutes, setM5RealDemoDispatchMinutes] = useState('30');
+  const [m5RealDemoConfirmMinutes, setM5RealDemoConfirmMinutes] = useState('30');
+  const [m5ConfirmModalOpen, setM5ConfirmModalOpen] = useState(false);
+  const [m5Confirming, setM5Confirming] = useState(false);
+  const [m5ConfirmedAt, setM5ConfirmedAt] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const [editTier, setEditTier] = useState<RiskTier | null>(null);
   const [ceilingDraft, setCeilingDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -174,6 +190,24 @@ export function AdminPage() {
       cancelled = true;
     };
   }, [user?.role, refresh]);
+
+  // Soft clock for remaining-time display on the M5 tab.
+  useEffect(() => {
+    if (tab !== 'm5paper') return;
+    const id = window.setInterval(() => setNowTick(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [tab]);
+
+  // Refresh M5 paper/real status while the experimental tab is open.
+  useEffect(() => {
+    if (user?.role !== 'admin' || tab !== 'm5paper') return;
+    const id = window.setInterval(() => {
+      void refresh().catch(() => {
+        /* keep last known status; banner already surfaces hard load errors */
+      });
+    }, 15000);
+    return () => window.clearInterval(id);
+  }, [user?.role, tab, refresh]);
 
   if (user?.role !== 'admin') {
     return <Navigate to="/dashboard" replace />;
@@ -516,33 +550,24 @@ export function AdminPage() {
     }
   }
 
-  async function onConfirmM5RealLiveTrading() {
-    if (!m5RealConfirmPhrase.trim()) {
-      setError('Enter the exact confirmation phrase first.');
-      return;
-    }
-    if (
-      !window.confirm(
-        'Confirm M5 REAL-DISPATCH live trading (UNPROVEN LIVE)? This arms Layer 2 for ' +
-          'this admin account. A real order can only be placed once Layer 1 ' +
-          '(M5_REAL_TRADING_ENABLED), Layer 3 (demo bypass, if on a demo account), and ' +
-          'Start are also satisfied.',
-      )
-    ) {
-      return;
-    }
+  async function onConfirmM5RealLiveTrading(phrase: string) {
     setError(null);
     setMessage(null);
+    setM5Confirming(true);
     try {
-      const result = await confirmM5RealLiveTrading(m5RealConfirmPhrase.trim());
-      setM5RealConfirmPhrase('');
+      const result = await confirmM5RealLiveTrading(phrase);
+      setM5ConfirmedAt(result.m5_live_trading_confirmed_at);
+      setM5ConfirmModalOpen(false);
       setMessage(
         `M5 real-dispatch live trading confirmed for bot_instance ${result.bot_instance_id} ` +
-          `(account_type=${result.account_type}).`,
+          `(account_type=${result.account_type}). Expires in ${LIVE_TRADING_CONFIRMATION_TTL_MINUTES} minutes if you don't Start; cleared on Stop.`,
       );
       await refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Confirmation failed.');
+      throw err;
+    } finally {
+      setM5Confirming(false);
     }
   }
 
@@ -573,6 +598,7 @@ export function AdminPage() {
     try {
       const status = await stopM5RealSession();
       setM5RealStatus(status);
+      setM5ConfirmedAt(null);
       setMessage('M5 real-dispatch session stopped. Confirm-live cleared.');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Stop failed.');
@@ -683,7 +709,7 @@ export function AdminPage() {
             ['tiers', 'Risk tiers'],
             ['strategies', 'Strategies'],
             ['demo', 'Demo dispatch'],
-            ['m5paper', 'M5 paper (experimental)'],
+            ['m5paper', 'M5 (experimental)'],
             ['m1paper', 'M1 paper (experimental)'],
           ] as const
         ).map(([id, label]) => (
@@ -1299,28 +1325,74 @@ export function AdminPage() {
             )}
           </GlassCard>
 
-          <h2 className="type-heading text-state-danger">M5 real-dispatch (UNPROVEN LIVE)</h2>
+          <h2 className="type-heading text-state-danger">
+            M5 Real-Dispatch — Experimental, has not yet completed a proven live trade
+          </h2>
           <p className="type-caption text-state-danger">
             Testing-only. Unlike the paper session above, this CAN place real MT5 orders.
-            Separate module/singleton (m5-real-dispatch.js / m5-real-harness.js), reachable
-            only from this admin tab — never from the Trading page. Requires Layer 1
+            Separate module/singleton from paper, reachable only from this admin tab — never
+            from the Trading page (that stays M15 until M5 has genuinely completed live
+            trades and a separate decision promotes it). Requires Layer 1
             (M5_REAL_TRADING_ENABLED env, server-side only), Layer 2 (confirm-live below,
             independent of forex&apos;s own confirm-live), and — on a demo account only —
-            Layer 3 (demo-dispatch bypass below). A human-reviewed live proof is still
-            required before this is trusted; see docs/14_M5_Forex_Paper_Experiment.md.
+            Layer 3 (demo-dispatch bypass below). See docs/14_M5_Forex_Paper_Experiment.md.
           </p>
 
           <GlassCard>
-            <h2 className="type-heading mb-2">Layer 1 — master kill switch</h2>
-            <p className="type-caption text-text-secondary">
-              M5_REAL_TRADING_ENABLED (env var, server-side only — cannot be toggled from
-              this UI):{' '}
-              <span className="text-text-primary">
-                {m5RealStatus?.realTradingEnabled ? 'ENABLED' : 'disabled'}
-              </span>
-              . If disabled, Start below always fails regardless of confirm-live or demo
-              bypasses.
-            </p>
+            <h2 className="type-heading mb-2">Gate status (auto-refreshes every 15s)</h2>
+            <div className="mb-2 space-y-1 type-caption text-text-secondary">
+              <p>
+                Session:{' '}
+                <span
+                  className="text-text-primary"
+                  style={
+                    m5RealStatus?.status === 'error' ? { color: '#C45C5C' } : undefined
+                  }
+                >
+                  {m5RealStatus ? m5RealStatus.status.toUpperCase() : '—'}
+                </span>
+                {m5RealStatus?.botInstanceId
+                  ? ` · botInstanceId ${m5RealStatus.botInstanceId}`
+                  : ' · botInstanceId null'}
+              </p>
+              <p>
+                Layer 1 kill switch:{' '}
+                <span className="text-text-primary">
+                  {m5RealStatus?.realTradingEnabled ? 'ENABLED' : 'disabled'}
+                </span>
+              </p>
+              <p>
+                Confirm-live remaining:{' '}
+                <span className="text-text-primary">
+                  {confirmLiveRemainingSeconds(m5ConfirmedAt, nowTick) > 0
+                    ? formatRemaining(confirmLiveRemainingSeconds(m5ConfirmedAt, nowTick))
+                    : 'not armed / expired'}
+                </span>
+                {m5ConfirmedAt ? ` (since ${m5ConfirmedAt})` : ''}
+              </p>
+              <p>
+                Demo-confirm remaining:{' '}
+                <span className="text-text-primary">
+                  {m5RealDemoConfirm?.enabled
+                    ? formatRemaining(m5RealDemoConfirm.remaining_seconds)
+                    : 'disabled'}
+                </span>
+              </p>
+              <p>
+                Demo-dispatch remaining:{' '}
+                <span className="text-text-primary">
+                  {m5RealDemoDispatch?.enabled
+                    ? formatRemaining(m5RealDemoDispatch.remaining_seconds)
+                    : 'disabled'}
+                </span>
+              </p>
+              {m5RealStatus?.haltReason ? (
+                <p className="text-state-danger">Halt reason: {m5RealStatus.haltReason}</p>
+              ) : null}
+            </div>
+            <Button variant="ghost" onClick={() => void refresh()}>
+              Refresh status now
+            </Button>
           </GlassCard>
 
           <GlassCard>
@@ -1328,28 +1400,26 @@ export function AdminPage() {
             <p className="mb-4 type-caption text-text-secondary">
               Independent of forex&apos;s live_trading_confirmed_at and synthetics&apos; own
               confirmation — confirming here does not confirm or affect M15 forex, and vice
-              versa. Requires a real account, or a demo account with the Layer 2 demo-confirm
-              bypass below enabled. The M5 real session must be stopped to confirm.
+              versa. Uses the same deliberate-typing phrase modal as forex Confirm Live.
+              Requires a real account, or a demo account with the Layer 2 demo-confirm bypass
+              below enabled. The M5 real session must be stopped to confirm. Expires after{' '}
+              {LIVE_TRADING_CONFIRMATION_TTL_MINUTES} minutes if you don&apos;t Start; cleared
+              on every Stop.
             </p>
-            <div className="flex max-w-lg flex-col gap-3">
-              <Input
-                label="Confirmation phrase"
-                type="text"
-                placeholder="I CONFIRM LIVE TRADING WITH REAL MONEY"
-                value={m5RealConfirmPhrase}
-                onChange={(e) => setM5RealConfirmPhrase(e.target.value)}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="destructive"
-                  onClick={() => void onConfirmM5RealLiveTrading()}
-                >
-                  Confirm M5 live trading
-                </Button>
-                <Button variant="ghost" onClick={() => void refresh()}>
-                  Refresh status
-                </Button>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setError(null);
+                  setM5ConfirmModalOpen(true);
+                }}
+                disabled={m5RealStatus?.status === 'running'}
+              >
+                Confirm M5 live trading…
+              </Button>
+              <Button variant="ghost" onClick={() => void refresh()}>
+                Refresh status
+              </Button>
             </div>
           </GlassCard>
 
@@ -1390,16 +1460,13 @@ export function AdminPage() {
               />
               <div className="flex flex-wrap gap-2">
                 <Button variant="destructive" onClick={() => void onEnableM5RealDemoConfirm()}>
-                  Enable confirm bypass
+                  Enable demo-confirm (30 min)
                 </Button>
                 {m5RealDemoConfirm?.enabled ? (
                   <Button variant="ghost" onClick={() => void onDisableM5RealDemoConfirm()}>
                     Disable now
                   </Button>
                 ) : null}
-                <Button variant="ghost" onClick={() => void refresh()}>
-                  Refresh status
-                </Button>
               </div>
             </div>
           </GlassCard>
@@ -1409,7 +1476,7 @@ export function AdminPage() {
             <p className="mb-4 type-caption text-text-secondary">
               Lets a confirmed M5 real session actually dispatch real orders on a demo
               account. Independent of forex/synthetic demo-dispatch. Requires Layer 2
-              (confirm) to have succeeded first.
+              (confirm) to have succeeded first. Not needed on a real account.
             </p>
             {m5RealDemoDispatch ? (
               <div className="mb-4 space-y-1 type-caption text-text-secondary">
@@ -1441,16 +1508,13 @@ export function AdminPage() {
               />
               <div className="flex flex-wrap gap-2">
                 <Button variant="destructive" onClick={() => void onEnableM5RealDemoDispatch()}>
-                  Enable dispatch bypass
+                  Enable demo-dispatch (30 min)
                 </Button>
                 {m5RealDemoDispatch?.enabled ? (
                   <Button variant="ghost" onClick={() => void onDisableM5RealDemoDispatch()}>
                     Disable now
                   </Button>
                 ) : null}
-                <Button variant="ghost" onClick={() => void refresh()}>
-                  Refresh status
-                </Button>
               </div>
             </div>
           </GlassCard>
@@ -1494,12 +1558,16 @@ export function AdminPage() {
               <p className="mb-4 text-text-secondary">Status unavailable.</p>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button variant="destructive" onClick={() => void onStartM5Real()}>
-                Start M5 real-dispatch session
+              <Button
+                variant="destructive"
+                onClick={() => void onStartM5Real()}
+                disabled={m5RealStatus?.status === 'running'}
+              >
+                Start M5 real session
               </Button>
               {m5RealStatus?.status === 'running' || m5RealStatus?.status === 'error' ? (
                 <Button variant="ghost" onClick={() => void onStopM5Real()}>
-                  Stop
+                  Stop M5 real session
                 </Button>
               ) : null}
               <Button variant="ghost" onClick={() => void refresh()}>
@@ -1574,6 +1642,16 @@ export function AdminPage() {
               <p className="type-caption text-text-secondary">No decisions logged yet.</p>
             )}
           </GlassCard>
+
+          <ConfirmLiveTradingModal
+            open={m5ConfirmModalOpen}
+            confirming={m5Confirming}
+            allowDemoConfirm={Boolean(m5RealDemoConfirm?.enabled)}
+            onClose={() => {
+              if (!m5Confirming) setM5ConfirmModalOpen(false);
+            }}
+            onConfirm={onConfirmM5RealLiveTrading}
+          />
         </div>
       ) : null}
 
