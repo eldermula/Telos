@@ -1,0 +1,359 @@
+{
+  "writtenAt": "2026-08-12T02:03:15.100Z",
+  "stopReason": "operator_stopped",
+  "elapsedMs": 4161567,
+  "status": "stopped",
+  "startedAt": null,
+  "stoppedAt": "2026-08-12T02:03:23.605Z",
+  "tickCount": 274,
+  "openTrade": {
+    "symbol": "GBPUSD",
+    "direction": "SELL",
+    "strategyName": "RSI Mean Reversion",
+    "strategyId": "2568cd64-f886-4e19-b2c1-54247d926499",
+    "confidence": 0.726111178524607,
+    "entryPrice": 1.35083,
+    "stopPrice": 1.35105,
+    "targetPrice": 1.3503899999999998,
+    "stopDistance": 0.000220000000000109,
+    "atrStopDistance": 0.00014598695859191344,
+    "spreadFloor": 0.000220000000000109,
+    "flooredBySpread": true,
+    "lotSize": 0.05,
+    "contractSize": 100000,
+    "appliedRisk": 0.1,
+    "dollarRisk": 1,
+    "balanceSnapshot": 10,
+    "openedAt": "2026-08-12T01:47:42.022Z",
+    "status": "open"
+  },
+  "closedCount": 0,
+  "wins": 0,
+  "losses": 0,
+  "totalPnl": 0,
+  "avgHoldSeconds": null,
+  "minHoldSeconds": null,
+  "maxHoldSeconds": null,
+  "holdSeconds": [],
+  "survivedPastOneTick": 0,
+  "immediateStopouts": 0,
+  "flooredOpens": 1,
+  "bySymbol": {},
+  "byStrategy": {},
+  "decisionTypesSample": {
+    "opened": 1,
+    "data_fetch_error": 49
+  },
+  "lastTickError": null,
+  "closedTrades": [],
+  "decisionLog": [
+    {
+      "type": "opened",
+      "symbol": "GBPUSD",
+      "direction": "SELL",
+      "strategyName": "RSI Mean Reversion",
+      "lotSize": 0.05,
+      "entryPrice": 1.35083,
+      "stopDistance": 0.000220000000000109,
+      "atrStopDistance": 0.00014598695859191344,
+      "flooredBySpread": true,
+      "at": "2026-08-12T01:47:42.022Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:47:41.998Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "EURUSD",
+      "message": "Unable to select symbol EURUSD",
+      "at": "2026-08-12T01:47:41.906Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:46:25.957Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:45:55.515Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "AUDUSD",
+      "message": "Unable to select symbol AUDUSD",
+      "at": "2026-08-12T01:45:40.146Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "Unable to select symbol USDJPY",
+      "at": "2026-08-12T01:45:40.124Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "Unable to select symbol USDJPY",
+      "at": "2026-08-12T01:45:24.912Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:44:54.524Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "EURUSD",
+      "message": "Unable to select symbol EURUSD",
+      "at": "2026-08-12T01:44:39.195Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "XAUUSD",
+      "message": "Unable to select symbol XAUUSD",
+      "at": "2026-08-12T01:44:24.103Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "AUDUSD",
+      "message": "Unable to select symbol AUDUSD",
+      "at": "2026-08-12T01:44:08.843Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:42:22.304Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "EURUSD",
+      "message": "Unable to select symbol EURUSD",
+      "at": "2026-08-12T01:42:06.993Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "XAUUSD",
+      "message": "Unable to select symbol XAUUSD",
+      "at": "2026-08-12T01:41:51.919Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "AUDUSD",
+      "message": "Unable to select symbol AUDUSD",
+      "at": "2026-08-12T01:41:51.872Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "Unable to select symbol USDJPY",
+      "at": "2026-08-12T01:41:36.615Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "AUDUSD",
+      "message": "Unable to select symbol AUDUSD",
+      "at": "2026-08-12T01:41:06.157Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "Unable to select symbol USDJPY",
+      "at": "2026-08-12T01:40:35.673Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:39:04.079Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:38:02.947Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "AUDUSD",
+      "message": "Unable to select symbol AUDUSD",
+      "at": "2026-08-12T01:38:02.918Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "XAUUSD",
+      "message": "Unable to select symbol XAUUSD",
+      "at": "2026-08-12T01:37:17.247Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:36:46.627Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "symbol_info unavailable for USDJPY",
+      "at": "2026-08-12T01:36:46.578Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "GBPUSD",
+      "message": "Unable to select symbol GBPUSD",
+      "at": "2026-08-12T01:36:46.550Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "AUDUSD",
+      "message": "Unable to select symbol AUDUSD",
+      "at": "2026-08-12T01:35:59.785Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:35:44.543Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:35:13.646Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "AUDUSD",
+      "message": "Unable to select symbol AUDUSD",
+      "at": "2026-08-12T01:35:13.623Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "AUDUSD",
+      "message": "Unable to select symbol AUDUSD",
+      "at": "2026-08-12T01:34:58.422Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "Unable to select symbol USDJPY",
+      "at": "2026-08-12T01:34:43.104Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "XAUUSD",
+      "message": "Unable to select symbol XAUUSD",
+      "at": "2026-08-12T01:33:26.641Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:33:26.617Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "GBPUSD",
+      "message": "Unable to select symbol GBPUSD",
+      "at": "2026-08-12T01:33:26.545Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:33:11.438Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "Unable to select symbol USDJPY",
+      "at": "2026-08-12T01:32:54.936Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "GBPUSD",
+      "message": "Unable to select symbol GBPUSD",
+      "at": "2026-08-12T01:32:39.690Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "XAUUSD",
+      "message": "Unable to select symbol XAUUSD",
+      "at": "2026-08-12T01:32:09.360Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "Unable to select symbol USDJPY",
+      "at": "2026-08-12T01:32:09.288Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "XAUUSD",
+      "message": "Unable to select symbol XAUUSD",
+      "at": "2026-08-12T01:31:19.935Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "EURUSD",
+      "message": "Unable to select symbol EURUSD",
+      "at": "2026-08-12T01:31:04.560Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:30:34.238Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "Unable to select symbol USDJPY",
+      "at": "2026-08-12T01:30:34.190Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "XAUUSD",
+      "message": "Unable to select symbol XAUUSD",
+      "at": "2026-08-12T01:30:03.867Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "AUDUSD",
+      "message": "Unable to select symbol AUDUSD",
+      "at": "2026-08-12T01:30:03.823Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDCAD",
+      "message": "Unable to select symbol USDCAD",
+      "at": "2026-08-12T01:29:48.656Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "USDJPY",
+      "message": "Unable to select symbol USDJPY",
+      "at": "2026-08-12T01:29:33.406Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "XAUUSD",
+      "message": "Unable to select symbol XAUUSD",
+      "at": "2026-08-12T01:28:17.463Z"
+    },
+    {
+      "type": "data_fetch_error",
+      "symbol": "XAUUSD",
+      "message": "Unable to select symbol XAUUSD",
+      "at": "2026-08-12T01:28:02.286Z"
+    }
+  ],
+  "operatorNote": "Session ended with an open position, no forced resolution.",
+  "sessionEndedWithOpenPosition": true
+}

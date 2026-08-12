@@ -19,6 +19,12 @@ const { createM1PaperHarness } = require('../backend/src/engine/m1-paper-harness
 
 const TICK_MS = Number(process.env.M1_PAPER_TICK_MS) || 15000;
 const OUT = path.join(__dirname, '..', 'backend', '_m1-paper-run-results.json');
+const OUT_ARCHIVE = path.join(
+  __dirname,
+  '..',
+  'backend',
+  `_m1-paper-run-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+);
 const HARD_CEILING_MS = 2.5 * 60 * 60 * 1000;
 const SOFT_ENOUGH_MS = 2 * 60 * 60 * 1000;
 
@@ -110,6 +116,7 @@ async function main() {
   console.log(
     `M1 paper JUDGMENT run: tickMs=${TICK_MS}, stop when sample is sufficient (max 2.5h) — PAPER ONLY`
   );
+  console.log(`Archive path: ${OUT_ARCHIVE}`);
   const harness = createM1PaperHarness({
     mt5Connector,
     candidateStrategiesRepository,
@@ -117,6 +124,7 @@ async function main() {
   });
   const startedMs = Date.now();
   let stopReason = null;
+  const printedCloses = new Set();
 
   while (true) {
     await harness.tick();
@@ -134,7 +142,24 @@ async function main() {
         `open=${after.openTrade ? after.openTrade.symbol + ' ' + after.openTrade.direction : 'none'} ` +
         `err=${after.lastTickError || 'none'}`
     );
-    fs.writeFileSync(OUT, JSON.stringify(summarize(after, null, startedMs), null, 2));
+    const snap = summarize(after, null, startedMs);
+    fs.writeFileSync(OUT, JSON.stringify(snap, null, 2));
+    // Also keep a run-specific archive so a later short run cannot clobber history.
+    fs.writeFileSync(OUT_ARCHIVE, JSON.stringify(snap, null, 2));
+
+    // Loud per-close line so entry/exit/pnl survive even if JSON is later overwritten.
+    if (closed > 0) {
+      const last = after.closedTrades[after.closedTrades.length - 1];
+      if (last && last.closedAt && !printedCloses.has(last.closedAt)) {
+        printedCloses.add(last.closedAt);
+        console.log(
+          `CLOSE ${last.symbol} ${last.direction} ${last.strategyName} ${last.outcome} ` +
+            `entry=${last.entryPrice} exit=${last.closePrice} stopDist=${last.stopDistance} ` +
+            `floored=${last.flooredBySpread} pnl=${last.pnl} ` +
+            `holdSec=${((new Date(last.closedAt) - new Date(last.openedAt)) / 1000).toFixed(1)}`
+        );
+      }
+    }
 
     stopReason = enough(after, Date.now() - startedMs);
     if (stopReason) break;
@@ -146,11 +171,13 @@ async function main() {
   final.startedAt = new Date(startedMs).toISOString();
   final.stoppedAt = new Date().toISOString();
   fs.writeFileSync(OUT, JSON.stringify(final, null, 2));
+  fs.writeFileSync(OUT_ARCHIVE, JSON.stringify(final, null, 2));
   console.log('STOP:', stopReason);
   console.log(
     `FINAL: ticks=${final.tickCount} closed=${final.closedCount} W/L=${final.wins}/${final.losses} pnl=${final.totalPnl.toFixed(4)}`
   );
   console.log('Results:', OUT);
+  console.log('Archive:', OUT_ARCHIVE);
   setTimeout(() => process.exit(0), 1500);
 }
 

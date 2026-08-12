@@ -167,6 +167,40 @@ Before the hard 5-minute re-run, a longer judgment harness under the same spread
 
 That sample is the direct contrast to Session A’s 6/6 ~15s stop-outs: with `SPREAD_STOP_MULTIPLE = 2.0`, the observed filled trades survived many ticks.
 
+### Session D — open-ended judgment run, operator-stopped (2026-08-12)
+
+Runner: `scripts/run-m1-paper-judgment.js`. Archive: `backend/_m1-paper-run-FINAL-operator-stop-2026-08-12T02-03-23-604Z.json` (timestamped; not overwritten by later `_m1-paper-run-results.json` writes). Stopped by operator before any judgment stop condition fired.
+
+| Metric | Value |
+|---|---|
+| Elapsed | **~69.4 min** |
+| Ticks | **274** |
+| Opened | **1** |
+| Closed | **0** |
+| Wins / losses | **0 / 0** |
+| Total closed PnL | **$0** (nothing resolved) |
+| `data_fetch_error` | **49** for the whole session (~0.18 per tick) |
+| Stop reason | `operator_stopped` |
+
+**Only open (still unresolved at stop — no forced close):**
+
+| Field | Value |
+|---|---|
+| Symbol / direction | **GBPUSD SELL** |
+| Strategy | RSI Mean Reversion |
+| Entry | **1.35083** |
+| Stop / target | 1.35105 / 1.35039 |
+| Stop distance | **0.00022** (`flooredBySpread: true`; ATR stop was ~0.000146) |
+| Lot | 0.05 |
+| Opened at | 2026-08-12T01:47:42.022Z |
+| Hold at stop | **~15+ minutes** still open |
+
+**Session ended with an open position, no forced resolution.**
+
+**Closed trades:** none.
+
+Quiet-stretch probes the same day showed multi-hour gaps between gate-qualified fires are normal; a ~69 min run with one open and zero closes is consistent with that, not a harness failure. The open GBPUSD SELL surviving well past one tick under the spread floor is further evidence against Session A’s immediate-stop-out mode — but **zero closed outcomes** means this session still cannot speak to win/loss quality.
+
 ## 7. Code review (M1 build) — findings
 
 **Fixed:**
@@ -176,17 +210,26 @@ That sample is the direct contrast to Session A’s 6/6 ~15s stop-outs: with `SP
 4. **Spread-aware stop distance** (`SPREAD_STOP_MULTIPLE = 2.0`) — addresses Session A / §1b.
 
 **Flagged (not fixed — needs product/threshold decisions):**
-1. M15-tuned `trend_quality` / volatility gates were reused unchanged; probe showed they open at similar rates but fire rates per wall-clock hour do **not** scale with candle frequency.
+1. M15-tuned `trend_quality` / volatility gates were reused unchanged; probe showed they open at similar rates but fire rates per wall-clock hour do **not** scale with candle frequency. Quiet-stretch measurement: watching all six instruments, ~half of inter-fire gaps exceed 30 minutes; worst in-session dry spell ~9.7h on M5.
 2. Connector contention (`Unable to select symbol` / −10004) remains a structural MT5-connector issue, not M1-specific.
 3. Paper monitor is price-vs-stop (not broker-authoritative) — fine for paper measurement, must not be confused with a live close model.
-4. No `M1` real-dispatch path exists (intentional). Do not add one until a human reviews a supervised paper period with a multi-symbol sample.
+4. No `M1` real-dispatch path exists (intentional). Do not add one until a human reviews a supervised paper period with a multi-symbol **closed** sample including wins and losses.
 
 ## 8. Recommendation
 
-**Do not run a human-supervised M1 real test yet.** The spread floor addresses the Session A mechanism (C′ hold evidence), but the hard 5-minute Session C produced no fills, and the overall paper sample is still thin.
+**Do not run a human-supervised M1 real test yet.**
+
+What is now supported by paper evidence:
+- Session A’s immediate stop-out mechanism is addressed by the spread floor (C′ multi-tick holds; Session D open still alive after ~15+ min).
+
+What is **not** yet supported:
+- No multi-symbol closed sample under the new formula with both wins and losses (Session D: **0 closes**).
+- Fire rates remain sparse under M15-tuned gates; expectancy on M1 is unproven.
+
+**Verdict:** recalibrate/re-test in paper (longer sample and/or gate review) — **not** ready for a supervised real test.
 
 Recommended next steps (human-led, separate session):
-1. Longer paper under the new formula until a multi-symbol sample includes both wins and losses.
+1. Longer paper under the new formula until a multi-symbol **closed** sample includes both wins and losses.
 2. Only then consider a **human-supervised** real proof (demo first), with a new Layer-1 kill switch — never auto-enabled from this paper build.
 
 ## 9. What this build explicitly does NOT do
