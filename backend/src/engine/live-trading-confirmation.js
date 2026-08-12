@@ -18,13 +18,13 @@ const LIVE_TRADING_CONFIRMATION_PHRASE = 'I CONFIRM LIVE TRADING WITH REAL MONEY
  * to NULL on every Stop (per explicit "re-confirm after every Stop"
  * decision), and this TTL is the second side — defense-in-depth
  * against a confirmation that's never invalidated because Start (or
- * Stop) simply never gets called again after confirming. 15 minutes
- * is long enough for a human to confirm and then immediately press
- * Start in the same sitting, short enough that a confirmation typed
- * today can't still be "armed" a week from now with nobody having
- * looked at it since.
+ * Stop) simply never gets called again after confirming. 120 minutes
+ * is long enough for a human to confirm, finish connector/setup
+ * checks, and press Start in the same sitting, short enough that a
+ * confirmation typed today can't still be "armed" a day later with
+ * nobody having looked at it since.
  */
-const LIVE_TRADING_CONFIRMATION_TTL_MINUTES = 15;
+const LIVE_TRADING_CONFIRMATION_TTL_MINUTES = 120;
 
 /**
  * Lazy expiry, not active pruning — same pattern this codebase already

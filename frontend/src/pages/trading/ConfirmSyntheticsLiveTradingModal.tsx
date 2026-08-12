@@ -160,7 +160,7 @@ export function ConfirmSyntheticsLiveTradingModal({
         ) : null}
 
         <p>
-          Confirmation expires in 15 minutes if you don&apos;t Start, and is cleared on
+          Confirmation expires in 120 minutes if you don&apos;t Start, and is cleared on
           every Stop. Type the phrase below exactly to continue.
         </p>
 

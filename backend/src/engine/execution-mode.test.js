@@ -7,11 +7,14 @@ const {
   resolveExecutionMode,
   resolveExpectedAccountTypeForLayer0,
 } = require('./execution-mode');
+const { LIVE_TRADING_CONFIRMATION_TTL_MINUTES } = require('./live-trading-confirmation');
 
-// Fresh relative to the process's `Date.now()` so the 15-minute TTL
-// introduced in Increment D doesn't reject every "correct inputs"
-// case as stale. Built once at module load; each individual test that
-// needs a specific age constructs its own.
+const TTL_MS = LIVE_TRADING_CONFIRMATION_TTL_MINUTES * 60 * 1000;
+
+// Fresh relative to the process's `Date.now()` so the confirmation TTL
+// doesn't reject every "correct inputs" case as stale. Built once at
+// module load; each individual test that needs a specific age
+// constructs its own.
 const REAL_TIMESTAMP = new Date();
 
 test('resolves real only when all three inputs are exactly correct', () => {
@@ -26,8 +29,8 @@ test('resolves real only when all three inputs are exactly correct', () => {
 });
 
 test('a non-null, non-empty ISO string timestamp also counts as confirmed (when fresh)', () => {
-  // Pass a Date close to now so isConfirmationActive's 15-minute TTL
-  // doesn't reject a hard-coded historical ISO string as stale.
+  // Pass a Date close to now so isConfirmationActive's TTL doesn't
+  // reject a hard-coded historical ISO string as stale.
   const freshIso = new Date().toISOString();
   assert.equal(
     resolveExecutionMode({
@@ -39,13 +42,13 @@ test('a non-null, non-empty ISO string timestamp also counts as confirmed (when 
   );
 });
 
-test('a past-TTL confirmation timestamp resolves to paper (D\'s 15-minute expiry)', () => {
-  const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);
+test('a past-TTL confirmation timestamp resolves to paper', () => {
+  const pastTtl = new Date(Date.now() - TTL_MS - 1000);
   assert.equal(
     resolveExecutionMode({
       realTradingEnabled: true,
       accountType: 'real',
-      liveTradingConfirmedAt: twentyMinutesAgo,
+      liveTradingConfirmedAt: pastTtl,
     }),
     'paper'
   );
