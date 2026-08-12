@@ -11,11 +11,14 @@ import {
 } from '../../lib/liveTradingConfirmation';
 import {
   confirmM5RealLiveTrading,
+  confirmXauVwapLiveTrading,
   disableForexDemoConfirm,
   disableForexDemoDispatch,
   disableForexDemoManualTrade,
   disableM5RealDemoConfirm,
   disableM5RealDemoDispatch,
+  disableXauVwapLiveDemoConfirm,
+  disableXauVwapLiveDemoDispatch,
   disableSyntheticDemoConfirm,
   disableSyntheticDemoDispatch,
   disableSyntheticDemoManualTrade,
@@ -24,6 +27,8 @@ import {
   enableForexDemoManualTrade,
   enableM5RealDemoConfirm,
   enableM5RealDemoDispatch,
+  enableXauVwapLiveDemoConfirm,
+  enableXauVwapLiveDemoDispatch,
   enableSyntheticDemoConfirm,
   enableSyntheticDemoDispatch,
   enableSyntheticDemoManualTrade,
@@ -37,6 +42,9 @@ import {
   getM5RealDemoConfirmStatus,
   getM5RealDemoDispatchStatus,
   getM5RealStatus,
+  getXauVwapLiveDemoConfirmStatus,
+  getXauVwapLiveDemoDispatchStatus,
+  getXauVwapLiveStatus,
   getSyntheticDemoConfirmStatus,
   getSyntheticDemoDispatchStatus,
   getSyntheticDemoManualTradeStatus,
@@ -50,10 +58,12 @@ import {
   startM1PaperSession,
   startXauVwapPaperSession,
   startM5RealSession,
+  startXauVwapLiveSession,
   stopM5PaperSession,
   stopM1PaperSession,
   stopXauVwapPaperSession,
   stopM5RealSession,
+  stopXauVwapLiveSession,
   type AdminUser,
   type AdminUserDetail,
   type CandidateStrategy,
@@ -66,6 +76,9 @@ import {
   type M5RealDemoConfirmStatus,
   type M5RealDemoDispatchStatus,
   type M5RealStatus,
+  type XauVwapLiveDemoConfirmStatus,
+  type XauVwapLiveDemoDispatchStatus,
+  type XauVwapLiveStatus,
   type RiskTier,
   type SyntheticDemoConfirmStatus,
   type SyntheticDemoDispatchStatus,
@@ -97,7 +110,15 @@ function confirmLiveRemainingSeconds(confirmedAt: string | null, nowMs = Date.no
 export function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<
-    'health' | 'users' | 'tiers' | 'strategies' | 'demo' | 'm5paper' | 'm1paper' | 'xauvwappaper'
+    | 'health'
+    | 'users'
+    | 'tiers'
+    | 'strategies'
+    | 'demo'
+    | 'm5paper'
+    | 'm1paper'
+    | 'xauvwappaper'
+    | 'xauvwaplive'
   >('health');
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -124,6 +145,11 @@ export function AdminPage() {
   const [m5RealDemoConfirm, setM5RealDemoConfirm] = useState<M5RealDemoConfirmStatus | null>(
     null,
   );
+  const [xauVwapLiveStatus, setXauVwapLiveStatus] = useState<XauVwapLiveStatus | null>(null);
+  const [xauVwapLiveDemoDispatch, setXauVwapLiveDemoDispatch] =
+    useState<XauVwapLiveDemoDispatchStatus | null>(null);
+  const [xauVwapLiveDemoConfirm, setXauVwapLiveDemoConfirm] =
+    useState<XauVwapLiveDemoConfirmStatus | null>(null);
   const [demoDispatchMinutes, setDemoDispatchMinutes] = useState('15');
   const [demoConfirmMinutes, setDemoConfirmMinutes] = useState('15');
   const [demoManualTradeMinutes, setDemoManualTradeMinutes] = useState('15');
@@ -132,9 +158,14 @@ export function AdminPage() {
   const [forexDemoManualTradeMinutes, setForexDemoManualTradeMinutes] = useState('15');
   const [m5RealDemoDispatchMinutes, setM5RealDemoDispatchMinutes] = useState('30');
   const [m5RealDemoConfirmMinutes, setM5RealDemoConfirmMinutes] = useState('30');
+  const [xauVwapLiveDemoDispatchMinutes, setXauVwapLiveDemoDispatchMinutes] = useState('30');
+  const [xauVwapLiveDemoConfirmMinutes, setXauVwapLiveDemoConfirmMinutes] = useState('30');
   const [m5ConfirmModalOpen, setM5ConfirmModalOpen] = useState(false);
   const [m5Confirming, setM5Confirming] = useState(false);
   const [m5ConfirmedAt, setM5ConfirmedAt] = useState<string | null>(null);
+  const [xauVwapLiveConfirmModalOpen, setXauVwapLiveConfirmModalOpen] = useState(false);
+  const [xauVwapLiveConfirming, setXauVwapLiveConfirming] = useState(false);
+  const [xauVwapLiveConfirmedAt, setXauVwapLiveConfirmedAt] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [editTier, setEditTier] = useState<RiskTier | null>(null);
   const [ceilingDraft, setCeilingDraft] = useState('');
@@ -143,7 +174,8 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [h, u, t, s, d, c, m, fd, fc, fm, m5, m1, xauV, m5r, m5rd, m5rc] = await Promise.all([
+    const [h, u, t, s, d, c, m, fd, fc, fm, m5, m1, xauV, m5r, m5rd, m5rc, xvl, xvld, xvlc] =
+      await Promise.all([
       getSystemHealth(),
       listAdminUsers({ page: 1, limit: 50 }),
       listRiskTiers(),
@@ -160,6 +192,9 @@ export function AdminPage() {
       getM5RealStatus(),
       getM5RealDemoDispatchStatus(),
       getM5RealDemoConfirmStatus(),
+      getXauVwapLiveStatus(),
+      getXauVwapLiveDemoDispatchStatus(),
+      getXauVwapLiveDemoConfirmStatus(),
     ]);
     setHealth(h);
     setUsers(u.data);
@@ -177,6 +212,9 @@ export function AdminPage() {
     setM5RealStatus(m5r);
     setM5RealDemoDispatch(m5rd);
     setM5RealDemoConfirm(m5rc);
+    setXauVwapLiveStatus(xvl);
+    setXauVwapLiveDemoDispatch(xvld);
+    setXauVwapLiveDemoConfirm(xvlc);
   }, []);
 
   useEffect(() => {
@@ -198,9 +236,9 @@ export function AdminPage() {
     };
   }, [user?.role, refresh]);
 
-  // Soft clock for remaining-time display on the M5 tab.
+  // Soft clock for remaining-time display on the M5 and XAU VWAP LIVE tabs.
   useEffect(() => {
-    if (tab !== 'm5paper') return;
+    if (tab !== 'm5paper' && tab !== 'xauvwaplive') return;
     const id = window.setInterval(() => setNowTick(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, [tab]);
@@ -208,6 +246,17 @@ export function AdminPage() {
   // Refresh M5 paper/real status while the experimental tab is open.
   useEffect(() => {
     if (user?.role !== 'admin' || tab !== 'm5paper') return;
+    const id = window.setInterval(() => {
+      void refresh().catch(() => {
+        /* keep last known status; banner already surfaces hard load errors */
+      });
+    }, 15000);
+    return () => window.clearInterval(id);
+  }, [user?.role, tab, refresh]);
+
+  // Refresh XAU VWAP LIVE status while that tab is open.
+  useEffect(() => {
+    if (user?.role !== 'admin' || tab !== 'xauvwaplive') return;
     const id = window.setInterval(() => {
       void refresh().catch(() => {
         /* keep last known status; banner already surfaces hard load errors */
@@ -718,6 +767,139 @@ export function AdminPage() {
     }
   }
 
+  async function onConfirmXauVwapLiveTrading(phrase: string) {
+    setError(null);
+    setMessage(null);
+    setXauVwapLiveConfirming(true);
+    try {
+      const result = await confirmXauVwapLiveTrading(phrase);
+      setXauVwapLiveConfirmedAt(result.xau_vwap_live_trading_confirmed_at);
+      setXauVwapLiveConfirmModalOpen(false);
+      setMessage(
+        `XAU VWAP LIVE trading confirmed for bot_instance ${result.bot_instance_id} ` +
+          `(account_type=${result.account_type}). Expires in ${LIVE_TRADING_CONFIRMATION_TTL_MINUTES} minutes if you don't Start; cleared on Stop.`,
+      );
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Confirmation failed.');
+      throw err;
+    } finally {
+      setXauVwapLiveConfirming(false);
+    }
+  }
+
+  async function onStartXauVwapLive() {
+    if (
+      !window.confirm(
+        'Start the XAUUSD VWAP p90 LIVE session? REAL MONEY — this CAN place real MT5 ' +
+          'orders if Layer 1-3 are all armed. Controlled live testing only. Do not start ' +
+          'unless you intend to test real order placement right now.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await startXauVwapLiveSession();
+      setXauVwapLiveStatus(status);
+      setMessage('XAU VWAP LIVE session started.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Start failed.');
+    }
+  }
+
+  async function onStopXauVwapLive() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await stopXauVwapLiveSession();
+      setXauVwapLiveStatus(status);
+      setXauVwapLiveConfirmedAt(null);
+      setMessage('XAU VWAP LIVE session stopped. Confirm-live cleared.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Stop failed.');
+    }
+  }
+
+  async function onEnableXauVwapLiveDemoDispatch() {
+    const minutes = Number.parseInt(xauVwapLiveDemoDispatchMinutes, 10);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30) {
+      setError('XAU VWAP LIVE dispatch duration must be an integer from 1 to 30 minutes.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Enable XAU VWAP LIVE DEMO bypass (Layer 3) for ${minutes} minute(s)? ` +
+          'Confirmed demo sessions may place real MT5 orders via the XAU VWAP LIVE harness.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await enableXauVwapLiveDemoDispatch(minutes);
+      setXauVwapLiveDemoDispatch(status);
+      setMessage(
+        `XAU VWAP LIVE Layer 3 demo-dispatch enabled until ${status.enabled_until ?? '—'}.`,
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Enable failed.');
+    }
+  }
+
+  async function onDisableXauVwapLiveDemoDispatch() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await disableXauVwapLiveDemoDispatch();
+      setXauVwapLiveDemoDispatch(status);
+      setMessage('XAU VWAP LIVE Layer 3 demo-dispatch disabled.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Disable failed.');
+    }
+  }
+
+  async function onEnableXauVwapLiveDemoConfirm() {
+    const minutes = Number.parseInt(xauVwapLiveDemoConfirmMinutes, 10);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 30) {
+      setError('XAU VWAP LIVE confirm duration must be an integer from 1 to 30 minutes.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Enable XAU VWAP LIVE DEMO confirm bypass (Layer 2) for ${minutes} minute(s)? ` +
+          'Demo accounts may pass XAU VWAP confirm-live. Layer 3 is still required to dispatch.',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await enableXauVwapLiveDemoConfirm(minutes);
+      setXauVwapLiveDemoConfirm(status);
+      setMessage(
+        `XAU VWAP LIVE Layer 2 demo-confirm enabled until ${status.enabled_until ?? '—'}.`,
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Enable failed.');
+    }
+  }
+
+  async function onDisableXauVwapLiveDemoConfirm() {
+    setError(null);
+    setMessage(null);
+    try {
+      const status = await disableXauVwapLiveDemoConfirm();
+      setXauVwapLiveDemoConfirm(status);
+      setMessage('XAU VWAP LIVE Layer 2 demo-confirm disabled.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Disable failed.');
+    }
+  }
+
   if (loading) {
     return <p className="text-text-secondary">Loading admin…</p>;
   }
@@ -751,6 +933,7 @@ export function AdminPage() {
             ['m5paper', 'M5 (experimental)'],
             ['m1paper', 'M1 paper (experimental)'],
             ['xauvwappaper', 'XAU VWAP paper (experimental)'],
+            ['xauvwaplive', 'XAUUSD VWAP p90 — LIVE (REAL MONEY)'],
           ] as const
         ).map(([id, label]) => (
           <Button
@@ -1940,6 +2123,515 @@ export function AdminPage() {
               <p className="type-caption text-text-secondary">No decisions logged yet.</p>
             )}
           </GlassCard>
+        </div>
+      ) : null}
+
+      {tab === 'xauvwaplive' ? (
+        <div className="flex flex-col gap-6">
+          <p className="rounded-[8px] border border-state-danger/60 bg-state-danger/15 px-4 py-3 type-caption text-state-danger">
+            <strong>REAL MONEY — CONTROLLED LIVE TESTING.</strong> Unlike the XAU VWAP paper tab,
+            this harness CAN place real MT5 orders on XAUUSD when Layers 0–3 are armed. Admin-only
+            — never exposed on the Trading page. See docs/17_XAU_VWAP_Live_Strategy.md. Do not start
+            unless you intend to test real order placement right now.
+          </p>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Gate status (auto-refreshes every 15s)</h2>
+            <div className="mb-2 space-y-1 type-caption text-text-secondary">
+              <p>
+                Strategy status:{' '}
+                <span
+                  className="text-text-primary"
+                  style={
+                    xauVwapLiveStatus?.uiStatus === 'BLOCKED' ? { color: '#C45C5C' } : undefined
+                  }
+                >
+                  {xauVwapLiveStatus?.uiStatus ?? '—'}
+                </span>
+                {' · '}
+                Session:{' '}
+                <span
+                  className="text-text-primary"
+                  style={
+                    xauVwapLiveStatus?.status === 'error' ? { color: '#C45C5C' } : undefined
+                  }
+                >
+                  {xauVwapLiveStatus ? xauVwapLiveStatus.status.toUpperCase() : '—'}
+                </span>
+                {xauVwapLiveStatus?.botInstanceId
+                  ? ` · botInstanceId ${xauVwapLiveStatus.botInstanceId}`
+                  : ' · botInstanceId null'}
+              </p>
+              <p>
+                Instrument:{' '}
+                <span className="text-text-primary">{xauVwapLiveStatus?.instrument ?? 'XAUUSD'}</span>
+                {' · '}
+                Timeframe:{' '}
+                <span className="text-text-primary">{xauVwapLiveStatus?.timeframe ?? 'M5'}</span>
+              </p>
+              <p>
+                Layer 1 kill switch:{' '}
+                <span className="text-text-primary">
+                  {xauVwapLiveStatus?.liveTradingEnabled ? 'ENABLED' : 'disabled'}
+                </span>
+              </p>
+              <p>
+                Emergency stop:{' '}
+                <span
+                  className="text-text-primary"
+                  style={
+                    xauVwapLiveStatus?.emergencyStopActive ? { color: '#C45C5C' } : undefined
+                  }
+                >
+                  {xauVwapLiveStatus?.emergencyStopActive ? 'ACTIVE' : 'off'}
+                </span>
+              </p>
+              <p>
+                Broker / execution mode:{' '}
+                <span className="text-text-primary">
+                  {xauVwapLiveStatus?.brokerStatus
+                    ? `${xauVwapLiveStatus.brokerStatus.account_type} · ${xauVwapLiveStatus.brokerStatus.mode}`
+                    : '—'}
+                </span>
+              </p>
+              <p>
+                Confirm-live remaining:{' '}
+                <span className="text-text-primary">
+                  {confirmLiveRemainingSeconds(xauVwapLiveConfirmedAt, nowTick) > 0
+                    ? formatRemaining(confirmLiveRemainingSeconds(xauVwapLiveConfirmedAt, nowTick))
+                    : 'not armed / expired'}
+                </span>
+                {xauVwapLiveConfirmedAt ? ` (since ${xauVwapLiveConfirmedAt})` : ''}
+              </p>
+              <p>
+                Demo-confirm remaining:{' '}
+                <span className="text-text-primary">
+                  {xauVwapLiveDemoConfirm?.enabled
+                    ? formatRemaining(xauVwapLiveDemoConfirm.remaining_seconds)
+                    : 'disabled'}
+                </span>
+              </p>
+              <p>
+                Demo-dispatch remaining:{' '}
+                <span className="text-text-primary">
+                  {xauVwapLiveDemoDispatch?.enabled
+                    ? formatRemaining(xauVwapLiveDemoDispatch.remaining_seconds)
+                    : 'disabled'}
+                </span>
+              </p>
+              {xauVwapLiveStatus?.haltReason ? (
+                <p className="text-state-danger">Halt reason: {xauVwapLiveStatus.haltReason}</p>
+              ) : null}
+            </div>
+            <Button variant="ghost" onClick={() => void refresh()}>
+              Refresh status now
+            </Button>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Market snapshot</h2>
+            {xauVwapLiveStatus?.lastMarketSnapshot?.ok !== false ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                <li>
+                  VWAP:{' '}
+                  {xauVwapLiveStatus?.lastMarketSnapshot?.vwap != null
+                    ? xauVwapLiveStatus.lastMarketSnapshot.vwap.toFixed(2)
+                    : '—'}
+                </li>
+                <li>
+                  p90 threshold:{' '}
+                  {xauVwapLiveStatus?.lastMarketSnapshot?.p90Threshold != null
+                    ? xauVwapLiveStatus.lastMarketSnapshot.p90Threshold.toFixed(4)
+                    : '—'}
+                </li>
+                <li>
+                  Spread:{' '}
+                  {xauVwapLiveStatus?.lastMarketSnapshot?.spread != null
+                    ? xauVwapLiveStatus.lastMarketSnapshot.spread.toFixed(4)
+                    : '—'}
+                </li>
+                <li>
+                  ATR:{' '}
+                  {xauVwapLiveStatus?.lastMarketSnapshot?.atr != null
+                    ? xauVwapLiveStatus.lastMarketSnapshot.atr.toFixed(4)
+                    : '—'}
+                </li>
+                <li>
+                  Stop distance:{' '}
+                  {xauVwapLiveStatus?.lastMarketSnapshot?.stopDistance != null
+                    ? xauVwapLiveStatus.lastMarketSnapshot.stopDistance.toFixed(4)
+                    : '—'}
+                </li>
+                <li>
+                  Target distance:{' '}
+                  {xauVwapLiveStatus?.lastMarketSnapshot?.targetDistance != null
+                    ? xauVwapLiveStatus.lastMarketSnapshot.targetDistance.toFixed(4)
+                    : '—'}
+                </li>
+                <li>
+                  Risk allocation:{' '}
+                  {xauVwapLiveStatus?.lastMarketSnapshot?.appliedRisk != null
+                    ? `${(xauVwapLiveStatus.lastMarketSnapshot.appliedRisk * 100).toFixed(2)}%`
+                    : '—'}
+                </li>
+                {xauVwapLiveStatus?.lastMarketSnapshot?.at ? (
+                  <li>Snapshot at: {xauVwapLiveStatus.lastMarketSnapshot.at}</li>
+                ) : null}
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">
+                Snapshot unavailable
+                {xauVwapLiveStatus?.lastMarketSnapshot?.reason
+                  ? ` (${xauVwapLiveStatus.lastMarketSnapshot.reason})`
+                  : ''}
+                .
+              </p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Strategy performance</h2>
+            {xauVwapLiveStatus ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                <li>
+                  Strategy P&amp;L:{' '}
+                  <span className="text-text-primary">
+                    {xauVwapLiveStatus.strategyPnl.toFixed(2)}
+                  </span>
+                </li>
+                <li>Live trade count: {xauVwapLiveStatus.liveTradeCount}</li>
+                <li>
+                  Win rate:{' '}
+                  {xauVwapLiveStatus.winRate != null
+                    ? `${(xauVwapLiveStatus.winRate * 100).toFixed(1)}%`
+                    : '—'}
+                </li>
+                <li>
+                  Average R:{' '}
+                  {xauVwapLiveStatus.averageR != null
+                    ? xauVwapLiveStatus.averageR.toFixed(2)
+                    : '—'}
+                </li>
+                <li>Max drawdown: {xauVwapLiveStatus.maxDrawdown.toFixed(2)}</li>
+                <li>
+                  Last execution: {xauVwapLiveStatus.lastExecutionAt ?? '—'}
+                </li>
+                <li>Signals detected: {xauVwapLiveStatus.signalsDetected}</li>
+                <li>
+                  Orders attempted / rejected: {xauVwapLiveStatus.ordersAttempted} /{' '}
+                  {xauVwapLiveStatus.ordersRejected}
+                </li>
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">Status unavailable.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Layer 2 — XAU VWAP confirm-live (this admin account)</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Independent of M15 forex, M5 real-dispatch, and synthetics confirm-live. Uses the same
+              deliberate-typing phrase modal. Requires a real account, or a demo account with the
+              Layer 2 demo-confirm bypass below. The XAU VWAP LIVE session must be stopped to
+              confirm. Expires after {LIVE_TRADING_CONFIRMATION_TTL_MINUTES} minutes if you
+              don&apos;t Start; cleared on every Stop.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setError(null);
+                  setXauVwapLiveConfirmModalOpen(true);
+                }}
+                disabled={xauVwapLiveStatus?.status === 'running'}
+              >
+                Confirm XAU VWAP LIVE trading…
+              </Button>
+              <Button variant="ghost" onClick={() => void refresh()}>
+                Refresh status
+              </Button>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Layer 2 bypass — XAU VWAP demo confirm-live</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Lets a demo account pass XAU VWAP confirm-live above. Does not by itself allow order
+              placement — Layer 3 below is still required to dispatch.
+            </p>
+            {xauVwapLiveDemoConfirm ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {xauVwapLiveDemoConfirm.enabled ? 'ENABLED' : 'disabled'}
+                  </span>
+                </p>
+                {xauVwapLiveDemoConfirm.enabled ? (
+                  <>
+                    <p>Until: {xauVwapLiveDemoConfirm.enabled_until ?? '—'}</p>
+                    <p>Remaining: {formatRemaining(xauVwapLiveDemoConfirm.remaining_seconds)}</p>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex max-w-md flex-col gap-3">
+              <Input
+                label="Duration (minutes, 1–30)"
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                value={xauVwapLiveDemoConfirmMinutes}
+                onChange={(e) => setXauVwapLiveDemoConfirmMinutes(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="destructive"
+                  onClick={() => void onEnableXauVwapLiveDemoConfirm()}
+                >
+                  Enable demo-confirm
+                </Button>
+                {xauVwapLiveDemoConfirm?.enabled ? (
+                  <Button variant="ghost" onClick={() => void onDisableXauVwapLiveDemoConfirm()}>
+                    Disable now
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Layer 3 bypass — XAU VWAP demo real-dispatch</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              Lets a confirmed XAU VWAP LIVE session actually dispatch real orders on a demo account.
+              Requires Layer 2 (confirm) to have succeeded first. Not needed on a real account.
+            </p>
+            {xauVwapLiveDemoDispatch ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span className="text-text-primary">
+                    {xauVwapLiveDemoDispatch.enabled ? 'ENABLED' : 'disabled'}
+                  </span>
+                </p>
+                {xauVwapLiveDemoDispatch.enabled ? (
+                  <>
+                    <p>Until: {xauVwapLiveDemoDispatch.enabled_until ?? '—'}</p>
+                    <p>Remaining: {formatRemaining(xauVwapLiveDemoDispatch.remaining_seconds)}</p>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex max-w-md flex-col gap-3">
+              <Input
+                label="Duration (minutes, 1–30)"
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                value={xauVwapLiveDemoDispatchMinutes}
+                onChange={(e) => setXauVwapLiveDemoDispatchMinutes(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="destructive"
+                  onClick={() => void onEnableXauVwapLiveDemoDispatch()}
+                >
+                  Enable demo-dispatch
+                </Button>
+                {xauVwapLiveDemoDispatch?.enabled ? (
+                  <Button variant="ghost" onClick={() => void onDisableXauVwapLiveDemoDispatch()}>
+                    Disable now
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">XAU VWAP LIVE session</h2>
+            <p className="mb-4 type-caption text-text-secondary">
+              {xauVwapLiveStatus?.strategyLabel ?? 'XAUUSD VWAP p90 — LIVE'}. Ticks every{' '}
+              {xauVwapLiveStatus ? Math.round(xauVwapLiveStatus.tickMs / 1000) : '—'}s.
+              Re-verifies Layer 1-3 on every tick — if any gate degrades mid-session, this halts to
+              an error state rather than falling back to paper.
+            </p>
+            {xauVwapLiveStatus ? (
+              <div className="mb-4 space-y-1 type-caption text-text-secondary">
+                <p>
+                  Status:{' '}
+                  <span
+                    className="text-text-primary"
+                    style={
+                      xauVwapLiveStatus.status === 'error' ? { color: '#C45C5C' } : undefined
+                    }
+                  >
+                    {xauVwapLiveStatus.status.toUpperCase()}
+                  </span>
+                </p>
+                {xauVwapLiveStatus.startedAt ? (
+                  <p>Started: {xauVwapLiveStatus.startedAt}</p>
+                ) : null}
+                <p>Ticks so far: {xauVwapLiveStatus.tickCount}</p>
+                <p>Candles observed: {xauVwapLiveStatus.candlesObserved}</p>
+                {xauVwapLiveStatus.haltReason ? (
+                  <p className="text-state-danger">Halt reason: {xauVwapLiveStatus.haltReason}</p>
+                ) : null}
+                {xauVwapLiveStatus.lastTickError ? (
+                  <p className="text-state-danger">
+                    Last tick error: {xauVwapLiveStatus.lastTickError}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mb-4 text-text-secondary">Status unavailable.</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="destructive"
+                onClick={() => void onStartXauVwapLive()}
+                disabled={xauVwapLiveStatus?.status === 'running'}
+              >
+                Start XAU VWAP LIVE session
+              </Button>
+              {xauVwapLiveStatus?.status === 'running' || xauVwapLiveStatus?.status === 'error' ? (
+                <Button variant="ghost" onClick={() => void onStopXauVwapLive()}>
+                  Stop XAU VWAP LIVE session
+                </Button>
+              ) : null}
+              <Button variant="ghost" onClick={() => void refresh()}>
+                Refresh status
+              </Button>
+            </div>
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Last signal</h2>
+            {xauVwapLiveStatus?.lastSignal ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                <li>At: {xauVwapLiveStatus.lastSignal.at}</li>
+                <li>Outcome: {xauVwapLiveStatus.lastSignal.outcome}</li>
+                {xauVwapLiveStatus.lastSignal.details ? (
+                  <li>Details: {JSON.stringify(xauVwapLiveStatus.lastSignal.details)}</li>
+                ) : null}
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No signal recorded yet.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Last order</h2>
+            {xauVwapLiveStatus?.lastOrder ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                <li>At: {xauVwapLiveStatus.lastOrder.at}</li>
+                <li>
+                  {xauVwapLiveStatus.lastOrder.symbol} {xauVwapLiveStatus.lastOrder.direction} @{' '}
+                  {xauVwapLiveStatus.lastOrder.entryPrice} (lot {xauVwapLiveStatus.lastOrder.lotSize})
+                </li>
+                <li>Broker ticket: {xauVwapLiveStatus.lastOrder.brokerTicket}</li>
+                <li>Status: {xauVwapLiveStatus.lastOrder.status ?? '—'}</li>
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No order recorded yet.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Open position (real money)</h2>
+            {xauVwapLiveStatus?.openTrade ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                <li>
+                  {xauVwapLiveStatus.openTrade.symbol} {xauVwapLiveStatus.openTrade.direction} @{' '}
+                  {xauVwapLiveStatus.openTrade.entryPrice} (lot {xauVwapLiveStatus.openTrade.lotSize})
+                </li>
+                <li>Broker ticket: {xauVwapLiveStatus.openTrade.brokerTicket}</li>
+                <li>Strategy: {xauVwapLiveStatus.openTrade.strategyName}</li>
+                {xauVwapLiveStatus.openTrade.p90Threshold != null ? (
+                  <li>p90 at signal: {xauVwapLiveStatus.openTrade.p90Threshold}</li>
+                ) : null}
+                <li>
+                  Stop {xauVwapLiveStatus.openTrade.stopPrice} / Target{' '}
+                  {xauVwapLiveStatus.openTrade.targetPrice}
+                </li>
+                <li>
+                  Risk allocation:{' '}
+                  {(xauVwapLiveStatus.openTrade.appliedRisk * 100).toFixed(2)}%
+                </li>
+                <li>Opened: {xauVwapLiveStatus.openTrade.openedAt}</li>
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No open real position.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Recent closed real trades</h2>
+            {xauVwapLiveStatus && xauVwapLiveStatus.closedTrades.length > 0 ? (
+              <DataTable
+                emptyMessage="No closed trades yet."
+                getRowKey={(row) => `${row.brokerTicket}-${row.closedAt ?? row.openedAt}`}
+                columns={[
+                  { key: 'direction', header: 'Dir', render: (row) => row.direction },
+                  { key: 'ticket', header: 'Ticket', render: (row) => row.brokerTicket },
+                  {
+                    key: 'pnl',
+                    header: 'PnL',
+                    numeric: true,
+                    render: (row) => (row.pnl != null ? row.pnl.toFixed(2) : '—'),
+                  },
+                  {
+                    key: 'realizedR',
+                    header: 'R',
+                    numeric: true,
+                    render: (row) =>
+                      row.realizedR != null ? row.realizedR.toFixed(2) : '—',
+                  },
+                  { key: 'closedAt', header: 'Closed', render: (row) => row.closedAt ?? '—' },
+                ]}
+                rows={xauVwapLiveStatus.closedTrades}
+              />
+            ) : (
+              <p className="type-caption text-text-secondary">No closed trades yet.</p>
+            )}
+          </GlassCard>
+
+          <GlassCard>
+            <h2 className="type-heading mb-2">Decision log (most recent first)</h2>
+            {xauVwapLiveStatus && xauVwapLiveStatus.decisionLog.length > 0 ? (
+              <ul className="type-caption space-y-1 text-text-secondary">
+                {xauVwapLiveStatus.decisionLog.slice(0, 20).map((entry, i) => (
+                  <li key={`${entry.at}-${i}`}>
+                    {entry.at} — {entry.type}
+                    {entry.symbol ? ` — ${entry.symbol}` : ''}
+                    {entry.direction ? ` ${entry.direction}` : ''}
+                    {entry.brokerTicket ? ` ticket=${entry.brokerTicket}` : ''}
+                    {entry.p90Threshold != null ? ` p90=${entry.p90Threshold}` : ''}
+                    {entry.reason ? ` (${entry.reason})` : ''}
+                    {entry.message ? ` — ${entry.message}` : ''}
+                    {entry.halt ? ' [HALT]' : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="type-caption text-text-secondary">No decisions logged yet.</p>
+            )}
+          </GlassCard>
+
+          <ConfirmLiveTradingModal
+            open={xauVwapLiveConfirmModalOpen}
+            confirming={xauVwapLiveConfirming}
+            allowDemoConfirm={Boolean(xauVwapLiveDemoConfirm?.enabled)}
+            onClose={() => {
+              if (!xauVwapLiveConfirming) setXauVwapLiveConfirmModalOpen(false);
+            }}
+            onConfirm={onConfirmXauVwapLiveTrading}
+          />
         </div>
       ) : null}
     </div>

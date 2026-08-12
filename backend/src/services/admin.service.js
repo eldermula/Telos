@@ -22,6 +22,10 @@ const xauVwapPaperHarness = require('../engine/xau-vwap-paper-harness');
 // See backend/src/engine/m5-real-harness.js and m5-real-dispatch.js headers.
 const m5RealHarness = require('../engine/m5-real-harness');
 const m5DemoDispatchService = require('../engine/m5-demo-dispatch.service');
+// XAUUSD VWAP p90 LIVE (CONTROLLED REAL-MONEY, docs/17) — independent of
+// M5 real / paper harnesses. Orders only via xau-vwap-live-dispatch.
+const xauVwapLiveHarness = require('../engine/xau-vwap-live-harness');
+const xauVwapDemoDispatchService = require('../engine/xau-vwap-demo-dispatch.service');
 const botInstanceRepository = require('../engine/bot-instance.repository');
 const { LIVE_TRADING_CONFIRMATION_PHRASE } = require('../engine/live-trading-confirmation');
 
@@ -636,6 +640,114 @@ async function disableM5RealConfirm(adminUserId) {
   return status;
 }
 
+// ---------------------------------------------------------------------------
+// XAUUSD VWAP p90 LIVE (CONTROLLED REAL-MONEY, docs/17_XAU_VWAP_Live_Strategy.md)
+// — admin-only, independent Layer 0–3 state from forex/synthetic/M5.
+// ---------------------------------------------------------------------------
+
+function getXauVwapLiveStatus() {
+  return xauVwapLiveHarness.getStatus();
+}
+
+async function startXauVwapLiveSession(adminUserId) {
+  console.warn(
+    `[admin] XAU VWAP LIVE session START requested by admin_user_id=${adminUserId} ` +
+      '— CONTROLLED REAL-MONEY'
+  );
+  const status = await xauVwapLiveHarness.start({ operatorUserId: adminUserId });
+  await writeAudit({ adminUserId, action: 'xau_vwap_live.start' });
+  return status;
+}
+
+async function stopXauVwapLiveSession(adminUserId) {
+  const status = await xauVwapLiveHarness.stop();
+  await writeAudit({ adminUserId, action: 'xau_vwap_live.stop' });
+  return status;
+}
+
+async function confirmXauVwapLiveTrading(adminUserId, confirmationPhrase) {
+  const harnessStatus = xauVwapLiveHarness.getStatus();
+  if (harnessStatus.status !== 'stopped') {
+    throw new AppError(
+      409,
+      'INSTANCE_MUST_BE_STOPPED',
+      'Stop the XAU VWAP live session before confirming live trading'
+    );
+  }
+
+  const instance = await botInstanceRepository.ensureForUser(adminUserId);
+
+  const demoAcceptanceAllowed = await xauVwapDemoDispatchService.isXauVwapDemoConfirmEnabled();
+  const accountQualifies =
+    instance.account_type === 'real' ||
+    (demoAcceptanceAllowed && instance.account_type === 'demo');
+  if (!accountQualifies) {
+    throw new AppError(
+      409,
+      'NOT_A_REAL_ACCOUNT',
+      'XAU VWAP live trading confirmation only applies to a real MT5 account (or demo with the XAU VWAP demo-confirm bypass enabled)'
+    );
+  }
+
+  if (confirmationPhrase !== LIVE_TRADING_CONFIRMATION_PHRASE) {
+    throw new AppError(400, 'CONFIRMATION_PHRASE_MISMATCH', 'Confirmation phrase does not match');
+  }
+
+  const updated = await botInstanceRepository.updateStatusFields(instance.id, {
+    xau_vwap_live_trading_confirmed_at: new Date(),
+  });
+  console.warn(
+    `[admin] XAU VWAP LIVE trading CONFIRMED by admin_user_id=${adminUserId} ` +
+      `bot_instance_id=${instance.id} account_type=${instance.account_type} — CONTROLLED REAL-MONEY`
+  );
+  await writeAudit({ adminUserId, action: 'xau_vwap_live.confirm_live' });
+  return {
+    bot_instance_id: updated.id,
+    account_type: instance.account_type,
+    xau_vwap_live_trading_confirmed_at: updated.xau_vwap_live_trading_confirmed_at,
+  };
+}
+
+function getXauVwapLiveDispatchStatus() {
+  return xauVwapDemoDispatchService.getDispatchStatus();
+}
+
+async function enableXauVwapLiveDispatch(adminUserId, minutes) {
+  const status = await xauVwapDemoDispatchService.enableDispatch(adminUserId, minutes);
+  await writeAudit({
+    adminUserId,
+    action: 'xau_vwap_live_demo_dispatch.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableXauVwapLiveDispatch(adminUserId) {
+  const status = await xauVwapDemoDispatchService.disableDispatch(adminUserId);
+  await writeAudit({ adminUserId, action: 'xau_vwap_live_demo_dispatch.disable' });
+  return status;
+}
+
+function getXauVwapLiveConfirmStatus() {
+  return xauVwapDemoDispatchService.getConfirmStatus();
+}
+
+async function enableXauVwapLiveConfirm(adminUserId, minutes) {
+  const status = await xauVwapDemoDispatchService.enableConfirm(adminUserId, minutes);
+  await writeAudit({
+    adminUserId,
+    action: 'xau_vwap_live_demo_confirm.enable',
+    details: { minutes, enabled_until: status.enabled_until },
+  });
+  return status;
+}
+
+async function disableXauVwapLiveConfirm(adminUserId) {
+  const status = await xauVwapDemoDispatchService.disableConfirm(adminUserId);
+  await writeAudit({ adminUserId, action: 'xau_vwap_live_demo_confirm.disable' });
+  return status;
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -681,5 +793,15 @@ module.exports = {
   getM5RealConfirmStatus,
   enableM5RealConfirm,
   disableM5RealConfirm,
+  getXauVwapLiveStatus,
+  startXauVwapLiveSession,
+  stopXauVwapLiveSession,
+  confirmXauVwapLiveTrading,
+  getXauVwapLiveDispatchStatus,
+  enableXauVwapLiveDispatch,
+  disableXauVwapLiveDispatch,
+  getXauVwapLiveConfirmStatus,
+  enableXauVwapLiveConfirm,
+  disableXauVwapLiveConfirm,
   writeAudit,
 };

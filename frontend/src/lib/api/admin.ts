@@ -462,3 +462,195 @@ export function enableM5RealDemoConfirm(minutes: number): Promise<M5RealDemoConf
 export function disableM5RealDemoConfirm(): Promise<M5RealDemoConfirmStatus> {
   return apiRequest('/admin/experimental/m5-real-demo-confirm-disable', { method: 'POST' });
 }
+
+/**
+ * XAUUSD VWAP p90 LIVE (docs/17_XAU_VWAP_Live_Strategy.md) — CONTROLLED REAL-MONEY.
+ * Separate singleton from paper harness and M5 real-dispatch. Admin-only; CAN place
+ * real MT5 orders once Layers 0–3 are armed.
+ */
+export type XauVwapLiveMarketSnapshot = {
+  ok?: boolean;
+  reason?: string;
+  symbol?: string;
+  timeframe?: string;
+  vwap?: number;
+  p90Threshold?: number;
+  close?: number;
+  absDist?: number;
+  spread?: number | null;
+  stopDistance?: number;
+  targetDistance?: number;
+  appliedRisk?: number;
+  lotSize?: number;
+  atr?: number | null;
+  barTime?: number;
+  at?: string;
+};
+
+export type XauVwapLiveTrade = {
+  tradeRowId: string | null;
+  symbol: string;
+  direction: 'BUY' | 'SELL';
+  entryPrice: number;
+  stopPrice: number;
+  targetPrice: number;
+  lotSize: number;
+  contractSize: number;
+  brokerTicket: number;
+  appliedRisk: number;
+  strategyName: string;
+  historyRetryCount: number;
+  openedAt: string;
+  p90Threshold?: number;
+  absDistAtSignal?: number;
+  spreadAtEntry?: number | null;
+  flooredBySpread?: boolean;
+  stopDistance?: number;
+  status?: 'closed';
+  exitPrice?: number;
+  pnl?: number;
+  wasWin?: boolean;
+  realizedR?: number;
+  closedAt?: string;
+  orphaned?: boolean;
+};
+
+export type XauVwapLiveDecision = {
+  type: string;
+  symbol?: string;
+  direction?: string;
+  lotSize?: number;
+  entryPrice?: number;
+  brokerTicket?: number;
+  pnl?: number;
+  realizedR?: number;
+  reason?: string;
+  message?: string;
+  halt?: boolean;
+  p90Threshold?: number;
+  at: string;
+};
+
+export type XauVwapLiveSignal = {
+  at: string;
+  outcome: string;
+  details: Record<string, unknown> | null;
+};
+
+export type XauVwapLiveOrder = XauVwapLiveTrade & {
+  at: string;
+  status?: string;
+};
+
+export type XauVwapLiveBrokerStatus = {
+  account_type: string;
+  mode: string;
+  allowDemoRealExecution: boolean;
+};
+
+export type XauVwapLiveStatus = {
+  status: 'stopped' | 'running' | 'error';
+  uiStatus: 'ENABLED' | 'DISABLED' | 'BLOCKED';
+  realMoney: boolean;
+  strategyId: string;
+  strategyLabel: string;
+  instrument: string;
+  timeframe: string;
+  startedAt: string | null;
+  stoppedAt: string | null;
+  tickMs: number;
+  tickCount: number;
+  operatorUserId: string | null;
+  botInstanceId: string | null;
+  openTrade: XauVwapLiveTrade | null;
+  closedTrades: XauVwapLiveTrade[];
+  decisionLog: XauVwapLiveDecision[];
+  lastTickError: string | null;
+  haltReason: string | null;
+  liveTradingEnabled: boolean;
+  emergencyStopActive: boolean;
+  brokerStatus: XauVwapLiveBrokerStatus | null;
+  lastMarketSnapshot: XauVwapLiveMarketSnapshot | null;
+  lastSignal: XauVwapLiveSignal | null;
+  lastOrder: XauVwapLiveOrder | null;
+  lastExecutionAt: string | null;
+  candlesObserved: number;
+  signalsDetected: number;
+  ordersAttempted: number;
+  ordersRejected: number;
+  liveTradeCount: number;
+  closedTradeCount?: number;
+  winRate: number | null;
+  averageR: number | null;
+  maxDrawdown: number;
+  strategyPnl: number;
+};
+
+export function getXauVwapLiveStatus(): Promise<XauVwapLiveStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-live-status');
+}
+
+export function startXauVwapLiveSession(): Promise<XauVwapLiveStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-live-start', { method: 'POST' });
+}
+
+export function stopXauVwapLiveSession(): Promise<XauVwapLiveStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-live-stop', { method: 'POST' });
+}
+
+export type XauVwapLiveConfirmResult = {
+  bot_instance_id: string;
+  account_type: string;
+  xau_vwap_live_trading_confirmed_at: string | null;
+};
+
+export function confirmXauVwapLiveTrading(
+  confirmationPhrase: string,
+): Promise<XauVwapLiveConfirmResult> {
+  return apiRequest('/admin/experimental/xau-vwap-live-confirm-live', {
+    method: 'POST',
+    body: { confirmationPhrase },
+  });
+}
+
+/** Same shape as forex/synthetic demo dispatch status — XAU VWAP Layer 3 bypass. */
+export type XauVwapLiveDemoDispatchStatus = SyntheticDemoDispatchStatus;
+
+export function getXauVwapLiveDemoDispatchStatus(): Promise<XauVwapLiveDemoDispatchStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-live-demo-dispatch-status');
+}
+
+export function enableXauVwapLiveDemoDispatch(
+  minutes: number,
+): Promise<XauVwapLiveDemoDispatchStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-live-demo-dispatch-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableXauVwapLiveDemoDispatch(): Promise<XauVwapLiveDemoDispatchStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-live-demo-dispatch-disable', {
+    method: 'POST',
+  });
+}
+
+/** Same shape — XAU VWAP Layer 2 demo confirm-live bypass. */
+export type XauVwapLiveDemoConfirmStatus = SyntheticDemoDispatchStatus;
+
+export function getXauVwapLiveDemoConfirmStatus(): Promise<XauVwapLiveDemoConfirmStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-live-demo-confirm-status');
+}
+
+export function enableXauVwapLiveDemoConfirm(
+  minutes: number,
+): Promise<XauVwapLiveDemoConfirmStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-live-demo-confirm-enable', {
+    method: 'POST',
+    body: { minutes },
+  });
+}
+
+export function disableXauVwapLiveDemoConfirm(): Promise<XauVwapLiveDemoConfirmStatus> {
+  return apiRequest('/admin/experimental/xau-vwap-live-demo-confirm-disable', { method: 'POST' });
+}

@@ -81,6 +81,14 @@ const SYNTHETIC_REAL_TRADING_ENABLED =
 const M5_REAL_TRADING_ENABLED = process.env.M5_REAL_TRADING_ENABLED === 'true';
 
 /**
+ * XAUUSD VWAP p90 LIVE strategy Layer 1 (docs/17_XAU_VWAP_Live_Strategy.md)
+ * — independent kill switch from forex / synthetic / M5 real flags.
+ * Exact-string 'true' only; default off. Master switch for
+ * xau-vwap-live-dispatch.js / xau-vwap-live-harness.js only.
+ */
+const XAU_VWAP_LIVE_TRADING_ENABLED = process.env.XAU_VWAP_LIVE_TRADING_ENABLED === 'true';
+
+/**
  * Option 2 E.3 — hard lot-size ceiling for real orders, independent of
  * APIRS risk-%. Approved default 1.00 (raised from 0.01 after Deriv
  * re-verification — still below broker volume_max of 20 FX / 10 XAU).
@@ -137,6 +145,7 @@ module.exports = {
   REAL_TRADING_ENABLED,
   SYNTHETIC_REAL_TRADING_ENABLED,
   M5_REAL_TRADING_ENABLED,
+  XAU_VWAP_LIVE_TRADING_ENABLED,
   REAL_MAX_LOT,
   REAL_CONNECTION_MAX_AGE_HOURS,
   NEWS_LLM_ENABLED,

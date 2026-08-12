@@ -480,6 +480,100 @@ async function disableM5RealConfirm(req, res, next) {
   }
 }
 
+// XAUUSD VWAP p90 LIVE (CONTROLLED REAL-MONEY) — see admin.service.js.
+async function getXauVwapLiveStatus(req, res, next) {
+  try {
+    const data = adminService.getXauVwapLiveStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function startXauVwapLiveSession(req, res, next) {
+  try {
+    const data = await adminService.startXauVwapLiveSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function stopXauVwapLiveSession(req, res, next) {
+  try {
+    const data = await adminService.stopXauVwapLiveSession(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function confirmXauVwapLiveTrading(req, res, next) {
+  try {
+    const body = parseBody(confirmLiveTradingSchema, req.body);
+    const data = await adminService.confirmXauVwapLiveTrading(req.user.id, body.confirmationPhrase);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getXauVwapLiveDispatchStatus(req, res, next) {
+  try {
+    const data = await adminService.getXauVwapLiveDispatchStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableXauVwapLiveDispatch(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableXauVwapLiveDispatch(req.user.id, body.minutes);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableXauVwapLiveDispatch(req, res, next) {
+  try {
+    const data = await adminService.disableXauVwapLiveDispatch(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getXauVwapLiveConfirmStatus(req, res, next) {
+  try {
+    const data = await adminService.getXauVwapLiveConfirmStatus();
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function enableXauVwapLiveConfirm(req, res, next) {
+  try {
+    const body = parseBody(demoDispatchEnableSchema, req.body);
+    const data = await adminService.enableXauVwapLiveConfirm(req.user.id, body.minutes);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function disableXauVwapLiveConfirm(req, res, next) {
+  try {
+    const data = await adminService.disableXauVwapLiveConfirm(req.user.id);
+    res.status(200).json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listUsers,
   getUser,
@@ -525,4 +619,14 @@ module.exports = {
   getM5RealConfirmStatus,
   enableM5RealConfirm,
   disableM5RealConfirm,
+  getXauVwapLiveStatus,
+  startXauVwapLiveSession,
+  stopXauVwapLiveSession,
+  confirmXauVwapLiveTrading,
+  getXauVwapLiveDispatchStatus,
+  enableXauVwapLiveDispatch,
+  disableXauVwapLiveDispatch,
+  getXauVwapLiveConfirmStatus,
+  enableXauVwapLiveConfirm,
+  disableXauVwapLiveConfirm,
 };

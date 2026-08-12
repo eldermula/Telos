@@ -250,4 +250,58 @@ router.post(
   controller.disableM5RealConfirm
 );
 
+// XAUUSD VWAP p90 — LIVE (CONTROLLED REAL-MONEY, docs/17_XAU_VWAP_Live_Strategy.md).
+// SEPARATE from xau-vwap-paper-* and from m5-real-*. Admin-only. All live
+// orders flow through xau-vwap-live-dispatch → existing mt5-connector.
+router.get(
+  '/experimental/xau-vwap-live-status',
+  rateLimit.read({ max: 20 }),
+  controller.getXauVwapLiveStatus
+);
+router.post(
+  '/experimental/xau-vwap-live-start',
+  rateLimit.write({ max: 5 }),
+  controller.startXauVwapLiveSession
+);
+router.post(
+  '/experimental/xau-vwap-live-stop',
+  rateLimit.write({ max: 5 }),
+  controller.stopXauVwapLiveSession
+);
+router.post(
+  '/experimental/xau-vwap-live-confirm-live',
+  rateLimit.write({ max: 5 }),
+  controller.confirmXauVwapLiveTrading
+);
+router.get(
+  '/experimental/xau-vwap-live-demo-dispatch-status',
+  rateLimit.read({ max: 20 }),
+  controller.getXauVwapLiveDispatchStatus
+);
+router.post(
+  '/experimental/xau-vwap-live-demo-dispatch-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableXauVwapLiveDispatch
+);
+router.post(
+  '/experimental/xau-vwap-live-demo-dispatch-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableXauVwapLiveDispatch
+);
+router.get(
+  '/experimental/xau-vwap-live-demo-confirm-status',
+  rateLimit.read({ max: 20 }),
+  controller.getXauVwapLiveConfirmStatus
+);
+router.post(
+  '/experimental/xau-vwap-live-demo-confirm-enable',
+  rateLimit.write({ max: 5 }),
+  controller.enableXauVwapLiveConfirm
+);
+router.post(
+  '/experimental/xau-vwap-live-demo-confirm-disable',
+  rateLimit.write({ max: 5 }),
+  controller.disableXauVwapLiveConfirm
+);
+
 module.exports = router;
